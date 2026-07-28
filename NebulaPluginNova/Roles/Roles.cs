@@ -1,0 +1,377 @@
+﻿using Nebula.Modules.GUIWidget;
+using Nebula.Modules.Logging;
+using Nebula.Roles.Assignment;
+using Nebula.Roles.Crewmate;
+using Nebula.Roles.Neutral;
+using Nebula.Scripts;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using Virial;
+using Virial.Assignable;
+using Virial.Configuration;
+using Virial.Game;
+using Virial.Runtime;
+using Virial.Text;
+using static Nebula.Configuration.ConfigurationValues;
+
+namespace Nebula.Roles;
+
+[NebulaPreprocess(PreprocessPhase.PreRoles)]
+internal class NoSRoleSetUp
+{
+    static private void SetTabs()
+    {
+        Func<bool> roleVisibility = () => GeneralConfigurations.CurrentGameMode.WithRoleSettings;
+        //Set Up Tabs
+        ConfigurationTab.tabSetting = new ConfigurationTab(0x01, "options.tab.setting", new(0.75f, 0.75f, 0.75f));
+        ConfigurationTab.tabCrewmate = new ConfigurationTab(0x02, "options.tab.crewmate", VColor.CrewmateColor, roleVisibility);
+        ConfigurationTab.tabImpostor = new ConfigurationTab(0x04, "options.tab.impostor", VColor.ImpostorColor, roleVisibility);
+        ConfigurationTab.tabNeutral = new ConfigurationTab(0x08, "options.tab.neutral", new(244f / 255f, 211f / 255f, 53f / 255f), roleVisibility);
+        ConfigurationTab.tabGhost = new ConfigurationTab(0x10, "options.tab.ghost", new(150f / 255f, 150f / 255f, 150f / 255f), roleVisibility);
+        ConfigurationTab.tabModifier = new ConfigurationTab(0x20, "options.tab.modifier", new(255f / 255f, 255f / 255f, 243f / 255f), roleVisibility);
+        ConfigurationTab.allTab = [ConfigurationTab.tabSetting, ConfigurationTab.tabCrewmate, ConfigurationTab.tabImpostor, ConfigurationTab.tabNeutral, ConfigurationTab.tabGhost, ConfigurationTab.tabModifier];
+    }
+
+    static private void SetNebulaTeams()
+    {
+        //Set Up Team
+        Virial.Assignable.NebulaTeams.CrewmateTeam = Crewmate.Crewmate.MyTeam;
+        Virial.Assignable.NebulaTeams.ImpostorTeam = Impostor.Impostor.MyTeam;
+        Virial.Assignable.NebulaTeams.ArsonistTeam = Neutral.Arsonist.MyTeam;
+        Virial.Assignable.NebulaTeams.ChainShifterTeam = Neutral.ChainShifter.MyTeam;
+        Virial.Assignable.NebulaTeams.JackalTeam = Neutral.Jackal.MyTeam;
+        Virial.Assignable.NebulaTeams.JesterTeam = Neutral.Jester.MyTeam;
+        Virial.Assignable.NebulaTeams.PaparazzoTeam = Neutral.Paparazzo.MyTeam;
+        Virial.Assignable.NebulaTeams.VultureTeam = Neutral.Vulture.MyTeam;
+    }
+
+
+    static NoSRoleSetUp()
+    {
+        AssignmentType.SortAllTypes();
+        SetTabs();
+        SetNebulaTeams();
+
+        foreach (var assembly in AddonScriptManager.ScriptAssemblies.Where(script => script.Behaviour.LoadRoles).Select(s => s.Assembly).Prepend(Assembly.GetAssembly(typeof(Roles))))
+        {
+            var types = assembly?.GetTypes().Where((type) => type.IsAssignableTo(typeof(DefinedAssignable)) || type.IsAssignableTo(typeof(PerkFunctionalInstance)));
+            foreach(var type in types ?? []) Helpers.RunStaticConstructor(type);
+        }
+    }
+}
+
+[NebulaPreprocess(PreprocessPhase.FixRoles)]
+public class Roles
+{
+    private class RolesAPI : Assignables
+    {
+        public IEnumerable<DefinedAssignable> AllAssignables => Roles.AllAssignables();
+        public IEnumerable<DefinedRole> AllRoles => Roles.AllRoles;
+        public IEnumerable<DefinedModifier> AllModifiers => Roles.AllModifiers;
+        public IEnumerable<DefinedGhostRole> AllGhostRoles => Roles.AllGhostRoles;
+        public DefinedRole? GetRole(string internalName) => Roles.AllRoles.FirstOrDefault(r => r.InternalName == internalName);
+        public DefinedRole? GetRoleById(int id) => Roles.GetRole(id);
+        public DefinedModifier? GetModifier(string internalName) => Roles.AllModifiers.FirstOrDefault(r => r.InternalName == internalName);
+        public DefinedModifier? GetModifierById(int id) => Roles.GetModifier(id);
+        public DefinedGhostRole? GetGhostRole(string internalName) => Roles.AllGhostRoles.FirstOrDefault(r => r.InternalName == internalName);
+        public DefinedGhostRole? GetGhostRoleById(int id) => Roles.GetGhostRole(id);
+        public AssignmentSummary CalcAssignmentSummary(int? players = null) => AssignmentPreview.CalcSummary(players ?? (GamePlayer.AllPlayers.Any() ? GamePlayer.AllPlayers.Count() : PlayerControl.AllPlayerControls.Count));
+    }
+    static private Virial.Logging.ILogger Log { get
+        {
+            if (field == null) field = NebulaAPI.Logging.NebulaLogger("Roles");
+            return field;
+        }
+    } = null;
+    static public Assignables API { get; } = new RolesAPI();
+    static public IReadOnlyList<DefinedRole> AllRoles { get; private set; } = [];
+    static public IReadOnlyList<DefinedModifier> AllModifiers { get; private set; } = [];
+    static public IReadOnlyList<DefinedGhostRole> AllGhostRoles { get; private set; } = [];
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    static private IEnumerable<T> GetAssignables<T>(IReadOnlyList<T> list, int idMin, int idMax)
+    {
+        if (idMin < 0) idMin = 0;
+        if (idMax >= list.Count) idMax = list.Count - 1;
+        for (int i = idMin; i < idMax; i++) yield return list[i];
+
+    }
+    /// <summary>
+    /// 指定の範囲に収まるIDの役職を全て返します。
+    /// </summary>
+    /// <param name="idMin">自身を含むIdの最小値</param>
+    /// <param name="idMax">自身を含まないIdの最大値</param>
+    /// <returns></returns>
+    static public IEnumerable<DefinedRole> GetRoles(int idMin, int idMax) => GetAssignables(AllRoles, idMin, idMax);
+
+    /// <summary>
+    /// 指定の範囲に収まるIDのモディファイアを全て返します。
+    /// </summary>
+    /// <param name="idMin">自身を含むIdの最小値</param>
+    /// <param name="idMax">自身を含まないIdの最大値</param>
+    /// <returns></returns>
+    static public IEnumerable<DefinedModifier> GetModifiers(int idMin, int idMax) => GetAssignables(AllModifiers, idMin, idMax);
+
+    /// <summary>
+    /// 指定の範囲に収まるIDの幽霊役職を全て返します。
+    /// </summary>
+    /// <param name="idMin">自身を含むIdの最小値</param>
+    /// <param name="idMax">自身を含まないIdの最大値</param>
+    /// <returns></returns>
+    static public IEnumerable<DefinedGhostRole> GetGhostRoles(int idMin, int idMax) => GetAssignables(AllGhostRoles, idMin, idMax);
+
+
+
+    static public DefinedRole? GetRole(int id)
+    {
+        if (id < 0) return null;
+        return AllRoles[id];
+    }
+
+    static public DefinedModifier? GetModifier(int id)
+    {
+        if (id < 0) return null;
+        return AllModifiers[id];
+    }
+
+    static public DefinedGhostRole? GetGhostRole(int id)
+    {
+        if (id < 0) return null;
+        return AllGhostRoles[id];
+    }
+
+    static public IEnumerable<DefinedAssignable> AllAssignables()
+    {
+        foreach(var r in AllRoles) yield return r;
+        foreach (var r in AllGhostRoles) yield return r;
+        foreach (var m in AllModifiers) yield return m;
+    }
+
+    static public IEnumerable<DefinedAllocatableModifier> AllAllocatableModifiers()
+    {
+        foreach (var m in AllModifiers) if (m is DefinedAllocatableModifier adm) yield return adm;
+    }
+
+    static public IReadOnlyList<Team> AllTeams { get; private set; } = null!;
+
+    static private List<DefinedRole>? allRoles = [];
+    static private List<DefinedGhostRole>? allGhostRoles = [];
+    static private List<DefinedModifier>? allModifiers = [];
+    static private List<Team>? allTeams = [];
+
+    static private Dictionary<string, PerkFunctionalDefinition> allPerks = [];
+    static internal IEnumerable<PerkFunctionalDefinition> AllPerks => allPerks.Values;
+    static internal void Register(PerkFunctionalDefinition definition) => allPerks[definition.Id] = definition;
+    static internal PerkFunctionalDefinition GetPerk(string id) => allPerks[id];
+
+    static public void CheckNeedingHandshake(object assignable)
+    {
+        var assembly = assignable.GetType().Assembly;
+        var addon = AddonScriptManager.ScriptAssemblies.FirstOrDefault(addon => assembly == addon.Assembly);
+        if (addon != null)
+        {
+            addon.Addon.MarkAsNeedingHandshake();
+        }
+    }
+
+    static public void Register(DefinedRole role)
+    {
+        if (allRoles == null)
+            Log.Error($"Failed to register role \"{role.LocalizedName}\".\nRole registration is only possible at load phase.");
+        else
+            allRoles?.Add(role);
+
+        CheckNeedingHandshake(role);
+    }
+
+    static public void Register(DefinedGhostRole role)
+    {
+        if (allRoles == null)
+            Log.Error($"Failed to register role \"{role.LocalizedName}\".\nRole registration is only possible at load phase.");
+        else
+            allGhostRoles?.Add(role);
+
+        CheckNeedingHandshake(role);
+    }
+
+    static public void Register(DefinedModifier role)
+    {
+        if(allModifiers == null)
+            Log.Error($"Failed to register modifier \"{role.LocalizedName}\".\nModifier registration is only possible at load phase.");
+        else
+            allModifiers?.Add(role);
+
+        CheckNeedingHandshake(role);
+    }
+    static public void Register(Team team) {
+        if(allTeams == null)
+            Log.Error($"Failed to register team \"{team.TranslationKey}\".\nTeam registration is only possible at load phase.");
+        else
+            allTeams.Add(team);
+
+        CheckNeedingHandshake(team);
+    }
+
+    static public Team GetTeamById(int id)
+    {
+        return AllTeams.Find(t => t.Id == id, out var team) ? team : null!;
+    }
+    
+    static public IEnumerator Preprocess(NebulaPreprocessor preprocessor)
+    {
+        yield return preprocessor.SetLoadingText("Building Roles Database");
+
+        allRoles!.Sort((role1, role2) => {
+            int diff;
+            
+            diff = (int)role1.Category - (int)role2.Category;
+            if (diff != 0) return diff;
+
+            return role1.InternalName.CompareTo(role2.InternalName);
+        });
+
+        allGhostRoles!.Sort((role1, role2) => {
+            int diff = (int)role1.Category - (int)role2.Category;
+            if (diff != 0) return diff;
+            return role1.InternalName.CompareTo(role2.InternalName);
+        });
+
+
+        allModifiers!.Sort((role1, role2) => {
+            return role1.InternalName.CompareTo(role2.InternalName);
+        });
+
+        allTeams!.Sort((team1, team2) => team1.TranslationKey.CompareTo(team2.TranslationKey));
+
+        for (int i = 0; i < allRoles!.Count; i++) allRoles![i].Id = i;
+        for (int i = 0; i < allGhostRoles!.Count; i++) allGhostRoles![i].Id = i;
+        for (int i = 0; i < allModifiers!.Count; i++) allModifiers![i].Id = i;
+        for (int i = 0; i < allTeams!.Count; i++) allTeams![i].Id = i;
+
+        AllRoles = allRoles!.AsReadOnly();
+        AllGhostRoles = allGhostRoles!.AsReadOnly();
+        AllModifiers = allModifiers!.AsReadOnly();
+        AllTeams = allTeams!.AsReadOnly();
+
+        foreach (var role in AllRoles)
+        {
+            if (role.ConfigurationHolder != null && role.AllocationParameters != null)
+            {
+                if(role.ModifierFilter != null) role.ConfigurationHolder.AppendRelatedAction(new TranslateTextComponent("options.role.modifierFilter"), () => true, () => RoleOptionHelper.OpenFilterScreen<DefinedModifier>("ModifierFilter", AllAllocatableModifiers().Where(m => role.CanLoadDefault(m)), m => role.ModifierFilter));
+                if (role.GhostRoleFilter != null) role.ConfigurationHolder.AppendRelatedAction(new TranslateTextComponent("options.role.ghostRoleFilter"), () => true, () => RoleOptionHelper.OpenFilterScreen("GhostRoleFilter", AllGhostRoles.Where(m => role.CanLoadDefault(m)), g => role.GhostRoleFilter));
+            }
+        }
+
+        foreach(var modifier in AllAllocatableModifiers())
+            if (modifier.ConfigurationHolder != null)
+                modifier.ConfigurationHolder.AppendRelatedAction(new TranslateTextComponent("options.role.modifierFilter"), () => true, () => RoleOptionHelper.OpenFilterScreen("RoleFilter", AllRoles.Where(r => r.CanLoadDefault(modifier)), r => modifier.RoleFilter));
+
+        foreach (var ghostRole in AllGhostRoles)
+            if (ghostRole.ConfigurationHolder != null)
+                ghostRole.ConfigurationHolder.AppendRelatedAction(new TranslateTextComponent("options.role.ghostRoleFilter"), () => true, () => RoleOptionHelper.OpenFilterScreen("RoleFilter", AllRoles.Where(r => r.CanLoadDefault(ghostRole)), r => ghostRole.RoleFilter));
+
+        //AllAssignables().Do(a => a.Load());
+
+
+        allRoles = null;
+        allGhostRoles = null;
+        allModifiers = null;
+        allTeams = null;
+
+        //色とアイコンを登録する
+        AllAssignables().Do(a =>
+        {
+            SerializableDocument.RegisterColor("role." + a.InternalName, a.Color.ToUnityColor());
+            a.ConfigurationHolder?.RelatedAssignable = a;
+
+        });
+    }
+}
+
+internal static class RoleOptionHelper
+{
+    private static readonly TextAttribute RelatedOutsideButtonAttr = new(GUI.API.GetAttribute(AttributeAsset.CenteredBoldFixed)) { Size = new(1.2f, 0.29f) };
+    private static readonly TextAttribute RelatedInsideButtonAttr = new(GUI.API.GetAttribute(AttributeAsset.CenteredBoldFixed)) { Size = new(1.14f, 0.26f), Font = GUI.API.GetFont(FontAsset.GothicMasked) };
+
+    static internal void OpenFilterScreen<R>(string scrollerTag, IEnumerable<R> allRoles, Func<R, AssignableFilter<R>> filter, MetaScreen? screen = null) where R : DefinedAssignable
+        => OpenFilterScreen(scrollerTag, allRoles, r => filter.Invoke(r).Test(r), (r, val) => filter.Invoke(r).SetAndShare(r, val), r => filter.Invoke(r).ToggleAndShare(r), screen);
+    static internal void OpenFilterScreen<R>(string scrollerTag, IEnumerable<R> allRoles, Func<R, bool> test, Action<R, bool>? setAndShare, Action<R> toggleAndShare, MetaScreen? screen = null, bool canFilterSpawnable = true) where R : DefinedAssignable => 
+        OpenFilterScreen(scrollerTag, [(null, allRoles)], test, setAndShare, toggleAndShare, screen, canFilterSpawnable);
+    static internal void OpenFilterScreen<R>(string scrollerTag, IEnumerable<(string? tag, IEnumerable<R> roles)> allRoles, Func<R, bool> test, Action<R, bool>? setAndShare, Action<R> toggleAndShare, MetaScreen? screen = null, bool canFilterSpawnable = true) where R : DefinedAssignable
+    {
+        if (!screen) screen = MetaScreen.GenerateWindow(new Vector2(6.7f, setAndShare != null ? 4.5f : 3.7f), HudManager.Instance.transform, Vector3.zero, true, true);
+
+        bool showOnlySpawnable = canFilterSpawnable && ClientOption.GetValue(ClientOption.ClientOptionType.ShowOnlySpawnableAssignableOnFilter) == 1;
+
+        IEnumerable<(string? tag, IEnumerable<R> roles)> allRolesFiltered = allRoles;
+        if (showOnlySpawnable) allRolesFiltered = allRoles.Select(tuple => (tuple.tag, tuple.roles.Where(r => (r as ISpawnable)?.IsSpawnable ?? true)));
+        allRolesFiltered = allRolesFiltered.Select(tuple => (tuple.tag, tuple.roles.Where(r => !(r is DefinedRole dr) || !dr.IsSystemRole)));
+
+        var allRolesFilteredFlat = allRolesFiltered.Select(tuple => tuple.roles).JoinMany();
+
+        List<GUIWidget> shortcutButtons = [];
+        if (setAndShare != null)
+        {
+            void Append(string translationKey, Func<bool> isInvalid, Action<bool> onClicked)
+            {
+                var invalid = isInvalid.Invoke();
+                shortcutButtons.Add(new GUIButton(Virial.Media.GUIAlignment.Center, RelatedOutsideButtonAttr, GUI.API.LocalizedTextComponent(translationKey))
+                {
+                    Color = invalid ? VColor.Gray : VColor.White,
+                    OnClick = _ =>
+                    {
+                        {
+                            //データのセーブと共有を一括で行う
+                            using var segment = new DataSaveSegment();
+                            using var shareSegment = new ConfigurationUpdateBlocker();
+                            onClicked.Invoke(invalid);
+                        }
+                        OpenFilterScreen(scrollerTag, allRoles, test, setAndShare, toggleAndShare, screen, canFilterSpawnable);
+                    },
+                    AsMaskedButton = false
+                });
+            }
+
+            Append("roleFilter.shortcut.all", () => allRolesFilteredFlat.Any(r => !test.Invoke(r)), val => allRolesFilteredFlat.Do(r => setAndShare.Invoke(r, val)));
+
+            if (typeof(R).IsAssignableTo(typeof(DefinedRole)))
+            {
+                if (allRolesFilteredFlat.Any(r => (r as DefinedRole)!.Category == RoleCategory.ImpostorRole))
+                {
+                    var impostors = allRolesFilteredFlat.Where(r => (r as DefinedRole)!.Category == RoleCategory.ImpostorRole);
+                    Append("roleFilter.shortcut.allImpostor", () => impostors.Any(r => !test.Invoke(r)), val => impostors.Do(r => setAndShare.Invoke(r, val)));
+                }
+                if (allRolesFilteredFlat.Any(r => (r as DefinedRole)!.Category == RoleCategory.NeutralRole))
+                {
+                    var neutrals = allRolesFilteredFlat.Where(r => (r as DefinedRole)!.Category == RoleCategory.NeutralRole);
+                    Append("roleFilter.shortcut.allNeutral", () => neutrals.Any(r => !test.Invoke(r)), val => neutrals.Do(r => setAndShare.Invoke(r, val)));
+                }
+                if (allRolesFilteredFlat.Any(r => (r as DefinedRole)!.Category == RoleCategory.CrewmateRole))
+                {
+                    var crewmates = allRolesFilteredFlat.Where(r => (r as DefinedRole)!.Category == RoleCategory.CrewmateRole);
+                    Append("roleFilter.shortcut.allCrewmate", () => crewmates.Any(r => !test.Invoke(r)), val => crewmates.Do(r => setAndShare.Invoke(r, val)));
+                }
+            }
+        }
+
+        screen!.SetWidget(new VerticalWidgetsHolder(Virial.Media.GUIAlignment.Center,
+            new HorizontalWidgetsHolder(Virial.Media.GUIAlignment.Center, shortcutButtons),
+            (canFilterSpawnable ? new HorizontalWidgetsHolder(Virial.Media.GUIAlignment.Center, new NoSGUICheckbox(Virial.Media.GUIAlignment.Center, showOnlySpawnable) { OnValueChanged = val =>
+            {
+                ClientOption.AllOptions[ClientOption.ClientOptionType.ShowOnlySpawnableAssignableOnFilter].Increment();
+                OpenFilterScreen(scrollerTag, allRoles, test, setAndShare, toggleAndShare, screen, canFilterSpawnable);
+            } }, GUI.API.HorizontalMargin(0.2f), GUI.API.LocalizedText(Virial.Media.GUIAlignment.Center, GUI.API.GetAttribute(AttributeAsset.OverlayContent), "roleFilter.showOnlySpawnable")) : null),
+            new GUIScrollView(Virial.Media.GUIAlignment.Center, new(6.5f, canFilterSpawnable ? 3.1f : 3.5f), GUI.API.VerticalHolder(Virial.Media.GUIAlignment.Center,
+                    allRolesFiltered.Select(tuple => GUI.API.VerticalHolder(Virial.Media.GUIAlignment.Center, [
+                        tuple.tag != null ? GUI.API.RawText(Virial.Media.GUIAlignment.Center, GUI.API.GetAttribute(AttributeAsset.OptionsValue), tuple.tag) : null,
+                        GUI.API.Arrange(Virial.Media.GUIAlignment.Center, tuple.roles.Select(r => new GUIButton(Virial.Media.GUIAlignment.Center, RelatedInsideButtonAttr, GUI.API.RawTextComponent(r.DisplayColoredName)) {
+                            OnClick = _ => { toggleAndShare(r); OpenFilterScreen(scrollerTag, allRoles, test, setAndShare, toggleAndShare, screen, canFilterSpawnable); },
+                            Color = test(r) ? VColor.White : new(0.14f, 0.14f, 0.14f),
+                            AsMaskedButton = true,
+                        })
+                        , 4)
+                        ]))
+                )
+            ) { ScrollerTag = scrollerTag, WithMask = true}), out _);
+    }
+}

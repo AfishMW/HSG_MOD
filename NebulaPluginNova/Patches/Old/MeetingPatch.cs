@@ -1,0 +1,1119 @@
+﻿using UnityEngine.Rendering;
+using Nebula.Behavior;
+using static MeetingHud;
+using Il2CppInterop.Runtime.InteropTypes.Arrays;
+using Virial.Events.Game.Meeting;
+using Virial.Events.Player;
+using UnityEngine;
+using BepInEx.Unity.IL2CPP.Utils;
+using Nebula.Modules.Cosmetics;
+using System.Runtime.CompilerServices;
+using Nebula.VoiceChat;
+using Nebula.Roles;
+using TMPro;
+
+namespace Nebula.Patches;
+
+public static class More15Helpers
+{
+    static private float[] VotingAreaScale = [1f, 0.95f, 0.76f];
+    static private (int x, int y)[] VotingAreaSize = [(3, 5), (3, 6), (4, 6)];
+    static private Vector3[] VotingAreaOffset = [Vector3.zero, new(0.1f, 0.145f, 0f), new(-0.355f, 0f, 0f)];
+    static private (float x, float y)[] VotingAreaMultiplier = [(1f, 1f), (1f, 0.89f), (0.974f, 1f)];
+    static public int GetDisplayType(int players) => players <= 15 ? 0 : players <= 18 ? 1 : 2;
+    public static Vector3 ConvertPos(int index, int arrangeType, (int x, int y)[] arrangement, Vector3 origin, Vector3[] originOffset, Vector3 contentsOffset, float[] scale, (float x, float y)[] contentAreaMultiplier)
+    {
+        int x = index % arrangement[arrangeType].x;
+        int y = index / arrangement[arrangeType].x;
+        return
+            origin + originOffset[arrangeType] +
+            new Vector3(
+                contentsOffset.x * scale[arrangeType] * contentAreaMultiplier[arrangeType].x * (float)x,
+                contentsOffset.y * scale[arrangeType] * contentAreaMultiplier[arrangeType].y * (float)y,
+                -(float)y * 0.01f);
+    }
+
+}
+
+[NebulaRPCHolder]
+public static class MeetingModRpc
+{
+    static private float[] VotingAreaScale = [1f, 0.95f, 0.76f];
+    static private (int x, int y)[] VotingAreaSize = [(3, 5), (3, 6), (4, 6)];
+    static private Vector3[] VotingAreaOffset = [new(0f,0f,-0.9f), new(0.1f, 0.145f, -0.9f), new(-0.355f, 0f, -0.9f)];
+    static private (float x, float y)[] VotingAreaMultiplier = [(1f, 1f), (1f, 0.89f), (0.974f, 1f)];
+    //static private int GetVotingAreaType(int players) => players <= 15 ? 0 : players <= 18 ? 1 : 2;
+    private static Vector3 ToVoteAreaPos(int index, int arrangeType) => More15Helpers.ConvertPos(index, arrangeType, VotingAreaSize, MeetingHud.Instance.VoteOrigin, VotingAreaOffset, MeetingHud.Instance.VoteButtonOffsets, VotingAreaScale, VotingAreaMultiplier);
+
+    public static void SortVotingArea(this MeetingHud __instance, Func<GamePlayer, int> rank, float speed = 1f)
+    {
+        int length = __instance.playerStates.Length;
+        int type = More15Helpers.GetDisplayType(length);
+        __instance.playerStates.Do(p => p.transform.localScale = new(VotingAreaScale[type], VotingAreaScale[type], 1f));
+        
+        var ordered = __instance.playerStates.OrderBy(p => p.TargetPlayerId + 32 * rank.Invoke(NebulaGameManager.Instance!.GetPlayer(p.TargetPlayerId)!)).ToArray();
+
+        if (speed > 0f)
+        {
+            for (int i = 0; i < ordered.Length; i++)
+                __instance.StartCoroutine(ordered[i].transform.Smooth(ToVoteAreaPos(i, type), 1.6f / speed).WrapToIl2Cpp());
+        }
+        else
+        {
+            for (int i = 0; i < ordered.Length; i++)
+                ordered[i].transform.localPosition = ToVoteAreaPos(i, type);
+        }
+    }
+
+    public static readonly RemoteProcess RpcBreakEmergencyButton = new("BreakEmergencyButton",
+        (_) => AmongUsLLImpl.ShipStatusInstance.BreakEmergencyButton());
+
+    public static readonly RemoteProcess<(int voteMask, bool canSkip, float votingTime, bool exileEvenIfTie, bool sort)> RpcChangeVotingStyle = new("ChangeVotingStyle",
+        (message,_) =>
+        {
+            MeetingHudExtension.UpdateVotingMask(message.voteMask);
+            MeetingHudExtension.CanSkip = message.canSkip;
+            MeetingHudExtension.ExileEvenIfTie = message.exileEvenIfTie;
+
+            var meetingHud = MeetingHud.Instance;
+
+            if (message.sort)
+            {
+                meetingHud.SortVotingArea(p =>
+                {
+                    if (((1 << p.PlayerId) & message.voteMask) != 0) return 0;
+                    if (p.IsDead) return 2;
+                    return 1;
+                });
+            }
+
+            meetingHud.state = VoteStates.NotVoted;
+            meetingHud.ResetPlayerState();
+
+            MeetingHudExtension.VotingTimer = message.votingTime;
+            meetingHud.lastSecond = Mathn.Min(11, (int)message.votingTime);
+        }
+        );
+
+    public static readonly RemoteProcess<float> RpcSyncMeetingTimer = new("SyncMeetingTimer", (timer, amHost) =>
+    {
+        if(!amHost)MeetingHudExtension.VotingTimer = timer;
+    });
+    public static readonly RemoteProcess<(byte reporter,byte reported)> RpcNoticeStartMeeting = new("ModStartMeeting",
+    (message,_) =>
+    {
+        var reporter = NebulaGameManager.Instance?.GetPlayer(message.reporter);
+        var reported = NebulaGameManager.Instance?.GetPlayer(message.reported);
+
+        Resources.UnloadUnusedAssets();
+
+        var meeting = new EmergencyMeetingImpl(reported, reporter);
+
+        if (reported != null)
+            GameOperatorManager.Instance?.Run(new ReportDeadBodyEvent(reporter!, reported, meeting), true);
+        else
+            GameOperatorManager.Instance?.Run(new CalledEmergencyMeetingEvent(reporter!, meeting), true);
+    });
+
+    public static List<VoterState> ConsiderSwapping(List<VoterState> firstStates, List<(byte playerFrom, byte playerTo)> mapList)
+    {
+        List<VoterState> list = [];
+        foreach(var state in firstStates)
+        {
+            var votedFor = state.VotedForId;
+            foreach(var mapping in mapList)
+            {
+                if (votedFor == mapping.playerFrom)
+                {
+                    votedFor = mapping.playerTo;
+                    break;
+                }
+            }
+            list.Add(new() { VotedForId = votedFor, VoterId = state.VoterId });
+        }
+        return list;
+    }
+
+    public static readonly RemoteProcess<(List<VoterState> firstStates, List<(byte playerFrom, byte playerTo)> mapList, byte exiled, byte[] exiledAll,  bool tie, bool isObvious)> RpcModCompleteVoting = new("CompleteVoting", 
+        (writer,message) => {
+            writer.Write(message.firstStates.Count);
+            foreach(var state in message.firstStates)
+            {
+                writer.Write(state.VoterId);
+                writer.Write(state.VotedForId);
+            }
+            writer.Write(message.mapList.Count);
+            foreach (var swap in message.mapList)
+            {
+                writer.Write(swap.playerFrom);
+                writer.Write(swap.playerTo);
+            }
+            writer.Write(message.exiled);
+            writer.WriteBytesAndSize(message.exiledAll);
+            writer.Write(message.tie);
+            writer.Write(message.isObvious);
+        },
+        (reader) => {
+            List<VoterState> states = [];
+            int statesNum = reader.ReadInt32();
+            for (int i = 0; i < statesNum; i++)
+            {
+                var state = new VoterState() { VoterId = reader.ReadByte(), VotedForId = reader.ReadByte() };
+                states.Add(state);
+            }
+            List<(byte player1, byte player2)> mapList = [];
+            int mapNum = reader.ReadInt32();
+            for (int i = 0; i < mapNum; i++)
+            {
+                mapList.Add((reader.ReadByte(), reader.ReadByte()));
+            }
+
+            return (states, mapList, reader.ReadByte(),reader.ReadBytesAndSize(), reader.ReadBoolean(), reader.ReadBoolean());
+        },
+        (message, _) => {
+            ForcelyVotingComplete(MeetingHud.Instance, message.firstStates, ConsiderSwapping(message.firstStates, message.mapList), message.mapList, message.exiled, message.exiledAll, message.tie, message.isObvious);
+        }
+        );
+
+    private static void ForcelyVotingComplete(MeetingHud meetingHud, List<VoterState> firstStates, List<VoterState> finalStates, List<(byte playerFrom, byte playerTo)> mapList, byte exiled, byte[] exiledAll, bool tie, bool isObvious)
+    {
+        //Debug.Log("Forcely Voting Complete");
+
+        var readonlyStates = finalStates.ToArray();
+
+        var localPlayerId = AmongUsLLImpl.LocalPlayer.PlayerId;
+        var votedLocal = NebulaGameManager.Instance!.GetPlayer(((VoterState?)finalStates.FirstOrDefault(s => s.VoterId == localPlayerId))?.VotedForId ?? 255);
+        var votedLocalOriginal = NebulaGameManager.Instance!.GetPlayer(((VoterState?)firstStates.FirstOrDefault(s => s.VoterId == localPlayerId))?.VotedForId ?? 255);
+
+        GameOperatorManager.Instance?.Run(new PlayerVoteDisclosedLocalEvent(GamePlayer.LocalPlayer, votedLocal, votedLocalOriginal, exiledAll.Contains(votedLocal?.PlayerId ?? byte.MaxValue)));
+        GamePlayer[] votedBy = finalStates.Where(s => s.VotedForId == localPlayerId).Select(s => s.VoterId).Distinct().Select(id => NebulaGameManager.Instance.GetPlayer(id)).Where(p => p != null).ToArray()!;
+        GameOperatorManager.Instance?.Run(new PlayerVotedLocalEvent(GamePlayer.LocalPlayer, votedBy!));
+        GameOperatorManager.Instance?.Run(new MeetingVoteDisclosedEvent(firstStates.ToArray(), readonlyStates));
+
+        meetingHud.exiledPlayer = Helpers.GetPlayer(exiled)?.Data;
+        meetingHud.wasTie = tie;
+        MeetingHudExtension.ExiledAllModCache = exiledAll.Select(p => GamePlayer.GetPlayer(p)!).ToArray();
+        MeetingHudExtension.WasTie = tie;
+        MeetingHudExtension.IsObvious = isObvious;
+
+        foreach(var pva in meetingHud.playerStates)
+        {
+            if (finalStates.All(state => state.VotedForId != pva.TargetPlayerId)) continue;
+            var textTransform = pva.transform.FindChild("NameText");
+            if(textTransform != null && textTransform)
+            {
+                var roleText = textTransform.FindChild("RoleText").GetComponent<TextMeshPro>();
+                IEnumerator CoMoveNameText()
+                {
+                    float p = 0f;
+                    while(true)
+                    {
+                        p += (1 - p).Delta(4f, 0.001f);
+                        textTransform.localPosition = new(0.3384f, 0.0311f + ((roleText.text.Length > 0) ? p * 0.123f : 0f), -0.1f);
+                        yield return null;
+                    }
+                }
+                CoMoveNameText().StartOn(textTransform.GetComponent<TextMeshPro>());
+            }
+        }
+
+        if (meetingHud.state == MeetingHud.VoteStates.Results) return;
+        meetingHud.state = MeetingHud.VoteStates.Results;
+        meetingHud.SkipVoteButton.gameObject.SetActive(false);
+        meetingHud.SkippedVoting.gameObject.SetActive(MeetingHudExtension.CanSkip);
+        AmongUsLLImpl.AmongUsClientInstance.DisconnectHandlers.Remove(meetingHud.TryCast<IDisconnectHandler>());
+        meetingHud.PopulateResults(firstStates.ToArray());
+        AnimateSwapping(meetingHud, mapList);
+        meetingHud.SetupProceedButton();
+
+        if (DestroyableSingleton<HudManager>.Instance.Chat.IsOpenOrOpening)
+        {
+            DestroyableSingleton<HudManager>.Instance.Chat.ForceClosed();
+            ControllerManager.Instance.CloseOverlayMenu(DestroyableSingleton<HudManager>.Instance.Chat.name);
+        }
+        ControllerManager.Instance.CloseOverlayMenu(meetingHud.name);
+        ControllerManager.Instance.OpenOverlayMenu(meetingHud.name, null, meetingHud.ProceedButtonUi);
+    }
+
+    static private void AnimateSwapping(MeetingHud meeting, List<(byte playerFrom, byte playerTo)> mapList)
+    {
+        foreach (var mapping in mapList)
+        {
+            if (mapping.playerFrom == mapping.playerTo)
+            {
+                if (meeting.TryGetPlayer(mapping.playerFrom, out var area))
+                {
+                    var pos = area.transform.localPosition;
+                    IEnumerator CoShakeAnim()
+                    {
+                        float angle = System.Random.Shared.NextSingle() * Mathn.PI;
+                        for(int i = 0; i < 5; i++)
+                        {
+                            angle += Mathn.PI + (System.Random.Shared.NextSingle() - 0.5f) * 1.4f;
+                            float p = 0f;
+                            float cos = Mathn.Cos(angle);
+                            float sin = Mathn.Sin(angle);
+                            while (p < 0.65f)
+                            {
+                                float coeff = Mathn.Sin((1 - Mathn.Pow(1 - p, 5f)) * Mathn.PI) * 0.045f;
+                                area.transform.localPosition = pos + new Vector3(cos * coeff, sin * coeff, 0f);
+                                p += Time.deltaTime * 5.9f;
+                                yield return null;
+                            }
+                        }
+                        area.transform.localPosition = pos;
+                    }
+                    CoShakeAnim().StartOnScene();
+                }
+            }
+            else
+            {
+                if (meeting.TryGetPlayer(mapping.playerFrom, out var areaFrom) && meeting.TryGetPlayer(mapping.playerTo, out var areaTo))
+                {
+                    var toPos = areaTo.transform.TransformPointLocalToLocal(Vector3.zero, areaFrom.transform);
+                    var child = areaFrom.transform.FindChild(MeetingHudExtension.SpreaderAndBG);
+                    if (child.AsBoolFast())
+                    {
+                        Vector3 addVec = mapList.Any(entry => entry.playerFrom == mapping.playerTo && entry.playerTo == mapping.playerFrom) ? toPos.normalized.RotateZ(90) : Vector3.zero;
+                        ManagedEffects.Lerp(1.3f, p =>
+                        {
+                            p = Mathn.Pow(p, 0.65f);
+                            Vector3 currentPos = toPos * p;
+
+                            p = (p - 0.5f) / 0.5f;
+                            p = 1f - (p * p);
+                            //p: 0 - 1 - 0
+
+                            currentPos += addVec * p * 0.32f;
+
+                            child.localPosition = currentPos;
+
+                        }).StartOnScene();
+                    }
+                }
+            }
+        }
+    }
+}
+
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.PopulateButtons))]
+class MeetingArrangeButtonStartPatch
+{
+    public static void Postfix(MeetingHud __instance)
+    {
+        MeetingHud.Instance.SortVotingArea(p => p.IsDead ? 2 : 1, 10f);
+    }
+
+}
+[HarmonyPatch(typeof(MeetingCalledAnimation), nameof(MeetingCalledAnimation.CoShow))]
+class MeetingCalledAnimationPatch
+{
+    public static void Prefix(MeetingCalledAnimation __instance)
+    {
+        if(ClientOption.AllOptions[ClientOption.ClientOptionType.ForceSkeldMeetingSE].Value == 1)
+        {
+            bool isEmergency = __instance.Stinger == AmongUsLLImpl.ShipStatusInstance.EmergencyOverlay.Stinger;
+            __instance.Stinger = (isEmergency ? VanillaAsset.MapAsset[0].EmergencyOverlay : VanillaAsset.MapAsset[0].ReportOverlay).Stinger;
+        }
+    }
+}
+
+[HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.ReportDeadBody))]
+class ReportDeadBodyPatch
+{
+    public static bool Prefix(PlayerControl __instance, [HarmonyArgument(0)] NetworkedPlayerInfo target)
+    {
+        var type = target == null ? MeetingHudExtension.ReportType.EmergencyMeeting : MeetingHudExtension.ReportType.ReportDeadBody;
+        MeetingHudExtension.ModReportDeadBody(__instance, target, type, type == MeetingHudExtension.ReportType.ReportDeadBody, type == MeetingHudExtension.ReportType.EmergencyMeeting);
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(PlayerVoteArea), nameof(PlayerVoteArea.canBeHighlighted))]
+class MeetingCanBeHighlightedPatch
+{
+    public static void Postfix(PlayerVoteArea __instance,ref bool __result)
+    {
+        __result = __result && MeetingHudExtension.CanVoteFor(__instance.TargetPlayerId);
+    }
+}
+
+[HarmonyPatch(typeof(MeetingIntroAnimation), nameof(MeetingIntroAnimation.CoRun))]
+class MeetingIntroStartPatch
+{
+    public static void Postfix(MeetingIntroAnimation __instance,ref Il2CppSystem.Collections.IEnumerator __result)
+    {
+        __result = Effects.Sequence(
+            Effects.Action((Il2CppSystem.Action)(() =>
+            {
+                NebulaGameManager.Instance?.OnMeetingStart();
+                if (MeetingHud.Instance) MeetingHudExtension.LastReporter = GamePlayer.GetPlayer(MeetingHud.Instance.reporterId);
+            })),
+            __result            
+            );
+    }
+}
+
+
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.CoIntro))]
+class MeetingIntroPatch
+{
+    public static void Postfix(MeetingHud __instance, ref Il2CppSystem.Collections.IEnumerator __result)
+    {
+        var orig = __result;
+        IEnumerator CoIntro()
+        {
+            while (orig.MoveNext())
+            {
+                var current = orig.Current;
+                yield return current;
+                if (current != null && current.TryCast<MeetingIntroAnimation._CoRun_d__17>() != null)
+                {
+                    NebulaGameManager.Instance?.OnMeetingStart();
+                    if (MeetingHud.Instance.AsBoolFast()) MeetingHudExtension.LastReporter = GamePlayer.GetPlayer(MeetingHud.Instance.reporterId);
+                }
+            }
+        }
+        __result = CoIntro().WrapToIl2Cpp();
+    }
+}
+
+
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.Start))]
+class MeetingStartPatch
+{
+    static private Image LightColorSprite = SpriteLoader.FromResource("Nebula.Resources.ColorLight.png", 100f);
+    static private Image DarkColorSprite = SpriteLoader.FromResource("Nebula.Resources.ColorDark.png", 100f);
+
+    static private bool CanVote => MeetingHud.Instance && MeetingHudExtension.VotingTimer > 0f && MeetingHud.Instance.state == VoteStates.NotVoted;
+    static void Postfix(MeetingHud __instance)
+    {
+        ClientOption.ChangeAmbientVolumeIfNecessary(true, false);
+
+        MeetingHudExtension.LeftContents.Clear();
+        MeetingHudExtension.Reset();
+        MeetingHudExtension.InitMeetingTimer();
+
+        NebulaManager.Instance.CloseAllUI();
+
+        //InnernetObjectの位置はStartより後で何か調整が入る (ownerとそれ以外で位置に違いが生まれる)
+        __instance.StartCoroutine(Effects.Sequence(Effects.Wait(0.1f), ManagedEffects.Action(() => {
+            __instance.transform.localPosition = new Vector3(0f, 0f, -25f);
+        }).WrapToIl2Cpp()));
+        
+
+        {
+            var role = GamePlayer.LocalPlayer!.Role.Role;
+            if (role != Roles.Crewmate.Crewmate.MyRole && role != Roles.Impostor.Impostor.MyRole)
+            {
+                Tutorial.WaitAndShowTutorial(() => !MeetingHud.Instance.AsBoolFast() || MeetingHud.Instance.state == VoteStates.Animating,
+                            new TutorialBuilder()
+                            .BindHistory("helpKey")
+                            .ShowWhile(() => MeetingHud.Instance.AsBoolFast())
+                            .AsSimpleTitledTextWidget(Language.Translate("tutorial.variations.helpInGame.title"), Language.Translate("tutorial.variations.helpInGame.caption").ReplaceKeyCode("%KEY%", Virial.Compat.VirtualKeyInput.Help)));
+            }
+        }
+
+        GamePlayer.AllPlayers.Do(p =>
+        {
+            p.Unbox().SpecialStampShower = PopupStampShower.GetHudShower(p.PlayerId, MeetingHud.Instance.transform, -100f, null);
+        });
+        NebulaManager.Instance.StartCoroutine(ManagedEffects.Wait(() => __instance.state == VoteStates.Animating, () =>
+        {
+            GamePlayer.AllPlayers.Do(p =>
+            {
+                var unbox = p.Unbox();
+                var shower = unbox.SpecialStampShower;
+                var area = __instance.GetPlayer(p.PlayerId);
+                unbox.SpecialStampShower = new ConditionalStampShower(
+                    PopupStampShower.GetMeetingShower(area),
+                    shower,
+                    () => area.gameObject.active
+                    );
+            });
+        }));
+
+        //色の明暗を表示
+        foreach (var player in __instance.playerStates)
+        {
+            player.NameText.rectTransform.sizeDelta = new(2.0942f, 0.3879f);
+            player.NameText.fontSizeMax = 2f;
+            player.NameText.fontSizeMin = 1.5f;
+            player.NameText.enableAutoSizing = true;
+
+            bool isLightColor = ModSingleton<BalancedColorManager>.Instance.IsLightColor(DynamicPalette.PlayerColors[player.TargetPlayerId]);
+
+            SpriteRenderer renderer = UnityHelper.CreateObject<SpriteRenderer>("Color", player.transform, new Vector3(1.2f, -0.18f, -1f));
+            renderer.sprite = isLightColor ? LightColorSprite.GetSprite() : DarkColorSprite.GetSprite();
+
+            //色テキストをプレイヤーアイコンそばに移動
+            var localPos = player.ColorBlindName.transform.localPosition;
+            localPos.x = -0.947f;
+            localPos.z -= 0.15f;
+            player.ColorBlindName.transform.localPosition = localPos;
+
+            var roleText = GameObject.Instantiate(player.NameText, player.NameText.transform);
+            roleText.name = "RoleText";
+            roleText.transform.localPosition = new Vector3(0f, -0.1611f, 0f);
+            roleText.transform.localScale = new Vector3(0.6333f, 0.6333f);
+            roleText.rectTransform.sizeDelta += new Vector2(0.35f, 0f);
+            roleText.UseRoleIcon();
+
+            player.NameText.UseRoleIcon();
+
+            player.CancelButton.GetComponent<SpriteRenderer>().material = __instance.Glass.material;
+            player.ConfirmButton.GetComponent<SpriteRenderer>().material = __instance.Glass.material;
+            player.CancelButton.transform.GetChild(0).GetComponent<SpriteRenderer>().maskInteraction = SpriteMaskInteraction.None;
+            player.ConfirmButton.transform.GetChild(0).GetComponent<SpriteRenderer>().maskInteraction = SpriteMaskInteraction.None;
+            player.Flag.gameObject.SetActive(GeneralConfigurations.ShowVoteStateOption || player.TargetPlayerId == AmongUsLLImpl.LocalPlayer.PlayerId);
+
+            var button = player.PlayerButton.Cast<PassiveButton>();
+            button.OnClick = new();
+            button.OnMouseOver = new();
+            button.OnMouseOut = new();
+            button.OnClick.AddListener(() =>
+            {
+                if (player.canBeHighlighted() && CanVote)
+                {
+                    if (MeetingHudExtension.CanVote)
+                        player.Select();
+                    else
+                        GameOperatorManager.Instance?.Run(new InvokeVoteAlternateEvent(player, GamePlayer.GetPlayer(player.TargetPlayerId)!));
+                }
+            });
+            var modPlayer = GamePlayer.GetPlayer(player.TargetPlayerId)?.Unbox();
+            button.OnMouseOver.AddListener(() =>
+            {
+                if (player.canBeHighlighted()) player.SetHighlighted(true);
+            });
+            button.OnMouseOut.AddListener(() =>
+            {
+                player.SetHighlighted(false);
+            });
+            button.SetOverlay(() => (NebulaGameManager.Instance?.CanSeeAllInfo ?? false) ? modPlayer?.ProgressWidget : null);
+
+
+            var script = player.gameObject.AddComponent<ScriptBehaviour>();
+            var cosmetics = player.PlayerIcon.cosmetics;
+            var nebulaCosmetics = cosmetics.GetComponent<NebulaCosmeticsLayer>();
+            var nameText = player.NameText;
+
+            TextMeshProHandler nameHandler = new(nameText);
+            TextMeshProHandler roleHandler = new(roleText);
+
+
+            SpriteRenderer[] renderers = [cosmetics.hat.FrontLayer, cosmetics.hat.BackLayer, cosmetics.visor.Image, cosmetics.skin.layer, cosmetics.currentBodySprite.BodySprite];
+
+            script.UpdateHandler += () => {
+                try
+                {
+                    if (nameHandler.IsActive)
+                    {
+                        modPlayer!.UpdateNameText(nameHandler, true);
+                        nameHandler.Reflect();
+                    }
+
+                    if (roleHandler.IsActive)
+                    {
+                        modPlayer!.UpdateRoleText(roleHandler, true);
+                        roleHandler.Reflect();
+                    }
+                }
+                catch
+                {
+                    if (roleHandler.IsActive)
+                    {
+                        roleHandler.RequestVisibility(false);
+                        roleHandler.Reflect();
+                    }
+                }
+
+                try
+                {
+                    foreach(var r  in renderers) r.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
+                    nebulaCosmetics.AdditionalRenderersAndMasks().Do(r => r.maskInteraction = SpriteMaskInteraction.VisibleInsideMask);
+                    player.XMark.maskInteraction = SpriteMaskInteraction.VisibleOutsideMask;
+                }
+                catch { }
+            };
+        }
+
+        //会議開始時に死亡したプレイヤーを考慮したソート
+        __instance.StartCoroutine(Effects.Sequence(Effects.Wait(2f), ManagedEffects.Action(() =>
+        {
+            MeetingHud.Instance.SortVotingArea(p => (p.IsDead || p.WillDie) ? 2 : 1);
+            MeetingHud.Instance.UpdatePlayerState();
+        }).WrapToIl2Cpp()));
+    }
+}
+
+
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.Update))]
+class MeetingHudUpdatePatch
+{
+    static bool Prefix(MeetingHud __instance)
+    {
+        if (__instance.state == MeetingHud.VoteStates.Animating) return false;
+        
+        __instance.UpdateButtons();
+
+        if (MeetingHudExtension.ActionCoolDown > 0f) MeetingHudExtension.ActionCoolDown -= Time.deltaTime;
+
+        switch (__instance.state)
+        {
+            case MeetingHud.VoteStates.Discussion:
+
+                MeetingHudExtension.DiscussionTimer -= Time.deltaTime;
+                if (MeetingHudExtension.DiscussionTimer > 0f)
+                {
+                    //議論時間中
+                    __instance.UpdateTimerText(StringNames.MeetingVotingBegins, Mathn.CeilToInt(MeetingHudExtension.DiscussionTimer));
+                    for (int i = 0; i < __instance.playerStates.Length; i++) __instance.playerStates[i].SetDisabled();
+                    __instance.SkipVoteButton.SetDisabled();
+                    return false;
+                }
+
+                //議論時間から投票時間へ
+                __instance.state = MeetingHud.VoteStates.NotVoted;
+
+                bool active = MeetingHudExtension.VotingTimer > 0;
+                __instance.TimerText.gameObject.SetActive(active);
+
+                __instance.discussionTimer = (float)GameManager.Instance.LogicOptions.CastFast<LogicOptionsNormal>().GetDiscussionTime();
+
+                __instance.lastSecond = 11;
+
+                MeetingHudExtension.ReflectVotingMask();
+
+                return false;
+            case MeetingHud.VoteStates.NotVoted:
+            case MeetingHud.VoteStates.Voted:
+                MeetingHudExtension.VotingTimer -= Time.deltaTime;
+                if (MeetingHudExtension.VotingTimer > 0f)
+                {
+                    //投票時間中
+                    int intCnt = Mathn.CeilToInt(MeetingHudExtension.VotingTimer);
+                    __instance.UpdateTimerText(StringNames.MeetingVotingEnds, intCnt);
+                    if (__instance.state == MeetingHud.VoteStates.NotVoted && intCnt < __instance.lastSecond)
+                    {
+                        __instance.lastSecond = intCnt;
+                        __instance.StartCoroutine(Effects.PulseColor(__instance.TimerText, Color.red, Color.white, 0.25f));
+                        AmongUsLLImpl.SoundManagerInstance.PlaySound(__instance.VoteEndingSound, false, 1f, null).pitch = Mathn.Lerp(1.5f, 0.8f, (float)__instance.lastSecond / 10f);
+                    }
+
+                    //定期的に時間を同期させる。投票漏れを防ぐためにわずかに時間を短く見積もる。
+                    if (MeetingHudExtension.LastSharedCount > MeetingHudExtension.VotingTimer && AmongUsLLImpl.AmongUsClientInstance.AmHost && intCnt % 20 == 11)
+                    {
+                        MeetingModRpc.RpcSyncMeetingTimer.Invoke(MeetingHudExtension.VotingTimer - 0.05f);
+                    }
+                }
+                else
+                {
+                    __instance.TimerText.text = Language.Translate("options.meeting.waitingForHost");
+
+                    if (AmongUsLLImpl.AmongUsClientInstance.AmHost)
+                    {
+                        //結果開示へ (ForceSkipAll)
+                        __instance.playerStates.Do(state => { if (!state.DidVote) state.VotedFor = 254; });
+                        __instance.SetDirtyBit(1U);
+                        __instance.CheckForEndVoting();
+                    }
+                }
+                break;
+            case MeetingHud.VoteStates.Results:
+                if (AmongUsLLImpl.AmongUsClientInstance.NetworkMode == NetworkModes.OnlineGame)
+                {
+                    MeetingHudExtension.ResultTimer -= Time.deltaTime;
+                    __instance.UpdateTimerText(StringNames.MeetingProceeds, Mathn.CeilToInt(MeetingHudExtension.ResultTimer));
+                    if (AmongUsLLImpl.AmongUsClientInstance.AmHost && MeetingHudExtension.ResultTimer <= 0f) __instance.HandleProceed();
+                }
+                break;
+        }
+
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.Close))]
+class MeetingClosePatch
+{ 
+    public static void Postfix(MeetingHud __instance)
+    {
+        //ベント内のプレイヤー情報をリセットしておく
+        VentilationSystem? ventilationSystem = AmongUsLLImpl.ShipStatusInstance.Systems[SystemTypes.Ventilation].TryCast<VentilationSystem>();
+        if (ventilationSystem != null) ventilationSystem.PlayersInsideVents.Clear();
+
+        GameOperatorManager.Instance?.Run(new ExileScenePreStartEvent(MeetingHudExtension.ExiledAllModCache!));
+
+        NebulaManager.Instance.CloseAllUI();
+
+        ClientOption.ChangeAmbientVolumeIfNecessary(false, true);
+    }
+}
+
+[HarmonyPatch(typeof(PlayerVoteArea), nameof(PlayerVoteArea.SetMaskLayer))]
+class VoteMaskPatch
+{
+    public static bool Prefix(PlayerVoteArea __instance)
+    {
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.PopulateButtons))]
+class VoteAreaVCPatch
+{
+    private static SpriteLoader VCFrameSprite = SpriteLoader.FromResource("Nebula.Resources.MeetingVCFrame.png", 119f);
+    public static void Postfix(MeetingHud __instance)
+    {
+        try
+        {
+
+            if (GeneralConfigurations.UseVoiceChatOption)
+            {
+                foreach (var pva in __instance.playerStates)
+                {
+                    var frame = UnityHelper.CreateObject<SpriteRenderer>("VCFrame", pva.transform, new Vector3(0, 0, -0.5f));
+                    frame.sprite = VCFrameSprite.GetSprite();
+                    frame.color = Color.clear;
+                    var col = DynamicPalette.PlayerColors[pva.TargetPlayerId];
+                    if (Mathn.Max((int)col.R, (int)col.G, (int)col.B) < 100) col = VColor.Lerp(col, VColor.White, 0.4f);
+
+                    if (ModSingleton<NoSVCRoom>.Instance != null)
+                    {
+                        float alpha = 0f;
+
+                        var script = frame.gameObject.AddComponent<ScriptBehaviour>();
+
+                        bool isLocal = GamePlayer.LocalPlayer?.PlayerId == pva.TargetPlayerId;
+                        script.UpdateHandler += () =>
+                        {
+                            float level = 0f;
+                            if (ModSingleton<NoSVCRoom>.Instance?.TryGetPlayer(pva.TargetPlayerId, out var vcPlayer) ?? false)
+                            {
+                                level = vcPlayer.Level;
+                            }
+                            else if (isLocal)
+                            {
+                                level = ModSingleton<NoSVCRoom>.Instance?.LocalMicLevel ?? 0f;
+                            }
+
+                            if (level > 0.12f)
+                                alpha = Mathn.Clamp(alpha + Time.deltaTime * 8f, 0f, 1f);
+                            else
+                                alpha = Mathn.Clamp(alpha - Time.deltaTime * 8f, 0f, 1f);
+                            col.A = alpha;
+                            frame.color = col.ToUnityColor();
+                        };
+
+                    }
+                }
+            }
+        }
+        catch { }
+    }
+}
+
+
+[HarmonyPatch(typeof(PlayerVoteArea), nameof(PlayerVoteArea.Start))]
+class VoteAreaPatch
+{
+    public static void Postfix(PlayerVoteArea __instance)
+    {
+        if (!MeetingHud.Instance.AsBoolFast()) return;
+
+        if(__instance.MaskArea.AsBoolFast()) { 
+        
+            var maskParent = UnityHelper.CreateObject<SortingGroup>("MaskedObjects", __instance.transform, new Vector3(0, 0, -0.1f));
+            __instance.MaskArea.transform.SetParent(maskParent.transform);
+            __instance.PlayerIcon.transform.SetParent(maskParent.transform);
+            __instance.Overlay.maskInteraction = SpriteMaskInteraction.None;
+            __instance.Overlay.material = __instance.Megaphone.material;
+
+            var mask = __instance.MaskArea.gameObject.AddComponent<SpriteMask>();
+            mask.sprite = __instance.MaskArea.sprite;
+            mask.transform.localScale = __instance.MaskArea.size;
+            __instance.MaskArea.enabled = false;
+
+            __instance.Background.material = __instance.Megaphone.material;
+
+            var cosmetics = __instance.PlayerIcon.cosmetics;
+            cosmetics.currentBodySprite.BodySprite.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
+
+            var hat = cosmetics.hat;
+            hat.FrontLayer.gameObject.AddComponent<ZOrderedSortingGroup>();
+            hat.FrontLayer.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
+            hat.BackLayer.gameObject.AddComponent<ZOrderedSortingGroup>();
+            hat.BackLayer.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
+            var visor = cosmetics.visor.Image;
+            visor.gameObject.AddComponent<ZOrderedSortingGroup>();
+            visor.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
+            cosmetics.skin.layer.gameObject.AddComponent<ZOrderedSortingGroup>();
+            cosmetics.skin.layer.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
+            cosmetics.currentBodySprite.BodySprite.gameObject.AddComponent<ZOrderedSortingGroup>();
+            var nebulaLayer = cosmetics.GetComponent<NebulaCosmeticsLayer>();
+            nebulaLayer.AdditionalRenderersAndMasks().Do(r =>
+            {
+                r.gameObject.AddComponent<ZOrderedSortingGroup>().SetConsiderParentsTo(nebulaLayer.transform);
+                r.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
+            });
+            nebulaLayer.SetUpAsMeetingMask();
+
+            var holder = UnityHelper.CreateObject(MeetingHudExtension.SpreaderAndBG, __instance.transform, Vector3.zero);
+            __instance.Background.transform.SetParent(holder.transform);
+            var spreader = holder.AddComponent<VoteSpreader>();
+            spreader.maxVotesBeforeSmoosh = 6;
+            spreader.VoteRange = new(-0.45f, 1.15f);
+
+            __instance.ThumbsDown.transform.SetLocalZ(-0.55f);
+        }
+    }
+}
+
+
+[HarmonyPatch(typeof(PlayerVoteArea), nameof(PlayerVoteArea.SetCosmetics))]
+class VoteAreaSetPatch
+{
+    public static void Postfix(PlayerVoteArea __instance, [HarmonyArgument(0)] NetworkedPlayerInfo playerInfo)
+    {
+        var p = GamePlayer.GetPlayer(playerInfo.PlayerId);
+        if(p != null) GameOperatorManager.Instance?.Run<SetUpVotingAreaEvent>(new(__instance, p));
+    }
+}
+
+
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.Confirm))]
+class CastVotePatch
+{
+    public static bool Prefix(MeetingHud __instance, [HarmonyArgument(0)] byte suspectStateIdx)
+    {
+        if (GamePlayer.LocalPlayer?.IsDead ?? true) return false;
+
+        foreach (var state in __instance.playerStates)
+        {
+            state.ClearButtons();
+            state.voteComplete = true;
+        }
+
+        var skipVoteButton = __instance.SkipVoteButton;
+        skipVoteButton.ClearButtons();
+        skipVoteButton.voteComplete = true;
+        skipVoteButton.gameObject.SetActive(false);
+
+        if (__instance.state != MeetingHud.VoteStates.NotVoted) return false;
+        
+        __instance.state = MeetingHud.VoteStates.Voted;
+
+        //CmdCastVote(Mod)
+        int vote = GameOperatorManager.Instance?.Run(new PlayerVoteCastLocalEvent(GamePlayer.LocalPlayer, NebulaGameManager.Instance!.GetPlayer(suspectStateIdx), 1)).Vote ?? 1;
+        __instance.ModCastVote(AmongUsLLImpl.LocalPlayer.PlayerId, suspectStateIdx, vote);
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.CheckForEndVoting))]
+static class CheckForEndVotingPatch
+{
+    public static void AddValue(this Dictionary<byte,int> self, byte target,int num)
+    {
+        if (self.TryGetValue(target, out var last))
+            self[target] = last + num;
+        else
+            self[target] = num;
+    }
+
+    public static Dictionary<byte, int> ModCalculateVotes(MeetingHud __instance)
+    {
+        Dictionary<byte, int> dictionary = new();
+
+        List<string> log = new();
+        for (int i = 0; i < __instance.playerStates.Length; i++)
+        {
+            PlayerVoteArea playerVoteArea = __instance.playerStates[i];
+            var player = NebulaGameManager.Instance?.GetPlayer(playerVoteArea.TargetPlayerId);
+            if (player?.IsDead ?? true) continue;
+
+            bool didVote = playerVoteArea.VotedFor != 252 && playerVoteArea.VotedFor != 255 && playerVoteArea.VotedFor != 254;
+            if (!MeetingHudExtension.WeightMap.TryGetValue((byte)playerVoteArea.TargetPlayerId, out var vote)) vote = 1;
+            var ev = GameOperatorManager.Instance!.Run(new PlayerFixVoteHostEvent(player, didVote, NebulaGameManager.Instance?.GetPlayer(playerVoteArea.VotedFor), vote));
+
+            if (ev.DidVote)
+            {
+                dictionary.AddValue(ev.VoteTo?.PlayerId ?? PlayerVoteArea.SkippedVote, ev.Vote);
+                playerVoteArea.VotedFor = ev.VoteTo?.PlayerId ?? PlayerVoteArea.SkippedVote;
+                MeetingHudExtension.WeightMap[player.PlayerId] = ev.Vote;
+            }
+            else
+            {
+                playerVoteArea.VotedFor = PlayerVoteArea.MissedVote;
+            }
+        }
+
+
+        return dictionary;
+    }
+
+    public static KeyValuePair<byte, int> MaxPair(this Dictionary<byte, int> self, out bool tie)
+    {
+        tie = true;
+        KeyValuePair<byte, int> result = new KeyValuePair<byte, int>(PlayerVoteArea.SkippedVote, 0);
+        foreach (KeyValuePair<byte, int> keyValuePair in self)
+        {
+            if (keyValuePair.Value > result.Value)
+            {
+                result = keyValuePair;
+                tie = false;
+            }
+            else if (keyValuePair.Value == result.Value)
+            {
+                tie = true;
+            }
+        }
+        return result;
+    }
+
+    public static bool Prefix(MeetingHud __instance)
+    {
+        //投票結果が自明な場合、早回しで終わらせる。
+        {
+            int canVoteTo = NebulaGameManager.Instance!.AllPlayerInfo.Count(MeetingHudExtension.CanVoteFor);
+            if (MeetingHudExtension.CanSkip) canVoteTo++;
+            
+            //選択肢が1つ以下の場合、結果は自明
+            if (canVoteTo <= 1) 
+            {
+                var exiled = NebulaGameManager.Instance!.AllPlayerInfo.FirstOrDefault(MeetingHudExtension.CanVoteFor);
+
+                if (exiled == null)
+                    MeetingModRpc.RpcModCompleteVoting.Invoke(([], [], byte.MaxValue, [], false, true));
+                else
+                {
+                    MeetingModRpc.RpcModCompleteVoting.Invoke(([], [], exiled!.PlayerId, [exiled.PlayerId], false, true));
+                }
+
+                return false;
+            }
+        }
+
+        //投票が済んでない場合、なにもしない
+        if (!__instance.playerStates.All((PlayerVoteArea ps) => ps.AmDead || ps.DidVote || !MeetingHudExtension.HasVote(ps.TargetPlayerId))) return false;
+
+        if(GeneralConfigurations.VoteAbandonmentPenaltyOption){
+            bool CheckAbandonment(PlayerVoteArea playerVoteArea) => playerVoteArea.VotedFor == 252 || playerVoteArea.VotedFor == 255 || playerVoteArea.VotedFor == 254;
+            int abandonmentMask = 0;
+            __instance.playerStates.Where(ps => !ps.AmDead && CheckAbandonment(ps)).Do(ps => abandonmentMask |= 1 << ps.TargetPlayerId);
+            if (abandonmentMask != 0) MeetingHudExtension.RpcShareAbandonment.Invoke(abandonmentMask);
+        }
+
+        {
+            Dictionary<byte, int> dictionary = ModCalculateVotes(__instance);
+            KeyValuePair<byte, int> max = dictionary.MaxPair(out bool tie);
+
+            List<byte> extraVotes = new();
+
+            if (tie)
+            {
+                Dictionary<byte, GamePlayer?> voteForMap = new();
+
+                foreach (var state in __instance.playerStates)
+                {
+                    if (!state.DidVote) continue;
+                    if (state.VotedFor == 254) continue;
+                    voteForMap[state.TargetPlayerId] = NebulaGameManager.Instance?.GetPlayer(state.VotedFor);
+                }
+
+                foreach (var target in GameOperatorManager.Instance?.Run(new MeetingTieVoteHostEvent(voteForMap))?.ExtraVotes ?? [])
+                {
+                    dictionary.AddValue(target?.PlayerId ?? 253, 1);
+                    extraVotes.Add(target?.PlayerId ?? 253);
+                }
+
+                //再計算する
+                max = dictionary.MaxPair(out tie);
+            }
+
+
+            List<(byte playerFrom, byte playerTo)> mapList = GameOperatorManager.Instance?.Run(new MeetingMapVotesHostEvent())?.RawMap.Select(entry => (entry.Key, entry.Value)).ToList() ?? [];
+            Dictionary<byte, GamePlayer> mappingDic = [];
+            foreach (var mapping in mapList)
+            {
+                mappingDic[mapping.playerFrom] = GamePlayer.GetPlayer(mapping.playerTo)!;
+            }
+
+            GamePlayer exiled = null!;
+            GamePlayer[] exiledAll = [];
+
+            if (MeetingHudExtension.ExileEvenIfTie) tie = false;
+            try
+            {
+                if (!tie)
+                {
+                    //投票対象で最高票を獲得しているプレイヤー全員
+                    var exiledPlayers = GamePlayer.AllPlayers
+                        .Where(v => dictionary.GetValueOrDefault(v.PlayerId) == max.Value && MeetingHudExtension.CanVoteFor(v))
+                        .Select(v => mappingDic.TryGetValue(v.PlayerId, out var mapped) ? mapped : v)
+                        .Distinct()
+                        .ToArray();
+                    exiled = exiledPlayers.First();
+                    if (exiledPlayers.Length > 0) exiledAll = exiledPlayers.ToArray();
+                }
+            }
+            catch { }
+            List<MeetingHud.VoterState> allStates = new();
+
+            //記名投票分
+            foreach (var state in __instance.playerStates)
+            {
+                if (!state.DidVote) continue;
+
+                if (!MeetingHudExtension.WeightMap.TryGetValue((byte)state.TargetPlayerId, out var vote)) vote = 1;
+
+                for (int i = 0; i < vote; i++)
+                {
+                    allStates.Add(new MeetingHud.VoterState
+                    {
+                        VoterId = state.TargetPlayerId,
+                        VotedForId = state.VotedFor
+                    });
+                }
+            }
+
+            //追加投票分
+            foreach(var votedFor in extraVotes)
+            {
+                allStates.Add(new MeetingHud.VoterState
+                {
+                    VoterId = byte.MaxValue,
+                    VotedForId = votedFor
+                });
+            }
+
+            //Debug.Log($"Exiled: ({string.Join(',', (exiledAll ?? []).Select(b => b.ToString()))})");
+            MeetingModRpc.RpcModCompleteVoting.Invoke((allStates, mapList, exiled?.PlayerId ?? byte.MaxValue, exiledAll?.Select(e => e.PlayerId).ToArray() ?? [], tie, false));
+            //サーバー用、プレイヤーは全員このメッセージを無視する
+            //__instance.RpcVotingComplete(allStates.ToArray(), Helpers.GetPlayer(exiled?.PlayerId)?.Data, tie);
+
+        }
+
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.HandleRpc))]
+class CancelVotingCompleteByRPCPatch
+{
+    public static bool Prefix(MeetingHud __instance, [HarmonyArgument(0)] byte callId)
+    {
+        if (callId == 23)
+        {
+            Debug.Log($"Canceled VotingComplete on HandleRpc");
+            return false;
+        }
+        return true;
+    }
+}
+
+[HarmonyPatch(typeof(VoteSpreader), nameof(VoteSpreader.Update))]
+class VoteSpreaderUpdatePatch
+{
+    public static void Postfix(VoteSpreader __instance)
+    {
+        int num = __instance.Votes.Count;
+        for (int i = 0; i < num; i++) {
+            var renderer = __instance.Votes[i];
+            if (!renderer || !renderer.enabled) continue;
+            renderer.transform.SetLocalZ((float)(-(float)i) / 50f - 0.05f);
+        }
+    }
+}
+
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.PopulateResults))]
+class PopulateResultPatch
+{
+    private static void ModBloopAVoteIcon(MeetingHud __instance,NetworkedPlayerInfo? voterPlayer, int index, Transform parent,bool isExtra)
+    {
+        SpriteRenderer spriteRenderer = GameObject.Instantiate<SpriteRenderer>(__instance.PlayerVotePrefab);
+        if ((GameManager.Instance.LogicOptions.GetAnonymousVotes() && !(NebulaGameManager.Instance?.CanSeeAllInfo ?? false)) || voterPlayer == null)
+            PlayerMaterial.SetColors(Palette.DisabledGrey, spriteRenderer);
+        else
+            PlayerMaterial.SetColors(voterPlayer.DefaultOutfit.ColorId, spriteRenderer);
+        
+        spriteRenderer.transform.SetParent(parent);
+        spriteRenderer.transform.localScale = Vector3.zero;
+        __instance.StartCoroutine(Effects.Bloop((float)index * 0.3f + (isExtra ? 0.85f : 0f), spriteRenderer.transform, 1f, isExtra ? 0.5f : 0.7f));
+
+        if (isExtra)
+            __instance.StartCoroutine(Effects.Sequence(Effects.Wait((float)index * 0.3f + 0.85f), ManagedEffects.Action(() => parent.GetComponent<VoteSpreader>().AddVote(spriteRenderer)).WrapToIl2Cpp()));
+        else
+            parent.GetComponent<VoteSpreader>().AddVote(spriteRenderer);
+    }
+
+
+    public static bool Prefix(MeetingHud __instance, [HarmonyArgument(0)]Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<MeetingHud.VoterState> states)
+    {
+        Debug.Log("Called PopulateResults");
+
+        GameOperatorManager.Instance?.Run(new MeetingVoteEndEvent(states.ToArray()));
+
+        __instance.TitleText.text = VanillaTranslationCache.GetString(StringNames.MeetingVotingResults);
+        foreach (var voteArea in __instance.playerStates)
+        {
+            voteArea.ClearForResults();
+            MeetingHudExtension.LastVotedForMap[voteArea.TargetPlayerId]= voteArea.VotedFor;
+        }
+
+        int lastVoteFor = -1;
+        int num = 0;
+        Transform? voteFor = null;
+
+        //OrderByは安定ソート
+        foreach (var state in states.OrderBy(s => s.VotedForId)){
+            if (state.VoterId == byte.MaxValue - 1) continue;
+            if(state.VotedForId != lastVoteFor)
+            {
+                lastVoteFor = state.VotedForId;
+                num = 0;
+                if (state.SkippedVote)
+                    voteFor = __instance.SkippedVoting.transform;
+                else
+                {
+                    voteFor = __instance.GetPlayer(lastVoteFor)?.transform ?? null;
+                    if (voteFor != null && voteFor)
+                    {
+                        var bg = voteFor.FindChild(MeetingHudExtension.SpreaderAndBG);
+                        if (bg != null && bg) voteFor = bg;
+                    }
+                }
+            }
+
+            if (voteFor != null)
+            {
+                NetworkedPlayerInfo? playerById = GameData.Instance.GetPlayerById(state.VoterId);
+
+                ModBloopAVoteIcon(__instance, playerById, num, voteFor, state.VoterId == byte.MaxValue);
+                num++;
+            }
+        }
+
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.Deserialize))]
+class MeetingDeserializePatch
+{
+    public static void Postfix(MeetingHud __instance)
+    {
+        if (__instance.CurrentState is VoteStates.Animating or VoteStates.Discussion) return;
+        __instance.UpdatePlayerState();
+    }
+}
+
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.OnDestroy))]
+class MeetingDestroyPatch
+{
+    public static void Postfix(MeetingHud __instance)
+    {
+        ClientOption.ChangeAmbientVolumeIfNecessary(false, true);
+    }
+}

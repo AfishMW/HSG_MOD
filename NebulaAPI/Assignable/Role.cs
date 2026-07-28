@@ -1,0 +1,983 @@
+﻿using DiscordConnect;
+using System.Diagnostics;
+using System.Reflection;
+using Virial.Attributes;
+using Virial.Configuration;
+using Virial.Game;
+using Virial.Helpers;
+
+namespace Virial.Assignable;
+
+/// <summary>
+/// 役職の種別を表します。
+/// 割り当て時に使用されます。
+/// </summary>
+[Flags]
+public enum RoleCategory
+{
+    /// <summary>
+    /// インポスター役職。
+    /// </summary>
+    ImpostorRole = 0x01,
+    /// <summary>
+    /// 第三陣営役職。
+    /// </summary>
+    NeutralRole = 0x02,
+    /// <summary>
+    /// クルーメイト役職。
+    /// </summary>
+    CrewmateRole = 0x04,
+}
+
+/// <summary>
+/// その役職のプレイヤーに割り当てられるタスクの種別を表します。
+/// </summary>
+public enum RoleTaskType
+{
+    /// <summary>
+    /// クルーメイトのタスク。
+    /// タスクノルマを持ち、このノルマはクルーメイト勝利に必要なタスクとしてカウントされます。
+    /// </summary>
+    CrewmateTask,
+    /// <summary>
+    /// 個人のタスク。
+    /// タスクノルマを持つものの、クルーメイト勝利に必要なタスクにはカウントされません。
+    /// </summary>
+    RoleTask,
+    /// <summary>
+    /// 特別なタスク。
+    /// クルーメイト勝利に必要なタスクノルマを持つものの、通常のタスクにはインタラクトできません。
+    /// </summary>
+    SpecialCrewmateTask,
+    /// <summary>
+    /// 特別なタスク。
+    /// タスクノルマを持つものの、通常のタスクにはインタラクトできません。クルーメイト勝利に必要なタスクにはカウントされません。
+    /// </summary>
+    SpecialRoleTask,
+    /// <summary>
+    /// タスクを持たない。
+    /// 主にインポスターや第三陣営が該当します。
+    /// </summary>
+    NoTask,
+}
+
+/// <summary>
+/// 短縮した、通常大文字アルファベット3文字からなる名前を持ちます。
+/// モディファイアはオプションの簡潔なシリアライズのため、コードネームを必要とします。
+/// </summary>
+public interface ICodeName
+{
+    /// <summary>
+    /// 役職のコードネーム。他の役職と被らないようにしてください。
+    /// 記号類の使用は推奨されません。
+    /// </summary>
+    string CodeName { get; }
+}
+
+/// <summary>
+/// ゲーム中に出現しうる役職が実装するインターフェースです。
+/// </summary>
+public interface ISpawnable
+{
+    /// <summary>
+    /// ゲーム中に出現しうる場合はtrueを返します。
+    /// この値は主にゲーム設定によって変化します。
+    /// GameParameterで渡される情報はここでは加味しないでください。
+    /// </summary>
+    bool IsSpawnable { get; }
+
+    /// <summary>
+    /// 指定の条件下で出現できるか返します。
+    /// </summary>
+    /// <param name="game"></param>
+    /// <returns></returns>
+    bool CanSpawnIn(GameParameters game) => true;
+
+    internal bool CanSpawnInCurrentGame
+    {
+        get
+        {
+            var game = NebulaAPI.CurrentGame;
+            if (game == null) return IsSpawnable;
+            return CanSpawnIn(game.GameParameter) && IsSpawnable;
+        }
+    }
+}
+
+/// <summary>
+/// 役職割り当て器です。
+/// 該当の役職が何度割り当てられたか記憶し、都度適切な割り当て確率を返します。
+/// </summary>
+/// <typeparam name="R"></typeparam>
+public interface ICategorizedRoleAllocator<R> where R : DefinedAssignable
+{
+    /// <summary>
+    /// 自身の役職です。
+    /// </summary>
+    R MyRole { get; }
+    /// <summary>
+    /// 割り当て確率を0～100の間で返します。
+    /// </summary>
+    /// <param name="category">割り当てカテゴリ。</param>
+    /// <returns></returns>
+    int GetChance(RoleCategory category);
+    /// <summary>
+    /// 役職を割り当てます。
+    /// このメソッドの呼び出しによって今後、割り当て確率が変化する可能性があります。
+    /// </summary>
+    /// <param name="category">割り当てカテゴリ。</param>
+    void ConsumeCount(RoleCategory category);
+}
+
+/// <summary>
+/// 役職割り当て器を提供する役職を表します。
+/// </summary>
+/// <typeparam name="R"></typeparam>
+public interface IHasCategorizedRoleAllocator<R> where R : DefinedAssignable
+{
+    /// <summary>
+    /// 役職割り当て器を生成します。
+    /// ゲームの度に新たな割り当て器が生成されます。
+    /// </summary>
+    /// <returns></returns>
+    ICategorizedRoleAllocator<R> GenerateRoleAllocator();
+}
+
+/// <summary>
+/// 引用元を持つ対象を表します。
+/// </summary>
+public interface HasCitation
+{
+    /// <summary>
+    /// 引用元を表します。
+    /// </summary>
+    Citation? Citation { get; }
+}
+
+/// <summary>
+/// 役職IDをもつ対象を表します。
+/// </summary>
+public interface IRoleID
+{
+    /// <summary>
+    /// 役職のIDを返します。
+    /// IDはアドオンの構成やバージョン間の違いによって変化します。
+    /// </summary>
+    int Id { get; internal set; }
+}
+
+/// <summary>
+/// 役職フィルタをもつ対象を表します。
+/// モディファイアや幽霊役職が該当します。
+/// </summary>
+public interface HasRoleFilter
+{
+    /// <summary>
+    /// 割り当て可能な役職に制限をかけます。
+    /// </summary>
+    RoleFilter RoleFilter { get; }
+}
+
+/// <summary>
+/// プレイヤーに割り当てられる役職および追加役職の定義を表します。
+/// </summary>
+public interface DefinedAssignable : IRoleID
+{
+
+    /// <summary>
+    /// 役職の翻訳用の名称です。
+    /// </summary>
+    string LocalizedName { get; }
+
+    /// <summary>
+    /// ヘルプ画面上で表示するかどうか設定できます。
+    /// </summary>
+    bool ShowOnHelpScreen { get => true; }
+
+    /// <summary>
+    /// フリープレイの役職一覧に表示するかどうか設定できます。
+    /// </summary>
+    bool ShowOnFreeplayScreen { get => true; }
+
+    /// <summary>
+    /// 役職の内部名です。
+    /// </summary>
+    string InternalName => LocalizedName;
+
+    /// <summary>
+    /// 役職アイコンを表します。nullの場合、デフォルトのアイコンが当てられます。
+    /// </summary>
+    Virial.Media.Image? IconImage => null;
+
+    /// <summary>
+    /// 役職アイコンの色です。nullの場合、役職の色がそのまま使われます。
+    /// </summary>
+    (Color mainColor, Color? subColor)? IconColor => null;
+
+    /// <summary>
+    /// 統計情報を収集する場合trueが返ります。
+    /// </summary>
+    bool WithStatistics => true;
+
+    /// <summary>
+    /// 役職の表示名です。
+    /// </summary>
+    string DisplayName => NebulaAPI.Language.Translate("role." + LocalizedName + ".name");
+    /// <summary>
+    /// 役職の表示名です。リッチテキストタグを用いて色を付けています。
+    /// </summary>
+    string DisplayColoredName => DisplayName.Color(Color);
+
+    /// <summary>
+    /// 一般的な二つ名テキストです。
+    /// </summary>
+    string GeneralBlurb => NebulaAPI.Language.Translate("role." + LocalizedName + ".blurb");
+    /// <summary>
+    /// 一般的な二つ名テキストです。リッチテキストタグを用いて色を付けています。
+    /// </summary>
+    string GeneralColoredBlurb => GeneralBlurb.Color(Color);
+
+    /// <summary>
+    /// 役職の簡単な説明です。ロールドラフトやドキュメント中で表示される、その役職をプレイする当事者に向けたテキストにしてください。
+    /// </summary>
+    string DocumentContent => NebulaAPI.Language.Translate("role." + LocalizedName + ".doc");
+
+    /// <summary>
+    /// 役職の色です。
+    /// </summary>
+    Virial.Color Color { get; }
+    internal UnityEngine.Color UnityColor { get; }
+
+    /// <summary>
+    /// 自身の役職の設定ホルダです。設定ホルダを持たない場合、nullを返します。
+    /// </summary>
+
+    IConfigurationHolder? ConfigurationHolder { get; }
+
+    /// <summary>
+    /// ヘルプ画面で表示する称号のグループです。
+    /// このグループに含まれるすべての役職の称号が表示されます。
+    /// </summary>
+    IEnumerable<DefinedAssignable> AchievementGroups => [this];
+
+    int[]? DefaultAssignableArguments => null;
+}
+
+/// <summary>
+/// 役職カテゴリで分類される役職の定義を表します。
+/// クルーメイト役職・インポスター役職・第三陣営役職が該当します。
+/// </summary>
+public interface DefinedCategorizedAssignable : DefinedAssignable
+{
+    /// <summary>
+    /// 役職のカテゴリ。役職割り当て時に使用します。
+    /// </summary>
+    RoleCategory Category { get; }
+
+    /// <summary>
+    /// 役職の省略名です。ゲーム終了時の役職開示画面などで使用します。
+    /// </summary>
+    string DisplayShort => NebulaAPI.Language.Translate("role." + LocalizedName + ".short");
+    /// <summary>
+    /// 役職の省略名です。リッチテキストタグを用いて色を付けています。
+    /// </summary>
+    string DisplayColoredShort => DisplayShort.Color(Color);
+}
+
+/// <summary>
+/// 単一のチームに属する役職の定義です。
+/// </summary>
+public interface DefinedSingleAssignable : DefinedCategorizedAssignable, ISpawnable
+{
+    /// <summary>
+    /// 役職の属する陣営を表します。おもに勝敗判定に使用されます。
+    /// </summary>
+    RoleTeam Team { get; }
+
+    /// <summary>
+    /// 割り当てのパラメータを返します。ゲーム内オプションで設定した割り当てを表します。
+    /// </summary>
+    AllocationParameters? AllocationParameters { get; }
+    AllocationParameters? GetCustomAllocationParameters(AssignmentType assignmentType);
+}
+
+/// <summary>
+/// 役職実体を生成する対象を表します。
+/// </summary>
+/// <typeparam name="T"></typeparam>
+public interface RuntimeAssignableGenerator<T> where T : RuntimeAssignable   
+{
+    /// <summary>
+    /// 役職実体を生成します。
+    /// </summary>
+    /// <param name="player">割り当て先のプレイヤー</param>
+    /// <param name="arguments">割り当て時の引数</param>
+    /// <returns>生成された役職実体。</returns>
+    T CreateInstance(Virial.Game.Player player, int[] arguments);
+}
+
+/// <summary>
+/// 推察可能になりうる対象を表します。
+/// </summary>
+public interface IGuessed
+{
+    /// <summary>
+    /// Guesserによる推測対象になる場合trueを返します。
+    /// </summary>
+    bool CanBeGuessDefault => true;
+
+    /// <summary>
+    /// Guesserによる推測対象になる場合trueを返します。
+    /// </summary>
+    bool CanBeGuess => CanBeGuessDefault && (CanBeGuessVariable?.CurrentValue ?? true);
+
+    /// <summary>
+    /// Guesserによる推測対象になるか設定する変数を返します。通常、オプションがこの値を変更します。
+    /// </summary>
+    ISharableVariable<bool>? CanBeGuessVariable { get; internal set; }
+}
+
+public interface ICustomAssignableStatus
+{
+    static private List<ICustomAssignableStatus> allStatus = [];
+    internal static IEnumerable<ICustomAssignableStatus> AllStatus => allStatus;
+    private protected static void Register(ICustomAssignableStatus status) => allStatus.Add(status);
+
+    /// <summary>
+    /// この割り当てがassignableを出現させるか調べます。
+    /// </summary>
+    /// <param name="assignable"></param>
+    /// <returns></returns>
+    bool CanSpawn(DefinedAssignable assignable);
+}
+
+public class AssignmentType
+{
+    private static List<AssignmentType> types = [];
+    internal static int NumOfTypes => types.Count;
+    private bool canGuessAsAbility;
+    public bool CanGuessAsAbility => canGuessAsAbility;
+    private int id = -1;
+    internal int Id => id;
+    private string postfix;
+    public string Postfix => postfix;
+    private Func<DefinedRole> relatedRole;
+    public DefinedRole RelatedRole => relatedRole.Invoke();
+    public RoleCategory Category => RelatedRole.Category;
+    private Func<int[], DefinedRole, int[]> argumentEditor;
+    private string GetTranslationKey(string orig) => orig + "." + postfix;
+    internal int[] EditArguments(int[] args, DefinedRole abilityRole) => argumentEditor.Invoke(args, abilityRole);
+    internal AssignmentType(Func<DefinedRole> relatedRole, Func<int[], DefinedRole, int[]> argumentEditor, string postfix, Virial.Color? color, Func<AbilityAssignmentStatus, DefinedRole, bool> predicate, Func<bool> isActive, bool canGuessAsAbility)
+    {
+        this.argumentEditor = argumentEditor;
+        this.relatedRole = relatedRole;
+        this.postfix = postfix;
+        this.canGuessAsAbility = canGuessAsAbility;
+        Predicate = predicate;
+        this.isActive = isActive;
+        Color = color ?? Virial.Color.White;
+
+        types.Add(this);
+    }
+
+    internal static void SortAllTypes()
+    {
+        types.Sort((t1, t2) => string.Compare(t1.postfix, t2.postfix));
+        for(int i = 0; i < types.Count; i++) types[i].id = i;
+    }
+
+    static public IEnumerable<AssignmentType> AllTypes => types;
+
+    public string CountTranslationKey => GetTranslationKey("options.role.count");
+    public string ChanceTranslationKey => GetTranslationKey("options.role.chance");
+
+    internal Virial.Color Color { get; }
+    public Func<AbilityAssignmentStatus, DefinedRole, bool> Predicate { get; }
+    private Func<bool> isActive { get; }
+    public bool IsActive => isActive.Invoke();
+}
+
+[Flags]
+public enum AbilityAssignmentStatus
+{
+    CannotLoad = 0x00,
+    CanLoadToCrewmate = 0x01,
+    CanLoadToMadmate = 0x02,
+    CanLoadToImpostor = 0x04,
+    CanLoadToKillNeutral = 0x08,
+    CanLoadToNeutral = 0x10,
+    Killers = CanLoadToImpostor | CanLoadToKillNeutral,
+    KillersSide = CanLoadToImpostor | CanLoadToKillNeutral | AbilityAssignmentStatus.CanLoadToMadmate,
+}
+
+/// <summary>
+/// モディファイアおよび幽霊役職の割り当てフィルタを持つ対象を表します。
+/// </summary>
+public interface AssignableFilterHolder
+{
+    /// <summary>
+    /// 付与されうるモディファイアを制限するフィルタです。
+    /// AllocatableDefinedModifierのRoleFilterと同期しています。
+    /// </summary>
+    ModifierFilter? ModifierFilter { get; }
+
+
+    /// <summary>
+    /// 付与されうる幽霊役職を制限するフィルタ。
+    /// DefinedGhostRoleのRoleFilterと同期しています。
+    /// </summary>
+    GhostRoleFilter? GhostRoleFilter { get; }
+
+    /// <summary>
+    /// デフォルト設定で幽霊役職/モディファイアを割り当てられるかどうか返します。
+    /// </summary>
+    /// <param name="assignable">調べる対象の役職定義</param>
+    /// <returns>割り当てられうる場合、true</returns>
+    bool CanLoadDefault(DefinedAssignable assignable);
+
+    /// <summary>
+    /// 幽霊役職/モディファイアを割り当てられるかどうか返します。
+    /// </summary>
+    /// <param name="assignable">調べる対象の役職定義</param>
+    /// <returns>割り当てられうる場合、true</returns>
+    bool CanLoad(DefinedAssignable assignable);
+}
+
+/// <summary>
+/// 割り当てパラメータを表します。
+/// このパラメータの値は通常、オプションによって変更されます。
+/// </summary>
+public interface AllocationParameters
+{
+    public delegate (DefinedRole role, int[]? argument) ExtraAssignment(DefinedRole assignable, int playerId);
+
+    /// <summary>
+    /// 付随役職の割り当てを表します。
+    /// </summary>
+    /// <param name="Assigner"></param>
+    /// <param name="Category"></param>
+    public record ExtraAssignmentInfo(ExtraAssignment Assigner, RoleCategory Category);
+
+    /// <summary>
+    /// 関係するすべてのコンフィグを返します。
+    /// </summary>
+    IEnumerable<IConfiguration> Configurations { get; }
+
+    /// <summary>
+    /// 割り当て数の総和です。
+    /// </summary>
+    int RoleCountSum { get; }
+
+    /// <summary>
+    /// 100%割り当て数です。
+    /// </summary>
+    int RoleCount100 { get; }
+    /// <summary>
+    /// 確率的な割り当て数です。
+    /// </summary>
+    int RoleCountRandom { get; }
+
+    /// <summary>
+    /// 同陣営への追加割り当てです。
+    /// </summary>
+    ExtraAssignmentInfo[] TeamAssignment => [];
+    /// <summary>
+    /// 別陣営への追加割り当てです。
+    /// </summary>
+    ExtraAssignmentInfo[] OthersAssignment => [];
+    /// <summary>
+    /// 追加割り当てを持つ場合、trueを返します。
+    /// </summary>
+    bool HasExtraAssignment => TeamAssignment.Length > 0 || OthersAssignment.Length > 0;
+    /// <summary>
+    /// 同陣営への割り当てに必要なコストです。
+    /// </summary>
+    int TeamCost => 1 + TeamAssignment.Length;
+    /// <summary>
+    /// 残り陣営への割り当てに必要なコストです。
+    /// </summary>
+    int OtherCost => OthersAssignment.Length;
+
+    /// <summary>
+    /// 割り当て数を取得します。100%か確率的な割り当てか真偽値で選択できます。
+    /// </summary>
+    /// <param name="get100"></param>
+    /// <returns></returns>
+    int GetRoleCountWhich(bool get100) => get100 ? RoleCount100 : RoleCountRandom;
+
+    /// <summary>
+    /// count人目のプレイヤーの割り当て確率を0～100の値で取得します。
+    /// </summary>
+    /// <param name="count">何人目のプレイヤーかを表す1以上の値</param>
+    /// <returns></returns>
+    int GetRoleChance(int count);
+}
+
+public enum MultipleAssignmentType
+{
+    Allowed,
+    AsUniqueKillAbility,
+    AsUniqueMapAbility,
+    NotAllowed,
+}
+
+public record RoleFallback(DefinedRole Role, int[]? Arguments);
+/// <summary>
+/// プレイヤーに割り当てられる役職の定義を表します。
+/// </summary>
+public interface DefinedRole : DefinedSingleAssignable, RuntimeAssignableGenerator<RuntimeRole>, IGuessed, AssignableFilterHolder
+{
+    /// <summary>
+    /// 役職のゲーム開始時の表示。
+    /// </summary>
+    string DisplayIntroBlurb => GeneralBlurb;
+
+    AbilityAssignmentStatus AssignmentStatus => AbilityAssignmentStatus.CannotLoad;
+    IPlayerAbility GetAbilityOnRole(Virial.Game.Player player, AbilityAssignmentStatus assignmentType, int[] arguments) => null!;
+
+    /// <summary>
+    /// 簒奪された能力を生成します。
+    /// </summary>
+    /// <param name="player">割り当て対象のプレイヤー。</param>
+    /// <param name="arguments">割り当てのパラメータ。</param>
+    /// <returns>簒奪された能力。簒奪不可能な場合はnull。</returns>
+    IUsurpableAbility? GetUsurpedAbility(Virial.Game.Player player, int[] arguments) => null!;
+
+    /// <summary>
+    /// フォールバックするべきかを返します。
+    /// </summary>
+    /// <param name="player">役職を与えられるプレイヤー</param>
+    /// <param name="arguments">役職引数</param>
+    /// <returns></returns>
+    RoleFallback? CheckFallback(Virial.Game.Player player, int[] arguments) => null;
+
+    /// <summary>
+    /// マッドメイト系の役職の場合はtrueを返します。
+    /// </summary>
+    bool IsMadmate => false;
+    /// <summary>
+    /// インポスターのような見た目の役職の場合はtrueを返します。
+    /// </summary>
+    bool IsImpostorlike => Category == RoleCategory.ImpostorRole;
+
+    bool IsKiller => Category == RoleCategory.ImpostorRole;
+
+    /// <summary>
+    /// システム上の役職の場合trueを返します。
+    /// 排他割り当てや役職フィルタで表示されなくなります。
+    /// </summary>
+    bool IsSystemRole => false;
+
+    /// <summary>
+    /// 追加割り当てされる役職を一覧で全て返します。割り当て数と一致する必要はありません。
+    /// </summary>
+    DefinedRole[] AdditionalRoles => [];
+
+    /// <summary>
+    /// 能力から表示名を取得します。主にジャッカル化能力と簒奪された能力で使用します。
+    /// </summary>
+    /// <param name="ability"></param>
+    /// <returns></returns>
+    string GetDisplayName(IPlayerAbility ability) => DisplayName;
+    string GetDisplayShort(IPlayerAbility ability) => DisplayShort;
+
+    IEnumerable<DefinedRole> GetGuessableAbilityRoles() => this.IsSpawnable ? [this] : [];
+
+    MultipleAssignmentType MultipleAssignment => MultipleAssignmentType.NotAllowed;
+}
+
+/// <summary>
+/// ジャッカル化あるいは簒奪された能力、および通常の能力を同一のクラスで定義できる役職の定義を表します。
+/// </summary>
+/// <typeparam name="Ability">役職の能力。</typeparam>
+public interface DefinedSingleAbilityRole<Ability> : DefinedRole, RuntimeAssignableGenerator<RuntimeRole> where Ability : class, IPlayerAbility
+{
+    /// <summary>
+    /// 役職の能力を生成します。
+    /// </summary>
+    /// <param name="player">割り当て対象のプレイヤー。</param>
+    /// <param name="arguments">割り当てのパラメータ。</param>
+    /// <returns></returns>
+    Ability CreateAbility(Virial.Game.Player player, int[] arguments);
+    private IUsurpableAbility? CreateUsurpedAbility(Virial.Game.Player player, int[] arguments) => typeof(Ability).IsAssignableTo(typeof(IUsurpableAbility)) ? CreateAbility(player, arguments) as IUsurpableAbility : null;
+    RuntimeRole RuntimeAssignableGenerator<RuntimeRole>.CreateInstance(Virial.Game.Player player, int[] arguments) => new RuntimeSingleAbilityAssignable<Ability>(player, this, arguments);
+    IPlayerAbility DefinedRole.GetAbilityOnRole(Virial.Game.Player player, AbilityAssignmentStatus assignmentType, int[] arguments) => CreateAbility(player, arguments);
+
+    IUsurpableAbility? DefinedRole.GetUsurpedAbility(Virial.Game.Player player, int[] arguments) => CreateUsurpedAbility(player, arguments);
+
+    string DefinedRole.GetDisplayName(IPlayerAbility ability) => DisplayName;
+    string DefinedRole.GetDisplayShort(IPlayerAbility ability) => DisplayShort;
+}
+
+/// <summary>
+/// 幽霊役職の役職定義を表します。
+/// </summary>
+public interface DefinedGhostRole : DefinedCategorizedAssignable, RuntimeAssignableGenerator<RuntimeGhostRole>, ICodeName, HasRoleFilter, IHasCategorizedRoleAllocator<DefinedGhostRole>, IAssignToCategorizedRole
+{
+}
+
+/// <summary>
+/// 役職が割り当てられたプレイヤーに、役職のカテゴリに応じて異なる割り当て確率を与える割り当てパラメータを表します。
+/// </summary>
+public interface IAssignToCategorizedRole
+{
+    /// <summary>
+    /// カテゴリごとの割り当てパラメータを取得します。
+    /// </summary>
+    /// <param name="category">カテゴリ。</param>
+    /// <param name="assign100">100%割り当て数。</param>
+    /// <param name="assignRandom">ランダム割り当て数。</param>
+    /// <param name="assignChance">ランダム割り当ての割り当て確率。</param>
+    void GetAssignProperties(RoleCategory category, out int assign100, out int assignRandom, out int assignChance);
+}
+/// <summary>
+/// プレイヤーに割り当てられるモディファイアの役職定義を表します。
+/// </summary>
+public interface DefinedModifier : DefinedAssignable, RuntimeAssignableGenerator<RuntimeModifier>
+{
+    string DefinedAssignable.GeneralBlurb => NebulaAPI.Language.Translate("role." + LocalizedName + ".generalBlurb");
+
+    /// <summary>
+    /// マッドメイト系のモディファイアの場合はtrueを返します。
+    /// </summary>
+    bool IsMadmate => false;
+}
+
+/// <summary>
+/// 独自の割り当てルーチンを持つ対象を表します。
+/// </summary>
+public interface HasAssignmentRoutine
+{
+    /// <summary>
+    /// 割り当ての優先度を返します。
+    /// </summary>
+    int AssignPriority { get; }
+
+    /// <summary>
+    /// 割り当てを試行します。
+    /// </summary>
+    /// <param name="roleTable">割り当てテーブル</param>
+    void TryAssign(IRoleTable roleTable);
+}
+
+/// <summary>
+/// ゲーム開始時に割り当てられるモディファイアの役職定義を表します。
+/// </summary>
+
+public interface DefinedAllocatableModifier : DefinedModifier, ICodeName, HasRoleFilter, HasAssignmentRoutine, ISpawnable, IAssignToCategorizedRole
+{
+    /// <summary>
+    /// 特殊割り当ての情報を返します。
+    /// </summary>
+    SpecialAssignment[] SpecialAssignment => [];
+}
+
+/// <summary>
+/// 役職実体です。
+/// プレイヤーに実際に割り当てられた役職やモディファイアのコンテナです。
+/// </summary>
+public interface RuntimeAssignable : ILifespan, IBindPlayer, IGameOperator, IReleasable
+{
+    /// <summary>
+    /// 役職定義。
+    /// </summary>
+    DefinedAssignable Assignable { get; }
+
+    //AssignableAspectAPI
+
+    /// <summary>
+    /// 通信障害を修理できる場合trueを返します。
+    /// </summary>
+    bool CanFixComm => true;
+
+    /// <summary>
+    /// 通信障害を修理できる場合trueを返します。
+    /// </summary>
+    bool CanFixLight => true;
+
+    /// <summary>
+    /// 割り当てられていることを自覚できる場合trueを返します。
+    /// </summary>
+    bool CanBeAwareAssignment => true;
+
+    /// <summary>
+    /// 役職定義で定めた役職アイコンを上書きする場合は上書きする画像を返します。
+    /// </summary>
+    (Virial.Media.Image image, Color? maincolor, Color? subColor)? OverriddenRoleIcon => null;
+
+    /// <summary>
+    /// 自身の能力が追加するアビリティを取得します。
+    /// </summary>
+    /// <returns></returns>
+    
+    IEnumerable<IPlayerAbility?> MyAbilities => [];
+
+
+
+    /// <summary>
+    /// アビリティを取得します。
+    /// </summary>
+    /// <typeparam name="Ability"></typeparam>
+    /// <returns></returns>
+    Ability? GetAbility<Ability>() where Ability : class, IPlayerAbility
+    {
+        foreach(var a in MyAbilities) if (a is Ability returned) return returned;
+        return null;
+    }
+
+    /// <summary>
+    /// ヘルプ画面上での表示に使用する役職です。
+    /// CanBeAwareAssignmentがfalseの場合、この値は使用されません。
+    /// </summary>
+    IEnumerable<DefinedAssignable> AssignableOnHelp => [Assignable];
+
+    /// <summary>
+    /// 緊急ボタンを押すことができる場合trueを返します。
+    /// </summary>
+    [Obsolete(AttributeConstants.ObsoleteText)]
+    bool CanCallEmergencyMeeting => true;
+
+    /// <summary>
+    /// 役職が、元の役職名を書き換える場合に呼び出されます。
+    /// </summary>
+    /// <param name="lastRoleName"></param>
+    /// <param name="isShort"></param>
+    /// <returns></returns>
+    string? OverrideRoleName(string lastRoleName, bool isShort, bool canSeeAllInfo) => null;
+
+    /// <summary>
+    /// 役職の表示名です。特に指定しない場合、役職定義の表示名をそのまま使用します。
+    /// </summary>
+    string DisplayName => Assignable.DisplayName;
+    /// <summary>
+    /// 役職の表示名です。リッチテキストタグを用いて色を付けています。特に指定しない場合、役職定義の表示名をそのまま使用します。
+    /// </summary>
+    string DisplayColoredName => Assignable.DisplayColoredName;
+
+    /// <summary>
+    /// 割り当てのパラメータを取得します。
+    /// </summary>
+    int[]? RoleArguments { get => null; }
+
+    /// <summary>
+    /// 役職の割り当て時に呼び出されます。
+    /// </summary>
+    protected internal void OnActivated();
+
+    /// <summary>
+    /// 役職が失わる時に呼び出されます。
+    /// </summary>
+    protected void OnInactivated() { }
+
+    internal sealed void Inactivate()
+    {
+        this.Release();
+        OnInactivated();
+    }
+
+    /// <summary>
+    /// 名前のテキストを恒常的に書き換えます。
+    /// 状態に依らない書き換えが推奨されます。
+    /// </summary>
+    /// <param name="name"></param>
+    /// <param name="canSeeAllInfo"></param>
+    void DecorateNameConstantly(ref string name, bool canSeeAllInfo, bool inEndScene) { }
+
+    /// <summary>
+    /// プレイヤーをキルできるか調べます。
+    /// </summary>
+    /// <param name="player"></param>
+    /// <returns></returns>
+    bool CanKill(Virial.Game.Player player) => true;
+
+    /// <summary>
+    /// クルーメイトタスクを持っていた場合、明示的に無効化する場合はtrue
+    /// </summary>
+    bool InvalidateCrewmateTask => false;
+
+    /// <summary>
+    /// クルーメイトタスクを持っていたとしても、クルーメイトタスクの総数に計上されない場合はtrue
+    /// </summary>
+    bool MyCrewmateTaskIsIgnored => false;
+
+    /// <summary>
+    /// 進捗を表示するGUIウィジェットを返します。
+    /// 既に死亡し、ネタバレに寛容なプレイヤーのみ閲覧できます。
+    /// </summary>
+    Virial.Media.GUIWidget? ProgressWidget
+    {
+        get
+        {
+
+            var widgets = MyAbilities.Select(a => a.ProgressWidget).Where(w => w != null).ToArray();
+            if (widgets.Length == 0) return null;
+            if(widgets.Length == 1) return widgets[0];
+            return NebulaAPI.GUI.VerticalHolder(Media.GUIAlignment.Left, widgets);
+        }
+    }
+}
+
+/// <summary>
+/// プレイヤーに割り当てられた役職のコンテナを表します。
+/// </summary>
+public interface RuntimeRole : RuntimeAssignable
+{
+    /// <summary>
+    /// 役職の定義
+    /// </summary>
+    DefinedRole Role { get; }
+    /// <summary>
+    /// 対外的な認識の役職定義
+    /// </summary>
+    DefinedRole ExternalRecognitionRole => Role;
+    DefinedAssignable RuntimeAssignable.Assignable => Role;
+
+    //AssignableAspectAPI
+
+    /// <summary>
+    /// サボタージュを起こすことができる場合trueを返します。
+    /// </summary>
+    bool CanInvokeSabotage => Role.Category == RoleCategory.ImpostorRole;
+
+    /// <summary>
+    /// バニラのキルボタンを使用できる場合trueを返します。
+    /// </summary>
+    bool HasVanillaKillButton => Role.Category == RoleCategory.ImpostorRole;
+
+    /// <summary>
+    /// ベントを使用できる場合はtrueを返します。
+    /// </summary>
+    bool CanUseVent => Role.Category == RoleCategory.ImpostorRole;
+    /// <summary>
+    /// ベントの使用を一時的に阻むときにtrueを返します。
+    /// </summary>
+    bool PreventUsingVent => false;
+
+    /// <summary>
+    /// ベントの使用にクールダウンを設けます。
+    /// </summary>
+    Virial.Components.GameTimer? VentCoolDown => null;
+
+    /// <summary>
+    /// ベントの潜伏時間に制限を設けます。
+    /// </summary>
+    Virial.Components.GameTimer? VentDuration => null;
+
+    /// <summary>
+    /// ベント間の移動ができる場合はtrueを返します。
+    /// <see cref="CanUseVent"/>がfalseの場合は意味がありません。
+    /// </summary>
+    bool CanMoveInVent => true;
+
+    /// <summary>
+    /// インポスターの視界を持つ場合はtrueを返します。
+    /// </summary>
+    bool HasImpostorVision => Role.Category == RoleCategory.ImpostorRole;
+
+    /// <summary>
+    /// 停電の影響を受ける場合はtrueを返します。
+    /// </summary>
+    bool IgnoreBlackout => HasImpostorVision;
+
+    /// <summary>
+    /// 視界が壁を無視する場合はtrueを返します。
+    /// </summary>
+    bool EyesightIgnoreWalls => false;
+
+    /// <summary>
+    /// 他人のフェイクサボタージュが確認できる場合はtrueを返します。
+    /// </summary>
+    bool CanSeeOthersFakeSabotage => Role.Category == RoleCategory.ImpostorRole;
+
+    /// <summary>
+    /// ノイズメーカーの通知を拒否する場合はtrueを返します。
+    /// </summary>
+    bool IgnoreNoisemakerNotification => false;
+
+    /// <summary>
+    /// 役職の省略名です。
+    /// </summary>
+    string DisplayShort => Role.DisplayShort;
+    string DisplayColoredShort => Role.DisplayColoredShort;
+
+    RoleTaskType TaskType => Role.Category == RoleCategory.CrewmateRole ? RoleTaskType.CrewmateTask : RoleTaskType.NoTask;
+    bool HaveNormalTask => TaskType == RoleTaskType.CrewmateTask || TaskType == RoleTaskType.RoleTask;
+
+    string DisplayIntroBlurb => Role.DisplayIntroBlurb;
+    string DisplayIntroRoleName => Role.DisplayColoredName;
+    
+    /// <summary>
+    /// 能力を簒奪します。RPCを送って全クライアントでUsurpを実行する必要があります。
+    /// </summary>
+    /// <returns></returns>
+    void Usurp() { }
+    
+    /// <summary>
+    /// 現在の状態を簒奪可能能力の引数に変換します。
+    /// </summary>
+    int[]? UsurpedAbilityArguments { get => null; }
+
+    /// <summary>
+    /// 勝機を取得します。
+    /// </summary>
+    float WinningOpportunity => NebulaAPI.CurrentGame?.GetModule<IWinningOpportunity>()?.GetOpportunity(Role.Team) ?? 0f;
+
+    bool CheckGuessAbility(DefinedRole abilityRole) => abilityRole == Role;
+}
+
+/// <summary>
+/// プレイヤーに割り当てられた役職のコンテナを表します。
+/// </summary>
+public interface RuntimeGhostRole : RuntimeAssignable
+{
+    /// <summary>
+    /// 役職の定義
+    /// </summary>
+    DefinedGhostRole Role { get; }
+    DefinedAssignable RuntimeAssignable.Assignable => Role;
+
+    /// <summary>
+    /// 役職の省略名です。
+    /// </summary>
+    string DisplayShort => Role.DisplayShort;
+}
+
+/// <summary>
+/// プレイヤーに割り当てられた追加役職のコンテナを表します。
+/// </summary>
+public interface RuntimeModifier : RuntimeAssignable
+{
+    /// <summary>
+    /// 追加役職の定義
+    /// </summary>
+    DefinedModifier Modifier { get; }
+    DefinedAssignable RuntimeAssignable.Assignable => Modifier;
+
+    /// <summary>
+    /// ゲーム開始時に割り当てられているとき、役職開示画面で表示されます。
+    /// </summary>
+    string? DisplayIntroBlurb => null;
+}
+
+public static class AssignableHelpers
+{
+    /// <summary>
+    /// 能力として、あるいはその役職として出現するか調べます。
+    /// </summary>
+    /// <param name="role"></param>
+    /// <returns></returns>
+    public static bool IsSpawnableInSomeForm(this DefinedRole role)
+    {
+        if (role.IsSpawnable) return true;
+        if(AssignmentType.AllTypes.Any(t =>
+        {
+            if (!t.IsActive) return false;
+            var param = role.GetCustomAllocationParameters(t);
+            if (param == null) return false;
+            if (param.RoleCountSum > 0) return true;
+            return false;
+        })) return true;
+        if(ICustomAssignableStatus.AllStatus.Any(s => s.CanSpawn(role))) return true;
+        return false;
+    }
+}

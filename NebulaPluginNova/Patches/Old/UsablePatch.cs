@@ -1,0 +1,697 @@
+﻿// 各種使用可能なオブジェクトに関するパッチ
+
+using System.Runtime.CompilerServices;
+using Virial;
+using Virial.Events.Player;
+using Virial.Game;
+using Virial.Game.Console;
+
+namespace Nebula.Patches;
+
+
+[HarmonyPatch(typeof(Vent),nameof(Vent.CanUse))]
+public static class VentCanUsePatch
+{
+    public static bool Prefix(Vent __instance, ref float __result,[HarmonyArgument(0)] NetworkedPlayerInfo pc, [HarmonyArgument(1)] out bool canUse, [HarmonyArgument(2)] out bool couldUse)
+    {
+        couldUse = true;
+        
+        float num = float.MaxValue;
+        PlayerControl @object = pc.Object;
+        GamePlayer? modInfo = NebulaGameManager.Instance?.GetPlayer(pc.PlayerId);
+
+        //ダイブ中はベント使用不可
+        if (modInfo?.IsDived ?? false)
+        {
+            canUse = couldUse = false;
+            __result = num;
+            return false;
+        }
+
+        if (@object.inVent && Vent.currentVent == __instance)
+        {
+            //既にベント内にいる場合
+        }
+        else {
+            //ベント外にいる場合
+            var ventState = GameOperatorManager.Instance?.Run(new Virial.Events.Player.PlayerUpdateVentStateLocalEvent(modInfo));
+            couldUse &= ((ventState?.CanUseVentButton ?? false)) || @object.inVent || @object.walkingToVent;
+            if (modInfo?.Role.HaveNormalTask ?? false) couldUse &= !@object.MustCleanVent(__instance.Id);
+            couldUse &= !modInfo.IsDead && @object.CanMove;
+        }
+
+        ISystemType systemType;
+        if (AmongUsLLImpl.ShipStatusInstance.Systems.TryGetValue(SystemTypes.Ventilation, out systemType))
+        {
+            VentilationSystem ventilationSystem = systemType.Cast<VentilationSystem>();
+            if (ventilationSystem != null && ventilationSystem.IsVentCurrentlyBeingCleaned(__instance.Id)) couldUse = false;
+        }
+
+        canUse = couldUse;
+
+        if (canUse)
+        {
+            Vector3 center = @object.Collider.bounds.center;
+            Vector3 position = __instance.transform.GetPositionFast();
+            num = Vector2.Distance(center, position);
+            canUse &= (num <= __instance.UsableDistance && !PhysicsHelpers.AnythingBetween(@object.Collider, center, position, Constants.ShipOnlyMask, false));
+        }
+        __result = num;
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(Vent), nameof(Vent.SetOutline))]
+public static class VentSetOutlinePatch
+{
+    public static bool Prefix(Vent __instance, [HarmonyArgument(0)]bool on, [HarmonyArgument(1)]bool mainTarget) {
+        Color color = AmongUsLLImpl.LocalPlayer.GetModInfo()!.Unbox().Role.Role.Color.ToUnityColor();
+        var mat = __instance.myRend.material;
+        mat.SetFloat("_Outline", (float)(on ? 1 : 0));
+        mat.SetColor("_OutlineColor", color);
+        mat.SetColor("_AddColor", mainTarget ? color : Color.clear);
+        if(on) HighlightManager.AddHighlightedRenderer(__instance.myRend);
+
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(Vent), nameof(Vent.EnterVent))]
+public static class EnterVentPatch
+{
+    public static void Postfix(Vent __instance, [HarmonyArgument(0)] PlayerControl pc)
+    {
+        var p = pc.GetModInfo();
+        if (p == null) return;
+        GameOperatorManager.Instance?.Run(new PlayerVentEnterEvent(p, __instance));
+        p.Role.VentDuration?.Start();
+    }
+}
+
+[HarmonyPatch(typeof(Vent), nameof(Vent.ExitVent))]
+public static class ExitVentPatch
+{
+    public static void Postfix(Vent __instance, [HarmonyArgument(0)] PlayerControl pc)
+    {
+        pc.moveable = false;
+        var p = pc.GetModInfo();
+        if (p == null) return;
+        GameOperatorManager.Instance?.Run(new PlayerVentExitEvent(p, __instance));
+        p.Role.VentCoolDown?.Start();
+    }
+}
+
+[HarmonyPatch(typeof(Vent), nameof(Vent.Start))]
+public static class VentStartPatch
+{
+    public static void Postfix(Vent __instance)
+    {
+        foreach (var b in __instance.Buttons)
+        {
+            b.spriteRenderer.gameObject.layer = LayerExpansion.GetUILayer();
+            b.spriteRenderer.sortingOrder = 0;
+        }
+        var scale = __instance.transform.localScale;
+        scale.z = 1f;
+        __instance.transform.localScale = scale;
+    }
+}
+
+
+[HarmonyPatch(typeof(Vent), nameof(Vent.Use))]
+public static class VentUsePatch
+{
+    public static bool Prefix(Vent __instance)
+    {
+        PlayerControl localPlayer = AmongUsLLImpl.LocalPlayer;
+
+        __instance.CanUse(localPlayer.Data, out var flag, out _);
+        if (!flag) return false;
+
+        bool isNotEnter = localPlayer.inVent && !localPlayer.walkingToVent;
+
+        var info = localPlayer.GetModInfo();
+
+        if (isNotEnter)
+        {
+            localPlayer.MyPhysics.RpcExitVent(__instance.Id);
+        }
+        else if (!localPlayer.walkingToVent)
+        {
+            localPlayer.MyPhysics.RpcEnterVent(__instance.Id);
+        }
+
+        __instance.SetButtons(!isNotEnter && info!.Role.CanMoveInVent);
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(Vent), nameof(Vent.SetButtons))]
+public static class VentUpdateArrowPatch1
+{
+    public static void Prefix(Vent __instance, [HarmonyArgument(0)] ref bool enabled)
+    {
+        if (GamePlayer.LocalPlayer != null)
+        {
+            if (!GamePlayer.LocalPlayer.Role.CanMoveInVent) enabled = false;
+        }
+    }
+}
+
+[HarmonyPatch(typeof(Vent), nameof(Vent.UpdateArrows))]
+public static class VentUpdateArrowPatch2
+{
+    public static void Postfix(Vent __instance)
+    {
+        if (GamePlayer.LocalPlayer != null)
+        {
+            if (!GamePlayer.LocalPlayer.Role.CanMoveInVent) __instance.SetButtons(false);
+        }
+    }
+}
+
+public static class CommonCanUsePatch
+{
+    public static bool CanUse(MonoBehaviour target, NetworkedPlayerInfo pc)
+    {
+        var info = GamePlayer.LocalPlayer;
+        if (info == null) return true;
+
+        if (info.AllAbilities.Any(a => a.BlockUsingUtility)) return false;
+
+        //ダイブ中は使用不可
+        if (info.IsDived) return false;
+
+        return true;
+    }
+
+    public static bool Prefix(ref float __result, MonoBehaviour __instance, NetworkedPlayerInfo pc, out bool canUse, out bool couldUse)
+    {
+        canUse = couldUse = false;
+
+        var info = GamePlayer.LocalPlayer;
+        if (info == null) return true;
+
+        if (!CanUse(__instance, pc))
+        {
+            __result = float.MaxValue;
+            return false;
+        }
+
+        return true;
+    }
+}
+
+[HarmonyPatch(typeof(Ladder), nameof(Ladder.CanUse))]
+public static class LadderCanUsePatch
+{
+    public static bool Prefix(ref float __result, Ladder __instance, [HarmonyArgument(0)] NetworkedPlayerInfo pc, [HarmonyArgument(1)] out bool canUse, [HarmonyArgument(2)] out bool couldUse) => CommonCanUsePatch.Prefix(ref __result, __instance, pc, out canUse, out couldUse);
+}
+
+[HarmonyPatch(typeof(ZiplineConsole), nameof(ZiplineConsole.CanUse))]
+public static class ZiplineCanUsePatch
+{
+    public static bool Prefix(ref float __result, ZiplineConsole __instance, [HarmonyArgument(0)] NetworkedPlayerInfo pc, [HarmonyArgument(1)] out bool canUse, [HarmonyArgument(2)] out bool couldUse) => CommonCanUsePatch.Prefix(ref __result, __instance, pc, out canUse, out couldUse);
+}
+
+[HarmonyPatch(typeof(PlatformConsole), nameof(PlatformConsole.CanUse))]
+public static class PlatformCanUsePatch
+{
+    public static bool Prefix(ref float __result, PlatformConsole __instance, [HarmonyArgument(0)] NetworkedPlayerInfo pc, [HarmonyArgument(1)] out bool canUse, [HarmonyArgument(2)] out bool couldUse) => CommonCanUsePatch.Prefix(ref __result, __instance, pc, out canUse, out couldUse);
+}
+
+[HarmonyPatch(typeof(DoorConsole), nameof(DoorConsole.CanUse))]
+public static class DoorConsoleCanUsePatch
+{
+    public static bool Prefix(ref float __result, DoorConsole __instance, [HarmonyArgument(0)] NetworkedPlayerInfo pc, [HarmonyArgument(1)] out bool canUse, [HarmonyArgument(2)] out bool couldUse) => CommonCanUsePatch.Prefix(ref __result, __instance, pc, out canUse, out couldUse);
+}
+
+[HarmonyPatch(typeof(OpenDoorConsole), nameof(OpenDoorConsole.CanUse))]
+public static class OpenDoorConsoleCanUsePatch
+{
+    public static bool Prefix(ref float __result, OpenDoorConsole __instance, [HarmonyArgument(0)] NetworkedPlayerInfo pc, [HarmonyArgument(1)] out bool canUse, [HarmonyArgument(2)] out bool couldUse) => CommonCanUsePatch.Prefix(ref __result, __instance, pc, out canUse, out couldUse);
+}
+
+[HarmonyPatch(typeof(DeconControl), nameof(DeconControl.CanUse))]
+public static class DeconControlConsoleCanUsePatch
+{
+    public static bool Prefix(ref float __result, DeconControl __instance, [HarmonyArgument(0)] NetworkedPlayerInfo pc, [HarmonyArgument(1)] out bool canUse, [HarmonyArgument(2)] out bool couldUse) => CommonCanUsePatch.Prefix(ref __result, __instance, pc, out canUse, out couldUse);
+}
+
+[HarmonyPatch(typeof(MapConsole), nameof(MapConsole.CanUse))]
+public static class MapConsoleCanUsePatch
+{
+    public static bool Prefix(ref float __result, MapConsole __instance, [HarmonyArgument(0)] NetworkedPlayerInfo pc, [HarmonyArgument(1)] out bool canUse, [HarmonyArgument(2)] out bool couldUse) => CommonCanUsePatch.Prefix(ref __result, __instance, pc, out canUse, out couldUse);
+}
+
+[HarmonyPatch(typeof(Console), nameof(Console.CanUse))]
+public static class ConsoleCanUsePatch
+{
+    public static bool Prefix(ref float __result, Console __instance, [HarmonyArgument(0)] NetworkedPlayerInfo pc, [HarmonyArgument(1)] out bool canUse, [HarmonyArgument(2)] out bool couldUse)
+    {
+        canUse = couldUse = false;
+
+        var info = GamePlayer.LocalPlayer;
+        if (info == null) return true;
+
+        if (!CommonCanUsePatch.CanUse(__instance, pc))
+        {
+            __result = float.MaxValue;
+            return false;
+        }
+
+        if (AmongUsLLImpl.ShipStatusInstance.SpecialTasks.Any((task) => __instance.TaskTypes.Contains(task.TaskType)))
+        {
+            if (
+                (__instance.TaskTypes.Contains(TaskTypes.FixLights) && info.AllAssigned().Any(assignable => !assignable.CanFixLight)) ||
+                (__instance.TaskTypes.Contains(TaskTypes.FixComms) && info.AllAssigned().Any(assignable => !assignable.CanFixComm))
+                )
+            {
+                __result = float.MaxValue;
+                return false;
+            }
+        }
+
+        if (__instance.AllowImpostor) return true;
+
+        if (!info.Role.HaveNormalTask)
+        {
+            __result = float.MaxValue;
+            return false;
+        }
+
+        return true;
+    }
+}
+
+[HarmonyPatch(typeof(ImpostorRole), nameof(ImpostorRole.CanUse))]
+public static class ImpostorRoleCanUsePatch
+{
+    public static bool Prefix(ImpostorRole __instance, ref bool __result)
+    {
+        //CanUseはローカルプレイヤーでしか呼ばれない。
+        var localPlayer = GamePlayer.LocalPlayer;
+        if (localPlayer == null) return true;
+
+        if (localPlayer.Role.HaveNormalTask)
+        {
+            __result = true;
+            return false;
+        }
+
+        return true;
+    }
+}
+
+[HarmonyPatch(typeof(DoorConsole), nameof(DoorConsole.Use))]
+public static class DoorConsoleUsePatch
+{
+    public static void Postfix(DoorConsole __instance)
+    {
+        var minigame = Minigame.Instance;
+        if (minigame.AsBoolFast() && minigame.IsFast<IDoorMinigame>())
+        {
+            GameOperatorManager.Instance?.Run(new PlayerBeginMinigameByDoorLocalEvent(GamePlayer.LocalPlayer!, __instance));
+        }
+    }
+}
+
+[HarmonyPatch(typeof(Console), nameof(Console.Use))]
+public static class ConsoleUsePatch
+{
+    public static void Postfix(Console __instance)
+    {
+        var minigame = Minigame.Instance;
+        if (minigame.AsBoolFast() && minigame.Console.AsBoolFast() && minigame.Console.GetInstanceIdFast() == __instance.GetInstanceIdFast())
+        {
+            GameOperatorManager.Instance?.Run(new PlayerBeginMinigameByConsoleLocalEvent(GamePlayer.LocalPlayer!, __instance));
+        }
+    }
+}
+
+[HarmonyPatch(typeof(SystemConsole), nameof(SystemConsole.CanUse))]
+public static class SystemConsoleCanUsePatch
+{
+    public static void Postfix(SystemConsole __instance, [HarmonyArgument(0)] NetworkedPlayerInfo pc, [HarmonyArgument(1)] ref bool canUse, [HarmonyArgument(2)] ref bool couldUse)
+    {
+        var info = GamePlayer.LocalPlayer;
+        if (info == null) return;
+
+        if (!CommonCanUsePatch.CanUse(__instance, pc))
+        {
+            canUse = false;
+            couldUse = false;
+        }
+
+        if(info != null && !UseButtonAlternative.CheckCanUse(__instance))
+        {
+            canUse = false;
+            couldUse = false;
+            return;
+        }
+
+        //緊急会議コンソールの使用をブロック
+        if (__instance.MinigamePrefab.AsBoolFast() && __instance.MinigamePrefab.IsFast<EmergencyMinigame>() && (info.AllAssigned().Any(a => !a.CanCallEmergencyMeeting) || info.AllAbilities.Any(a => a.BlockCallingEmergencyMeeting)))
+        {
+            canUse = false;
+            couldUse = false;
+        }
+    }
+}
+
+[HarmonyPatch(typeof(MovingPlatformBehaviour), nameof(MovingPlatformBehaviour.MeetingCalled))]
+class MovingPlatformBehaviourMeetingCalledPatch
+{
+    static bool Prefix(MovingPlatformBehaviour __instance)
+    {
+        if (NebulaAPI.AmongUs.MapId != 4) return true;
+        return !GeneralConfigurations.AirshipOneWayMeetingRoomOption.CurrentValue;
+    }
+}
+
+[HarmonyPatch(typeof(MovingPlatformBehaviour), nameof(MovingPlatformBehaviour.InUse), MethodType.Getter)]
+class CanUseMovingPlayformPatch
+{
+    static bool Prefix(MovingPlatformBehaviour __instance, out bool __result)
+    {
+        __result = false;
+        if (NebulaAPI.AmongUs.MapId != 4) return true;
+        else {
+            return !GeneralConfigurations.AirshipOneWayMeetingRoomOption.CurrentValue;
+        }
+    }
+}
+
+[HarmonyPatch(typeof(MovingPlatformBehaviour), nameof(MovingPlatformBehaviour.SetSide))]
+class MovingPlatformBehaviourSetSidePatch
+{
+    static bool Prefix(MovingPlatformBehaviour __instance)
+    {
+        __instance.IsDirty = true;
+        return !GeneralConfigurations.AirshipOneWayMeetingRoomOption.CurrentValue;
+    }
+}
+
+//フリープレイPC
+
+[HarmonyPatch(typeof(SystemConsole), nameof(SystemConsole.Start))]
+class SystemConsoleStartPatch
+{
+    static bool Prefix(SystemConsole __instance)
+    {
+        if (__instance.FreeplayOnly && GeneralConfigurations.CurrentGameMode != GameModes.FreePlay)
+            UnityEngine.Object.Destroy(__instance.gameObject);
+
+        return false;
+    }
+}
+
+
+[HarmonyPatch(typeof(ArrowBehaviour), nameof(ArrowBehaviour.UpdatePosition))]
+public static class ArrowUpdatePatch
+{
+    public static bool Prefix(ArrowBehaviour __instance) => FixInternal(__instance, __instance.transform);
+
+    private const float LowerPowY = 0.8f;
+    private static bool ShouldUseConcave(float x, float y)
+    {
+        if (y > 0f) return false;
+        return NebulaGameManager.Instance?.HudGrid.ContentsOccupyMultipleLines[x < 0f ? 0 : 1] ?? false;
+    }
+    internal static bool InArea(bool ovalMode, Vector2 vector)
+    {
+        if (ovalMode)
+        {
+            float x = (vector.x - 0.5f) * 2f;
+            float y = (vector.y - 0.5f) * 2f;
+            if (ShouldUseConcave(x, y))
+            {
+                float x2 = Mathn.Pow(Mathn.Abs(x), LowerPowY);
+                float y2 = Mathn.Pow(Mathn.Abs(y), LowerPowY);
+                return x2 + y2 < 1f;
+            }
+            else
+            {
+                float x2 = x * x;
+                float y2 = y * y;
+                return x2 + y2 < 1f;
+            }
+        }
+        else
+        {
+            var x = vector.x;
+            var y = vector.y;
+            return 0f < x && x < 1f && 0f < y && y < 1f;
+        }
+    }
+
+    internal static Vector2 AdjustVector(bool ovalMode, Vector2 vpPoint)
+    {
+        Vector2 vector = new(Mathn.Clamp(vpPoint.x * 2f - 1f, -1f, 1f), Mathn.Clamp(vpPoint.y * 2f - 1f, -1f, 1f));
+        if (ovalMode)
+        {
+            if (ShouldUseConcave(vector.x, vector.y))
+            {
+                float sum = Mathn.Pow(Mathn.Abs(vector.x), LowerPowY) + Mathn.Pow(Mathn.Abs(vector.y), LowerPowY);
+                sum = Mathn.Pow(sum, 1.0f / LowerPowY);
+                vector /= Mathn.Max(sum, 1.0f);
+            }
+            else
+            {
+                vector /= vector.magnitude;
+            }
+        }
+        return vector;
+    }
+
+    private static void DistancedBehaviour(bool ovalMode, ArrowBehaviour __instance, Vector2 vpPoint, Vector2 del, float delLen, Camera cam)
+    {
+        float safeOrthographicSize = CameraSafeArea.GetSafeOrthographicSize(cam);
+
+        Vector2 vector = AdjustVector(ovalMode, vpPoint);
+
+        float num = safeOrthographicSize * cam.aspect;
+        Vector3 vector2 = new(Mathn.LerpUnclamped(0f, num * 0.88f, vector.x), Mathn.LerpUnclamped(0f, safeOrthographicSize * 0.79f, vector.y), 0f);
+        var transform = __instance.transform;
+        var maxScale = __instance.MaxScale;
+        transform.position = cam.transform.GetPositionFast() + vector2;
+        transform.localScale = new Vector3(maxScale, maxScale, maxScale);
+    }
+    internal static bool FixInternal(ArrowBehaviour __instance, Transform lookAt) {
+        bool ovalMode = ClientOption.GetValue(ClientOption.ClientOptionType.ArrowRework) == 1;
+
+        try
+        {
+            var transform = __instance.ModGameObject(false);
+
+            __instance.gameObject.layer = LayerExpansion.GetArrowLayer();
+            if(__instance.image.AsBoolFast()) __instance.image.sortingOrder = 10;
+
+            //表示するのはUIカメラ
+            Camera main = NebulaGameManager.Instance?.WideCamera.Camera ?? UnityHelper.FindCamera(LayerExpansion.GetUILayer())!;
+            //距離を測るのは表示用のカメラ
+            Camera worldCam = (NebulaGameManager.Instance?.WideCamera.IsShown ?? false) ? NebulaGameManager.Instance.WideCamera.Camera : Camera.main;
+            float worldCamSize = worldCam.orthographicSize;
+            float mainCamSize = Camera.main.orthographicSize;
+
+            VVector2 del = (VVector2)__instance.target - main.ModGameObject(false).Position;
+
+            float num = del.Magnitude / (worldCamSize * __instance.perc);
+            if (__instance.image.AsBoolFast()) __instance.image.enabled = (num > __instance.minDistanceToShowArrow);
+
+            VVector2 vector = worldCam.WorldToViewportPoint(__instance.target);
+
+            //カメラに合わせて見かけ上の位置に偽装させる
+            VVector2 hudPos =  AmongUsLLImpl.HudManagerBridge.MyTransform.ModGameObject(false).Position;
+            var tempTarget = __instance.target;
+            var diff = __instance.target - hudPos;
+            VVector2 pos = hudPos + diff / (worldCamSize / 3f);
+            __instance.target = pos.AsUnityVector3(tempTarget.z);
+
+            if (InArea(ovalMode, vector))
+            {
+                VVector2 worldCamPos = worldCam.ModGameObject(false).Position;
+                VVector2 temp = worldCamPos + (__instance.target - worldCamPos) * (worldCamSize / mainCamSize);
+                transform.Position = (temp - del.Normalized * 0.6f * (worldCamSize / mainCamSize)).AsVector3();
+
+                float scale = __instance.alwaysMaxSize ? __instance.MaxScale : Mathn.Clamp(num, 0f, __instance.MaxScale);
+                transform.LocalScale = new(scale, scale, 1f);
+            }
+            else
+                DistancedBehaviour(ovalMode, __instance, vector, del, num, main);
+
+            transform.LocalScale *= (worldCamSize / mainCamSize);
+
+            __instance.target = tempTarget;
+
+            lookAt.LookAt2d(__instance.target);
+
+            //Zの位置を調整
+            transform.SetLocalZ(-100f);
+        }catch(System.Exception e) {
+            LogUtils.WriteToConsole(e.ToString());
+        }
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(PingBehaviour), nameof(PingBehaviour.UpdatePosition))]
+public static class PingUpdatePatch
+{
+    public static bool Prefix(PingBehaviour __instance) => ArrowUpdatePatch.FixInternal(__instance, __instance.transform);
+}
+
+
+[HarmonyPatch(typeof(NoisemakerArrow), nameof(NoisemakerArrow.UpdatePosition))]
+public static class NoisemakerArrowUpdatePatch
+{
+    public static bool Prefix(NoisemakerArrow __instance) => ArrowUpdatePatch.FixInternal(__instance, __instance.pivot);
+}
+
+[HarmonyPatch(typeof(NoisemakerArrow), nameof(NoisemakerArrow.Awake))]
+public static class NoisemakerArrowAwakePatch
+{
+    public static void postfix(NoisemakerArrow __instance)
+    {
+        foreach(var renderer in __instance.pivot.GetComponentsInChildren<SpriteRenderer>())
+        {
+            renderer.gameObject.layer = LayerExpansion.GetArrowLayer();
+            renderer.SetBothOrder(10);
+        }
+    }
+}
+
+
+[HarmonyPatch(typeof(Ladder), nameof(Ladder.MaxCoolDown), MethodType.Getter)]
+class LadderCoolDownPatch
+
+{
+    //GeneralConfigurationsの初期化タイミングを調整するため、関数に抽出
+    static float GetModCooldown() => GeneralConfigurations.LadderCoolDownOption;
+
+    static bool Prefix(Ladder __instance, out float __result)
+    {
+        if (NebulaPreprocessorImpl.Finished)
+        {
+            __result = Math.Max(0.01f, GetModCooldown());
+            return false;
+        }
+
+        __result = 0f;
+        return true;
+    }
+}
+
+[HarmonyPatch(typeof(Ladder), nameof(Ladder.SetDestinationCooldown))]
+class LadderCoolDownUpdatePatch
+{
+    //GeneralConfigurationsの初期化タイミングを調整するため、関数に抽出
+    static float GetModCooldown() => GeneralConfigurations.LadderCoolDownOption;
+
+    static bool Prefix(Ladder __instance)
+    {
+        if (NebulaPreprocessorImpl.Finished)
+        {
+            float maxCoolDown = GeneralConfigurations.LadderCoolDownOption;
+            __instance.Destination.CoolDown = maxCoolDown;
+            __instance.CoolDown = maxCoolDown;
+            return false;
+        }
+        else
+        {
+            return true;
+        }
+    }
+}
+
+/*
+[HarmonyPatch(typeof(ZiplineConsole), nameof(ZiplineConsole.MaxCoolDown), MethodType.Getter)]
+class ZiplineCoolDownPatch
+{
+    static bool Prefix(ZiplineConsole __instance, out float __result)
+    {
+        __result = Math.Max(0.01f, GeneralConfigurations.ZiplineCoolDownOption);
+        return false;
+    }
+}
+*/
+
+[HarmonyPatch(typeof(ZiplineBehaviour._CoUseZipline_d__39), nameof(ZiplineBehaviour._CoUseZipline_d__39.MoveNext))]
+class ZiplineSetCoolDownPatch
+{
+    static void Postfix(ZiplineBehaviour._CoUseZipline_d__39 __instance, bool __result)
+    {
+        if (__result)
+        {
+            //コルーチン実行中
+            var current = __instance.__2__current;
+            if (current != null)
+            {
+                if (current?.TryCast<ZiplineBehaviour._CoAnimatePlayerJumpingOnToZipline_d__40>(out var apjz) ?? false)
+                {
+                    var modPlayer = __instance.player.GetModInfo();
+                    modPlayer?.Unbox().AddPlayerColorRenderers(apjz.hand.handRenderer);
+                    if(modPlayer != null)
+                    {
+                        GameOperatorManager.Instance?.Run<PlayerUseZiplineEvent>(new(modPlayer, !__instance.fromTop, __instance.start.GetPositionFast(), __instance.end.GetPositionFast()));
+                    }
+                    try
+                    {
+                        modPlayer?.DeathPosition = new(
+                            __instance.fromTop ? __instance.__4__this.landingPositionBottom.GetPositionFast() : __instance.__4__this.landingPositionTop.GetPositionFast(),
+                            __instance.fromTop ?__instance.__4__this.landingPositionTop.GetPositionFast() : __instance.__4__this.landingPositionBottom.GetPositionFast()
+                            );
+                    }
+                    catch
+                    {
+                        Debug.Log($"Skipped presetting goal position on use ZiplineBehaviour. (for {__instance.__4__this.name})");
+                    }
+                }
+                else if (current?.TryCast<ZiplineBehaviour._CoAlightPlayerFromZipline_d__46>(out var apfz) ?? false)
+                {
+                    __instance.player.GetModInfo()?.DeathPosition = null;
+
+                    __instance.__2__current = Effects.Sequence(current?.CastFast<Il2CppSystem.Collections.IEnumerator>(),
+                        ManagedEffects.Action(() =>
+                        {
+                            __instance.player.GetModInfo()?.Unbox().RemovePlayerColorRenderer(apfz.hand.handRenderer);
+                        }).WrapToIl2Cpp()
+                        ).CastFast<Il2CppSystem.Object>();
+                    
+                }
+            }
+        }
+        else
+        {
+            //コルーチン終了時
+            if (__instance.__4__this.lastUsedConsole && __instance.player.AmOwner) __instance.__4__this.lastUsedConsole.SetDestinationCooldown();
+        }
+    }
+}
+
+
+[HarmonyPatch(typeof(ZiplineConsole), nameof(ZiplineConsole.SetDestinationCooldown))]
+class ZiplineCoolDownUpdatePatch
+{
+    static bool Prefix(ZiplineConsole __instance)
+    {
+        float maxCoolDown = GeneralConfigurations.ZiplineCoolDownOption;
+        __instance.destination.CoolDown = maxCoolDown;
+        __instance.CoolDown = maxCoolDown;
+        return false;
+
+    }
+}
+
+//Admin
+[HarmonyPatch(typeof(MapConsole), nameof(MapConsole.Use))]
+public static class MapConsoleUsePatch
+{
+    public static void Postfix(MapConsole __instance)
+    {
+        int mapId = NebulaAPI.AmongUs.MapId;
+        int consoleId = 0;
+        if (mapId == 4 && __instance.transform.GetPositionFast().x > 10f) consoleId = 1;
+        MapBehaviourExtension.RestrictRoom(MapBehaviour.Instance, GeneralConfigurations.AdminRoomOptions[mapId][consoleId].Value << 1);
+    }
+}

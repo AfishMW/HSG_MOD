@@ -1,0 +1,186 @@
+﻿using Nebula.Behavior;
+using Nebula.VoiceChat;
+using UnityEngine.UIElements;
+
+namespace Nebula.Patches;
+
+//Camera (Skeld)
+[HarmonyPatch(typeof(SurveillanceMinigame), nameof(SurveillanceMinigame.Begin))]
+class SurveillanceMinigameBeginPatch
+{
+    public static void Prefix(SurveillanceMinigame __instance)
+    {
+        if(!__instance.CameraPrefab.gameObject.TryGetComponent<IgnoreShadowCamera>(out _))
+        {
+            __instance.CameraPrefab.cullingMask &= 0xFFFF; 
+            var isc = __instance.CameraPrefab.gameObject.AddComponent<IgnoreShadowCamera>();
+            isc.ShowNameText = false;
+        }
+
+        NebulaGameManager.Instance?.ConsoleRestriction?.ShowTimerIfNecessary(ConsoleRestriction.ConsoleType.Camera, __instance.transform, new Vector3(3.4f, 2f, -50f));
+
+        if (ModSingleton<CameraVC>.Instance != null) CameraVC.RpcUseCamera.Invoke((GamePlayer.LocalPlayer!, 0));
+    }
+
+    public static void Postfix(SurveillanceMinigame __instance)
+    {
+        __instance.gameObject.GetComponentsInChildren<IgnoreShadowCamera>().Do(isc => isc.ShowNameText = false);
+    }
+}
+
+[HarmonyPatch(typeof(SurveillanceMinigame), nameof(SurveillanceMinigame.Close))]
+class SurveillanceMinigameClosePatch
+{
+    public static void Postfix(SurveillanceMinigame __instance)
+    {
+        if (ModSingleton<CameraVC>.Instance != null) CameraVC.RpcUseCamera.Invoke((GamePlayer.LocalPlayer!, -1));
+    }
+}
+
+[HarmonyPatch(typeof(SurveillanceMinigame), nameof(SurveillanceMinigame.Update))]
+class SurveillanceMinigameUpdatePatch
+{
+    public static bool Prefix(SurveillanceMinigame __instance)
+    {
+        if (ConsoleTimer.IsOpenedByAvailableWay()) return true;
+
+        for (int j = 0; j < __instance.ViewPorts.Length; j++)
+        {
+            __instance.ViewPorts[j].sharedMaterial = __instance.StaticMaterial;
+            __instance.SabText[j].gameObject.SetActive(true);
+            __instance.SabText[j].text = Language.Translate("console.notAvailable");
+        }
+        return false;
+    }
+}
+
+//Camera (Fungle)
+[HarmonyPatch(typeof(FungleSurveillanceMinigame), nameof(FungleSurveillanceMinigame.Begin))]
+class FungleSurveillanceMinigameBeginPatch
+{
+    public static void Prefix(FungleSurveillanceMinigame __instance)
+    {
+        NebulaGameManager.Instance?.ConsoleRestriction?.ShowTimerIfNecessary(ConsoleRestriction.ConsoleType.Camera, __instance.transform, new Vector3(3.4f, -2f, -50f));
+
+        var isc = __instance.securityCamera.cam.gameObject.AddComponent<IgnoreShadowCamera>();
+        isc.ShowNameText = false;
+    }
+}
+
+[HarmonyPatch(typeof(FungleSurveillanceMinigame), nameof(FungleSurveillanceMinigame.Update))]
+class FungleSurveillanceMinigameUpdatePatch
+{
+    public static void Postfix(FungleSurveillanceMinigame __instance)
+    {
+        var localY = __instance.transform.localPosition.y;
+        if (localY < -5f) localY = -5f;
+        __instance.viewport.transform.localPosition = new(0f, localY * 0.4f, 1f);
+
+        if (ConsoleTimer.IsOpenedByAvailableWay()) return;
+
+        //カメラが使用できないとき
+        if(__instance.securityCamera.cam.enabled)
+        {
+            RenderTexture rt = new RenderTexture(32, 32, 32);
+            rt.Create();
+
+            var cam = __instance.securityCamera.cam;
+            cam.targetTexture = rt;
+            cam.cullingMask &= ~(1 << LayerExpansion.GetPlayersLayer());
+            cam.Render();
+            cam.enabled = false;
+
+            __instance.viewport.sharedMaterial.mainTexture = cam.targetTexture;
+        }
+    }
+}
+
+//Camera (Others)
+[HarmonyPatch(typeof(PlanetSurveillanceMinigame), nameof(PlanetSurveillanceMinigame.Begin))]
+class PlanetSurveillanceMinigameBeginPatch
+{
+    public static void Prefix(PlanetSurveillanceMinigame __instance)
+    {
+        var isc = __instance.Camera.gameObject.AddComponent<IgnoreShadowCamera>();
+        isc.ShowNameText = false;
+
+        NebulaGameManager.Instance?.ConsoleRestriction?.ShowTimerIfNecessary(ConsoleRestriction.ConsoleType.Camera, __instance.transform, new Vector3(0f, -1.9f, -50f));
+    }
+}
+
+
+[HarmonyPatch(typeof(PlanetSurveillanceMinigame), nameof(PlanetSurveillanceMinigame.Close))]
+class PlanetSurveillanceMinigameClosePatch
+{
+    public static void Postfix(PlanetSurveillanceMinigame __instance)
+    {
+        if (ModSingleton<CameraVC>.Instance != null) CameraVC.RpcUseCamera.Invoke((GamePlayer.LocalPlayer!, -1));
+    }
+}
+
+[HarmonyPatch(typeof(PlanetSurveillanceMinigame), nameof(PlanetSurveillanceMinigame.Update))]
+class PlanetSurveillanceMinigameUpdatePatch
+{
+    public static bool Prefix(PlanetSurveillanceMinigame __instance)
+    {
+        if (ConsoleTimer.IsOpenedByAvailableWay()) return true;
+
+        __instance.SabText.gameObject.SetActive(true);
+        __instance.SabText.text = Language.Translate("console.notAvailable");
+        __instance.isStatic = true;
+        __instance.ViewPort.sharedMaterial = __instance.StaticMaterial;
+
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(PlanetSurveillanceMinigame), nameof(PlanetSurveillanceMinigame.NextCamera))]
+class PlanetSurveillanceMinigameNextCameraPatch
+{
+    public static bool Prefix(PlanetSurveillanceMinigame __instance, [HarmonyArgument(0)]int direction)
+    {
+        if (ConsoleTimer.IsOpenedByAvailableWay()) return true;
+
+        if (direction != 0 && Constants.ShouldPlaySfx()) AmongUsLLImpl.SoundManagerInstance.PlaySound(__instance.ChangeSound, false, 1f, null);
+        
+        __instance.Dots[__instance.currentCamera].sprite = __instance.DotDisabled;
+        __instance.currentCamera = (__instance.currentCamera + direction).Wrap(__instance.survCameras.Length);
+        __instance.Dots[__instance.currentCamera].sprite = __instance.DotEnabled;
+        SurvCamera survCamera = __instance.survCameras[__instance.currentCamera];
+        __instance.Camera.transform.position = survCamera.transform.GetPositionFast() + __instance.survCameras[__instance.currentCamera].Offset;
+        __instance.LocationName.text = ((survCamera.NewName > StringNames.None) ? VanillaTranslationCache.GetString(survCamera.NewName) : survCamera.CamName);
+        
+        return false;
+    }
+
+    public static void Postfix(PlanetSurveillanceMinigame __instance)
+    {
+        if (ModSingleton<CameraVC>.Instance != null) CameraVC.RpcUseCamera.Invoke((GamePlayer.LocalPlayer!, __instance.currentCamera));
+    }
+}
+
+//Door Log
+//Camera (Others)
+[HarmonyPatch(typeof(SecurityLogGame), nameof(SecurityLogGame.Awake))]
+class SecurityLogGameBeginPatch
+{
+    public static void Prefix(SecurityLogGame __instance)
+    {
+        NebulaGameManager.Instance?.ConsoleRestriction?.ShowTimerIfNecessary(ConsoleRestriction.ConsoleType.Camera, __instance.transform, new Vector3(3.4f, 1.5f, -50f));
+    }
+}
+
+[HarmonyPatch(typeof(SecurityLogGame), nameof(SecurityLogGame.Update))]
+class SecurityLogGameUpdatePatch
+{
+    public static bool Prefix(SecurityLogGame __instance)
+    {
+        if (ConsoleTimer.IsOpenedByAvailableWay()) return true;
+
+        __instance.SabText.gameObject.SetActive(true);
+        __instance.SabText.text = Language.Translate("console.notAvailable");
+        __instance.EntryPool.ReclaimAll();
+
+        return false;
+    }
+}

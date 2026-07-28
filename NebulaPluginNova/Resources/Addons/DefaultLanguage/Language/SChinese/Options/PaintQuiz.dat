@@ -1,0 +1,33 @@
+# Header
+ 
+"options.paintQuiz" : "绘画问答设置"
+"options.paintQuiz.detail" : "绘画问答相关设置"
+ 
+# Groups
+ 
+"options.paintQuiz.group.stamps" : "评价表情设定"
+ 
+# Options
+ 
+"options.paintQuiz.numOfQuiz" : "题目数量"
+"options.paintQuiz.category" : "题目风格"
+"options.paintQuiz.category.detail" : "绘画问答题目风格（从什么猜什么）设定"
+"options.paintQuiz.category.blurbToRole" : "风格简介 → 职业"
+"options.paintQuiz.category.blurbToRole.detail" : "<b>推荐！</b> 给出职业的风格简介文本，然后猜出对应的职业。"
+"options.paintQuiz.category.roleToIcon" : "职业 → 职业图标"
+"options.paintQuiz.category.roleToIcon.detail" : "<b>推荐！</b> 给出职业，然后画出对应的职业图标。"
+"options.paintQuiz.category.titleToRole" : "成就 → 职业"
+"options.paintQuiz.category.titleToRole.detail" : "<b>推荐！</b> 给出参与者已拥有的成就，然后猜出对应的职业。"
+"options.paintQuiz.category.challengeToRole" : "挑战成就 → 职业"
+"options.paintQuiz.category.challengeToRole.detail" : "给出参与者已拥有的挑战成就，然后猜出对应的职业。"
+"options.paintQuiz.category.roleToBlurb" : "职业 → 风格简介"
+"options.paintQuiz.category.roleToBlurb.detail" : "给出职业，然后猜出对应的风格简介文本。<br>遇到困难就用想象力！"
+"options.paintQuiz.category.roleToChallenge" : "职业 → 挑战成就"
+"options.paintQuiz.category.roleToChallenge.detail" : "给出参与者以拥有的挑战成就职业，然后猜出对应的挑战成就。"
+"options.paintQuiz.restrictToSpawnables" : "仅出与生成职业相关题目"
+"options.paintQuiz.category.playerToBlurb" : "玩家 → 风格简介"
+"options.paintQuiz.category.playerToBlurb.detail" : "给出玩家，然后为这名玩家写一个风格简介文本。"
+"options.paintQuiz.category.playerToTitle" : "玩家 → 成就"
+"options.paintQuiz.category.playerToTitle.detail" : "给出玩家，然后为这名玩家写一个成就文本。<br>放轻松，就当是搞笑问答！"
+"options.paintQuiz.restrictToSpawnables.detail" : "开启后，仅出与当前在分配池中的职业相关的题目。<br>若无题可出，则会扩大范围至所以职业并重置。"
+ 

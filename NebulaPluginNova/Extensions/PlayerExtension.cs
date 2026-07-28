@@ -1,0 +1,224 @@
+﻿using AmongUs.GameOptions;
+using BepInEx.Unity.IL2CPP.Utils;
+using Epic.OnlineServices.Mods;
+using Hazel;
+using Nebula.Behavior;
+using Nebula.Game.Statistics;
+using Nebula.Modules.Cosmetics;
+using Nebula.Player;
+using TMPro;
+using UnityEngine.Rendering;
+using Virial.Assignable;
+using Virial.Events.Player;
+using Virial.Game;
+using Virial.Text;
+using static UnityEngine.GraphicsBuffer;
+
+namespace Nebula.Extensions;
+
+[NebulaRPCHolder]
+public static class PlayerExtension
+{
+
+    public static IEnumerator CoDive(this PlayerControl player, bool playAnim)
+    {
+        if (!playAnim)
+        {
+            player.MyPhysics.myPlayer.Visible = false;
+            player.GetModInfo()!.Unbox().CurrentDiving = new();
+            yield break;
+        }
+
+        player.MyPhysics.body.velocity = Vector2.zero;
+        if (player.AmOwner) player.MyPhysics.inputHandler.enabled = true;
+        player.cosmetics.skin.SetEnterVent(player.cosmetics.FlipX);
+        player.moveable = false;
+
+        player.NetTransform.SetPaused(true);
+
+        yield return player.MyPhysics.Animations.CoPlayEnterVentAnimation(0);
+
+        player.NetTransform.SetPaused(false);
+        player.MyPhysics.myPlayer.Visible = false;
+        player.cosmetics.skin.SetIdle(player.cosmetics.FlipX);
+        player.MyPhysics.Animations.PlayIdleAnimation();
+        player.moveable = true;
+
+        player.currentRoleAnimations.ForEach((Action<RoleEffectAnimation>)((an) => an.ToggleRenderer(false)));
+        if (player.AmOwner) player.MyPhysics.inputHandler.enabled = false;
+        player.GetModInfo()!.Unbox().CurrentDiving = new();
+    }
+
+    public static IEnumerator CoGush(this PlayerControl player, bool playAnim)
+    {
+        if (!playAnim)
+        {
+            player.MyPhysics.myPlayer.Visible = true;
+            player.GetModInfo()!.Unbox().CurrentDiving = null;
+            yield break;
+        }
+
+        player.MyPhysics.body.velocity = Vector2.zero;
+        if (player.AmOwner) player.MyPhysics.inputHandler.enabled = true;
+        player.moveable = false;
+        player.MyPhysics.myPlayer.Visible = true;
+        player.cosmetics.AnimateSkinExitVent();
+
+        player.GetModInfo()!.Unbox().CurrentDiving = null;
+
+        player.NetTransform.SetPaused(true);
+
+        yield return player.MyPhysics.Animations.CoPlayExitVentAnimation();
+
+        player.NetTransform.SetPaused(false);
+
+        player.cosmetics.AnimateSkinIdle();
+        player.MyPhysics.Animations.PlayIdleAnimation();
+        player.moveable = true;
+        player.currentRoleAnimations.ForEach((Action<RoleEffectAnimation>)((an) => an.ToggleRenderer(true)));
+        if (player.AmOwner) player.MyPhysics.inputHandler.enabled = false;
+    }
+
+    public static void HaltSmoothly(this CustomNetworkTransform netTransform)
+    {
+        ushort minSid = (ushort)(netTransform.lastSequenceId + 1);
+        netTransform.SnapToSmoothly(netTransform.ModGameObject(false).Position);
+    }
+
+    public static void SnapToSmoothly(this CustomNetworkTransform netTransform, VVector2 position)
+    {
+        //netTransform.ClearPositionQueues();
+
+        var transform = netTransform.ModGameObject();
+        var body = netTransform.body;
+        body.position = position;
+        transform.Position = position.AsUnityVector3(position.y / 1000f);
+        body.velocity = Vector2.zero;
+
+        netTransform.sendQueue.Enqueue(position);
+        netTransform.SetDirtyBit(2U);
+    }
+
+    public static void StopAllAnimations(this CosmeticsLayer layer)
+    {
+        try
+        {
+            if (layer.skin.animator.AsBoolFast()) layer.skin.animator.Stop();
+            if (layer.currentPet.animator.AsBoolFast()) layer.currentPet.animator.Stop();
+        }
+        catch { }
+    }
+
+    static RemoteProcess<(byte exiledId, byte sourceId, CommunicableTextTag stateId, CommunicableTextTag recordId)> RpcMarkAsExtraVictim = new(
+        "MarkAsExtraVictim",
+        (message, _) => MeetingHudExtension.ExtraVictims.Add(message)
+        );
+
+    static public void ModMarkAsExtraVictim(this PlayerControl exiled,PlayerControl? source, CommunicableTextTag playerState, CommunicableTextTag recordState)
+    {
+        RpcMarkAsExtraVictim.Invoke((exiled.PlayerId, source?.PlayerId ?? byte.MaxValue, playerState, recordState));
+
+    }
+
+    static public void ModDive(this PlayerControl player, bool isDive = true, bool playAnim = true)
+    {
+        RpcDive.Invoke((player.PlayerId,isDive, playAnim));
+    }
+
+    static RemoteProcess<(byte sourceId, byte targetId, Vector2 revivePos, bool cleanDeadBody,bool recordEvent)> RpcRivive = new(
+        "Revive",
+        (message, calledByMe) =>
+        {
+            var player = Helpers.GetPlayer(message.targetId);
+            if (!player.AsBoolFast()) return;
+
+            player!.Revive();
+            player.NetTransform.SnapTo(message.revivePos);
+            var modinfo = player.GetModInfo()!.Unbox();
+            modinfo.MyState = PlayerState.Revived;
+            modinfo.WillDie = false;
+            modinfo.CurrentDiving = null;
+
+            if (message.cleanDeadBody) foreach (var d in Helpers.AllDeadBodies()) if ((d.ParentId & 0x7F) == player.PlayerId) GameObject.Destroy(d.gameObject);
+
+            if(message.recordEvent)NebulaGameManager.Instance?.GameStatistics.RecordEvent(new(GameStatistics.EventVariation.Revive, message.sourceId != byte.MaxValue ? message.sourceId : null, 1 << message.targetId) { RelatedTag = EventDetail.Revive });
+
+            GameOperatorManager.Instance?.Run(new PlayerReviveEvent(modinfo, NebulaGameManager.Instance?.GetPlayer(message.sourceId)));
+        }
+        );
+
+    static RemoteProcess<(byte playerId, bool isDive, bool playAnim)> RpcDive = new(
+        "Dive",
+        (message, _) =>
+        {
+            var player = Helpers.GetPlayer(message.playerId);
+            if (!player.AsBoolFast()) return;
+            player?.StartCoroutine(message.isDive ? player.CoDive(message.playAnim) : player.CoGush(message.playAnim));
+        }
+        );
+
+    static public void ModRevive(this PlayerControl player, Vector2 pos, bool cleanDeadBody,bool recordEvent)
+    {
+        RpcRivive.Invoke((byte.MaxValue, player.PlayerId, pos, cleanDeadBody,recordEvent));
+    }
+
+    static public void ModRevive(this PlayerControl player, PlayerControl? healer, Vector2 pos, bool cleanDeadBody, bool recordEvent = true)
+    {
+        RpcRivive.Invoke((healer?.PlayerId ?? byte.MaxValue, player.PlayerId, pos, cleanDeadBody, recordEvent));
+    }
+
+    static public ModTitleShower GetTitleShower(this PlayerControl player)
+    {
+        if (player.TryGetComponent<ModTitleShower>(out var result))
+            return result;
+        else
+        {
+            return player.gameObject.AddComponent<ModTitleShower>();
+        }
+    }
+
+    static public void ResetOnDying(PlayerControl player)
+    {
+        var modInfo = player.GetModInfo()!;
+        modInfo.Unbox().CurrentDiving = null;
+
+        if (player.AmOwner)
+        {
+            if(Vent.currentVent != null)
+            {
+                Vent.currentVent.SetButtons(false);
+                Vent.currentVent = null;
+            }
+        }
+
+        player.inVent = false;
+        player.moveable = true;
+    }
+
+    public static void SetUpScaler(GameObject playerControlObject)
+    {
+        //Scalerにまとめる
+        var scaler = UnityHelper.CreateObject("Scaler", playerControlObject.transform, playerControlObject.GetComponent<Collider2D>().offset).transform;
+        var group = scaler.gameObject.AddComponent<SortingGroup>();
+        var cosmetics = playerControlObject.GetComponentInChildren<CosmeticsLayer>();
+        cosmetics.transform.SetParent(scaler, true);
+        playerControlObject.transform.FindChild("BodyForms").SetParent(scaler, true);
+        cosmetics.zIndexSpacing = 0f;
+        scaler.transform.localScale = new(1f, 1f, 0f);
+    }
+
+    private static readonly RemoteProcess<(GamePlayer src, GamePlayer dst, DefinedRole role, PlayerRoleSwapEvent.SwapType type)> RpcSwap = new("swapDesc", (message, _) =>
+    {
+        GameOperatorManager.Instance?.Run(new PlayerRoleSwapEvent(message.src, message.dst, message.role, message.type));
+    });
+
+    /// <summary>
+    /// 役職の交換を通知します。
+    /// Madmateの背信者設定のように、役職の交換を追跡したい場合に使用します。
+    /// </summary>
+    /// <param name="src"></param>
+    /// <param name="dst"></param>
+    /// <param name="role"></param>
+    /// <param name="swapType"></param>
+    public static void SendRoleSwapping(GamePlayer src, GamePlayer dst, DefinedRole role, PlayerRoleSwapEvent.SwapType swapType) => RpcSwap.Invoke((src, dst, role, swapType));
+}

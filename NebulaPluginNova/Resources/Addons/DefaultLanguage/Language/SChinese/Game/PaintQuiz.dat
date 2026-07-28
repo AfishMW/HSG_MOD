@@ -1,0 +1,49 @@
+# UI
+ 
+"paintQuiz.ui.canvas.clear" : "清除"
+"paintQuiz.ui.canvas.submit" : "回答"
+"paintQuiz.ui.done" : "已回答"
+"paintQuiz.ui.waitScoring" : "等待主持评分中"
+ 
+# Quiz
+ 
+"paintQuiz.category.blurbToRole.quiz" : "风格简介“%BLURB%”对应的职业是什么？<br>请把答案写出来！"
+"paintQuiz.category.roleToIcon.quiz" : "画出%ROLE%的职业图标！"
+"paintQuiz.category.roleToBlurb.quiz" : "职业%ROLE%对应的风格简介内容大致是什么？<br>请把答案写出来！"
+"paintQuiz.category.titleToRole.quiz" : "成就“%TITLE%”对应的职业是什么？<br>请把答案写出来！"
+"paintQuiz.category.roleToChallenge.quiz" : "职业%ROLE%对应的成就内容大致是什么？<br>请把答案写出来！"
+"paintQuiz.category.playerToBlurb.quiz" : "为%PLAYER%写一个风格简介！"
+"paintQuiz.category.playerToTitle.quiz" : "为%PLAYER%写一个成就！"
+"paintQuiz.hint.title" : "%PLAYERS%已获得"
+"paintQuiz.hint.title.moreThan2" : "%PLAYERS%以及%OTHERS%个人已获得"
+"paintQuiz.hint.role" : "%PLAYERS%最近玩过！"
+"paintQuiz.hint.role.moreThan2" : "%PLAYERS%以及%OTHERS%个人最近玩过！"
+"paintQuiz.hint.comma" : "、"
+ 
+"paintQuiz.category.hint" : "～本局规则～"
+"paintQuiz.category.blurbToRole.hint" : "通过职业的风格简介文本，<br>猜出对应的职业！"
+"paintQuiz.category.roleToIcon.hint" : "通过职业，<br>画出职业的图标！"
+"paintQuiz.category.titleToRole.hint" : "通过职业的成就文本，<br>猜出对应的职业！"
+"paintQuiz.category.challengeToRole.hint" : "通过职业的挑战成就文本，<br>猜出对应的职业！"
+"paintQuiz.category.roleToBlurb.hint" : "通过职业，<br>猜出职业的风格简介文本！"
+"paintQuiz.category.roleToChallenge.hint" : "通过职业，<br>猜出职业的挑战成就文本！"
+"paintQuiz.category.playerToBlurb.hint" : "为其他玩家写一个风格简介！<br>%RANDOM%"
+"paintQuiz.category.playerToBlurb.hint.random.0" : "拜托了，写一个够酷够帅的！"
+"paintQuiz.category.playerToBlurb.hint.random.1" : "可不要诽谤我哦~"
+"paintQuiz.category.playerToBlurb.hint.random.2" : "不要写梗啊！"
+"paintQuiz.category.playerToTitle.hint" : "为其他玩家写一个成就！<br>%RANDOM%"
+"paintQuiz.category.playerToTitle.hint.random.0" : "一定要让气氛燥起来！"
+"paintQuiz.category.playerToTitle.hint.random.1" : "来一个有面的成就！"
+"paintQuiz.category.playerToTitle.hint.random.2" : "想想获取条件，也许这样补充的更有趣哦！" 
+
+# ForHost
+ 
+"paintQuiz.ui.proceed" : "下一个"
+"paintQuiz.ui.noScore" : "无分数"
+"paintQuiz.ui.answer" : "回答正确"
+"paintQuiz.ui.noAnswer" : "好家伙，有品位啊！"
+"paintQuiz.ui.hint.leftClick" : "指定分数进行评分"
+"paintQuiz.ui.hint.rightClick" : "以相同分数进行评分"
+"paintQuiz.ui.finishReview" : "评分结束"
+"paintQuiz.ui.resetToDefault" : "因为没有可出题的<b>问题</b>，<br>已扩大出题范围并重置。"
+ 

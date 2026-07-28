@@ -1,0 +1,830 @@
+﻿using AmongUs.Data;
+using AmongUs.GameOptions;
+using Il2CppInterop.Runtime.Injection;
+using Nebula.Behavior;
+using Nebula.Game.Statistics;
+using Nebula.Map;
+using Nebula.Modules.Cosmetics;
+using Nebula.Patches;
+using Virial;
+using Virial.Game;
+using Virial.Text;
+
+namespace Nebula.Utilities;
+
+file static class IgnoreShadowHelpers
+{
+    static public void SetIgnoreShadow(bool ignore = true, bool showNameText = true)
+    {
+        foreach (var p in NebulaGameManager.Instance!.AllPlayerlike) p.UpdateVisibility(null, false, ignore, showNameText);
+    }
+
+    static public void ResetIgnoreShadow()
+    {
+        foreach (var p in NebulaGameManager.Instance!.AllPlayerlike) p.UpdateVisibility(null, false, !NebulaGameManager.Instance.WideCamera.DrawShadow);
+    }
+}
+file class IgnoreShadowScope : IDisposable
+{
+    public IgnoreShadowScope(bool showNameText = true)
+    {
+        IgnoreShadowHelpers.SetIgnoreShadow(showNameText: showNameText);
+    }
+
+    public IgnoreShadowScope(bool ignoreShadow, bool showNameText)
+    {
+        IgnoreShadowHelpers.SetIgnoreShadow(ignoreShadow, showNameText);
+    }
+
+    void IDisposable.Dispose()
+    {
+        IgnoreShadowHelpers.ResetIgnoreShadow();
+    }
+}
+
+public class IgnoreShadowCamera : MonoBehaviour
+{
+    static IgnoreShadowCamera() => ClassInjector.RegisterTypeInIl2Cpp<IgnoreShadowCamera>();
+    public bool ShowNameText = true;
+    void OnPreRender()
+    {
+        IgnoreShadowHelpers.SetIgnoreShadow(true, ShowNameText);
+    }
+    void OnPostRender()
+    {
+        IgnoreShadowHelpers.SetIgnoreShadow(true, ShowNameText);
+    }
+}
+
+public class CustomIgnoreShadowCamera : MonoBehaviour
+{
+    static CustomIgnoreShadowCamera() => ClassInjector.RegisterTypeInIl2Cpp<CustomIgnoreShadowCamera>();
+    public Func<bool>? IgnoreShadow { get; set; } = null;
+    void OnPreRender()
+    {
+        IgnoreShadowHelpers.SetIgnoreShadow(IgnoreShadow?.Invoke() ?? false);
+    }
+}
+
+public class ResetIgnoreShadowCamera : MonoBehaviour
+{
+    static ResetIgnoreShadowCamera() => ClassInjector.RegisterTypeInIl2Cpp<ResetIgnoreShadowCamera>();
+
+    void OnPostRender()
+    {
+        IgnoreShadowHelpers.ResetIgnoreShadow();
+    }
+}
+
+
+[NebulaRPCHolder]
+public static class AmongUsUtil
+{
+    public static bool IsPiled(this PassiveUiElement uiElem)
+    {
+        var currentOver = PassiveButtonManager.Instance.currentOver;
+        if (!currentOver.AsBoolFast() || !uiElem.AsBoolFast()) return false;
+        return currentOver.EqualsFast(uiElem);
+    }
+
+    public static string GetRoomName(UnityEngine.Vector2 position, bool detail = false, bool shortName = false, bool onlyVanillaRoom = false)
+    {
+        GetRoomName(position, out var roomName, detail, shortName, onlyVanillaRoom);
+        return roomName;
+    }
+
+    public static bool GetRoomName(UnityEngine.Vector2 position, out string roomName, bool detail = false, bool shortName = false, bool onlyVanillaRoom = false)
+    {
+        var mapData = MapData.GetCurrentMapData();
+        foreach (var entry in AmongUsLLImpl.ShipStatusInstance.FastRooms)
+        {
+            if (entry.value.roomArea.OverlapPoint(position))
+            {
+                if (detail && onlyVanillaRoom)
+                {
+                    var overrideRoom = mapData.GetOverrideMapRooms(entry.Key, position);
+                    if (overrideRoom != null)
+                    {
+                        roomName = ToDisplayLocationString(overrideRoom, null, shortName);
+                        return true;
+                    }
+                }
+                roomName = AmongUsUtil.ToDisplayString(entry.Key, null, shortName);
+                return true;
+            }
+        }
+
+        if (onlyVanillaRoom)
+        {
+            var additionalRoom = mapData.GetAdditionalMapRooms(position, detail);
+            if (additionalRoom != null)
+            {
+                roomName = ToDisplayLocationString(additionalRoom, null, shortName);
+                return true;
+            }
+        }
+
+        roomName = Language.Translate("location.outside");
+        return false;
+    }
+
+    public static void SetHighlight(Renderer renderer, bool on, Color? color = null) => SetHighlight(renderer, on, true, color);
+    public static void SetHighlight(Renderer renderer, bool on, bool mainTarget, Color? color = null)
+    {
+        var mat = renderer.material;
+        if (on)
+        {
+            color ??= new(1f, 1f, 0f);
+            mat.SetFloat("_Outline", 1f);
+            mat.SetColor("_OutlineColor", color.Value);
+            mat.SetColor("_AddColor", color.Value);
+            HighlightManager.AddHighlightedRenderer(renderer);
+        }
+        else
+        {
+            color = new Color(0f, 0f, 0f, 0f);
+            mat.SetFloat("_Outline", 0f);
+            mat.SetColor("_OutlineColor", color.Value);
+            mat.SetColor("_AddColor", color.Value);
+        }
+    }
+
+    public static IDisposable IgnoreShadow(bool showNameText = true) => new IgnoreShadowScope(showNameText);
+    public static IDisposable IgnoreShadow(bool ignoreShadow, bool showNameText) => new IgnoreShadowScope(ignoreShadow, showNameText);
+
+    public static MonoBehaviour CurrentCamTarget => HudManager.Instance.PlayerCam.Target;
+    public static void SetCamTarget(MonoBehaviour? target = null, bool allowMoving = false)
+    {
+        var localPlayer = AmongUsLLImpl.LocalPlayer;
+
+        if(CurrentCamTarget == localPlayer) localPlayer.NetTransform.Halt();
+
+        HudManager.Instance.PlayerCam.Target = target ?? localPlayer;
+        if (allowMoving && target.AsBoolFast()) Patches.PlayerCanMovePatch.SetMovableCamera(target!);
+    }
+    public static void ToggleCamTarget(MonoBehaviour? target1 = null, MonoBehaviour? target2 = null)
+    {
+        target1 ??= AmongUsLLImpl.LocalPlayer;
+        target2 ??= AmongUsLLImpl.LocalPlayer;
+        SetCamTarget(CurrentCamTarget == target1 ? target2 : target1);
+    }
+
+    public static ShadowCollab GetShadowCollab() => Camera.main.GetComponentInChildren<ShadowCollab>();
+    public static float GetShadowSize() => GetShadowCollab().ShadowCamera.orthographicSize;
+    
+    public static Vector2 ConvertPosFromGameWorldToScreen(Vector2 pos)=> UnityHelper.WorldToScreenPoint(NebulaGameManager.Instance?.WideCamera.ConvertToWideCameraPos(pos) ?? Vector2.zero, LayerExpansion.GetObjectsLayer());
+
+    public static void ChangeShadowSize(float orthographicSize = 3f)
+    {
+        var shadowCollab = GetShadowCollab();
+        shadowCollab.ShadowCamera.orthographicSize = orthographicSize;
+        shadowCollab.ShadowQuad.transform.localScale = new Vector3(orthographicSize * Camera.main.aspect, orthographicSize) * 2f;
+    }
+
+    public static UiElement CurrentUiElement => ControllerManager.Instance.CurrentUiState.CurrentSelection;
+    public static bool InMeeting => MeetingHud.Instance.AsBoolFast() && !ExileController.Instance.AsBoolFast();
+    private static string[] mapName = new string[] { "skeld", "mira", "polus", "undefined", "airship", "fungle" };
+    public static string ToMapName(byte mapId) => mapName[mapId];
+    public static string ToLocalizedMapName(byte mapId) => Language.Translate("map." + mapName[mapId].HeadLower());
+    public static string ToDisplayLocationString(string room, byte? mapId = null, bool shortName = false)
+    {
+        string key = "location." + mapName[mapId ?? NebulaAPI.AmongUs.MapId] + "." + room;
+        if (shortName)
+        {
+            string? shortResult = Language.Find(key + ".short");
+            if (shortResult != null) return shortResult;
+        }
+        return Language.Translate(key);
+    }
+    public static string ToDisplayString(SystemTypes room, byte? mapId = null, bool shortName = false) => ToDisplayLocationString(Enum.GetName(typeof(SystemTypes), room)!.HeadLower(), mapId, shortName);
+    public static bool InCommSab => PlayerTask.PlayerHasTaskOfType<IHudOverrideTask>(AmongUsLLImpl.LocalPlayer);
+    public static bool InElecSab => PlayerTask.PlayerHasTaskOfType<ElectricTask>(AmongUsLLImpl.LocalPlayer);
+    public static bool InAnySab => PlayerTask.PlayerHasTaskOfType<SabotageTask>(AmongUsLLImpl.LocalPlayer);
+    public static PoolablePlayer PoolablePrefab => HudManager.Instance.IntroPrefab.PlayerPrefab;
+    public static PoolablePlayer GetPlayerIcon(OutfitCandidate outfit, Transform? parent, Vector3 position, Vector3 scale, bool flip = false, bool includePet = true)
+        => GetPlayerIcon(outfit.Outfit.outfit, parent, position, scale, flip, includePet);
+    public static PoolablePlayer GetPlayerIcon(OutfitDefinition outfit, Transform? parent, Vector3 position, Vector3 scale, bool flip = false, bool includePet = true)
+        =>GetPlayerIcon(outfit.outfit, parent, position, scale, flip, includePet);
+    public static PoolablePlayer GetPlayerIcon(NetworkedPlayerInfo.PlayerOutfit outfit, Transform? parent,Vector3 position,Vector3 scale,bool flip = false, bool includePet = true)
+    {
+        var player = GameObject.Instantiate(PoolablePrefab);
+
+        if(parent != null)player.transform.SetParent(parent);
+
+        player.name = outfit.PlayerName;
+        player.SetFlipX(flip);
+        player.transform.localPosition = position;
+        player.transform.localScale = scale;
+        player.UpdateFromPlayerOutfit(outfit, PlayerMaterial.MaskType.None, false, includePet);
+        player.ToggleName(false);
+        player.SetNameColor(Color.white);
+        var nosCosmeticsLayer = player.cosmetics.GetComponent<NebulaCosmeticsLayer>();
+        nosCosmeticsLayer.SetSortingProperty(true, 1000f);
+        player.cosmetics.nameText._SortingOrder = 2000;
+        var renderers = player.cosmetics.nameText.GetComponentsInChildren<Renderer>();
+        nosCosmeticsLayer.gameObject.AddComponent<ScriptBehaviour>().UpdateHandler += ()=>
+        {
+            renderers.Do(r =>
+            {
+                r.sortingGroupOrder = 2000;
+                r.sortingOrder = 2000;
+            });
+        };
+        return player;
+    }
+
+    public static PoolablePlayer SetAlpha(this PoolablePlayer player, float alpha)
+    {
+        foreach (SpriteRenderer r in player.gameObject.GetComponentsInChildren<SpriteRenderer>())
+            r.color = new Color(r.color.r, r.color.g, r.color.b, alpha);
+        return player;
+    }
+
+    public static float GetAlpha(this PoolablePlayer player)=> player.cosmetics.currentBodySprite.BodySprite.color.a;
+
+    public static PoolablePlayer GetPlayerIcon(NetworkedPlayerInfo.PlayerOutfit outfit, Transform parent, Vector3 position, Vector2 scale, float nameScale,Vector3 namePos,bool flip = false)
+    {
+        var player = GetPlayerIcon(outfit, parent, position, scale, flip);
+
+        player.ToggleName(true);
+        player.SetNameScale(Vector3.one * nameScale);
+        player.SetNamePosition(namePos);
+        player.SetName(outfit.PlayerName);
+
+        return player;
+    }
+
+    public static SpriteRenderer GenerateFullscreen(VColor color)
+    {
+        var flash = GameObject.Instantiate(HudManager.Instance.FullScreen, HudManager.Instance.transform);
+        flash.color = color.ToUnityColor();
+        flash.enabled = true;
+        flash.gameObject.active = true;
+        return flash;
+    }
+
+    public static void PlayCustomFlash(VColor color, float fadeIn, float fadeOut, float maxAlpha = 0.5f, float maxDuration = 0f)
+    {
+        float duration = fadeIn + fadeOut;
+
+        var flash = GenerateFullscreen(color.AlphaMultiplied(Mathn.Clamp01(maxAlpha)));
+
+        IEnumerator CoPlayFlash()
+        {
+            float t;
+            
+            t = 0f;
+            while(t < fadeIn)
+            {
+                flash.color = color.AlphaMultiplied(Mathn.Clamp01(maxAlpha * t / fadeIn)).ToUnityColor();
+                t += Time.deltaTime;
+                yield return null;
+            }
+            flash.color = color.AlphaMultiplied(Mathn.Clamp01(maxAlpha)).ToUnityColor();
+
+            yield return Effects.Wait(maxDuration);
+
+            t = 0f;
+            while (t < fadeOut)
+            {
+                flash.color = color.AlphaMultiplied(Mathn.Clamp01(maxAlpha * (1f - t / fadeOut))).ToUnityColor();
+                t += Time.deltaTime;
+                yield return null;
+            }
+
+            flash.enabled = false;
+            GameObject.Destroy(flash.gameObject);
+        }
+
+        NebulaManager.Instance.StartCoroutine(CoPlayFlash().WrapToIl2Cpp());
+    }
+
+    public static void PlayFlash(VColor color)
+    {
+        PlayCustomFlash(color, 0.375f, 0.375f);
+    }
+
+    public static void PlayQuickFlash(VColor color)
+    {
+        PlayCustomFlash(color, 0.1f, 0.4f);
+    }
+
+    class CleanBodyMessage
+    {
+        public TranslatableTag? RelatedTag = null;
+        public byte SourceId =  byte.MaxValue;
+        public int TargetId;
+    }
+
+    static RemoteProcess<CleanBodyMessage> RpcCleanDeadBodyDef = new RemoteProcess<CleanBodyMessage>(
+        "CleanDeadBody",
+        (writer, message) => { 
+            writer.Write(message.SourceId);
+            writer.Write(message.TargetId);
+            writer.Write(message.RelatedTag?.Id ?? -1);
+        },
+        (reader)=> {
+            return new() { SourceId = reader.ReadByte(), TargetId = reader.ReadInt32(), RelatedTag = TranslatableTag.ValueOf(reader.ReadInt32()) };
+        },
+        (message, _) =>
+        {
+            if (ModSingleton<DeadBodyManager>.Instance.TryGetDeadBody(message.TargetId, out var body) && body.IsActive)
+            {
+                GameObject.Destroy(body.VanillaDeadBody.gameObject);
+            }
+
+            if (message.SourceId != byte.MaxValue)
+                NebulaGameManager.Instance?.GameStatistics.RecordEvent(new GameStatistics.Event(GameStatistics.EventVariation.CleanBody, message.SourceId, 1 << message.TargetId) { RelatedTag = message.RelatedTag });
+        }
+        );
+
+    static public void RpcCleanDeadBody(Virial.Game.DeadBody deadbody,byte sourceId=byte.MaxValue,TranslatableTag? relatedTag = null)
+    {
+        if (Helpers.CurrentMonth == 11)
+        {
+            var deadBodyPlayer = deadbody.Player;
+            if (!(deadBodyPlayer?.MyKiller?.AmOwner ?? true) && NebulaGameManager.Instance!.CurrentTime - (deadBodyPlayer.DeathTime ?? 0f) < 5f) new StaticAchievementToken("freshWine");
+        }
+
+        RpcCleanDeadBodyDef.Invoke(new() { TargetId = deadbody.Id, SourceId = sourceId, RelatedTag = relatedTag });
+    }
+
+    static private SpriteLoader lightMaskSprite = SpriteLoader.FromResource("Nebula.Resources.LightMask.png", 100f);
+    public static SpriteRenderer GenerateCustomLight(Vector2 position,Sprite? lightSprite = null)
+    {
+        var renderer = UnityHelper.CreateObject<SpriteRenderer>("Light", null, (Vector3)position + new Vector3(0, 0, -10f), LayerExpansion.GetDrawShadowsLayer());
+        renderer.sprite = lightSprite ?? lightMaskSprite.GetSprite();
+        renderer.material.shader = NebulaAsset.MultiplyBackShader;
+        new LightInfo(renderer);
+
+        return renderer;
+    }
+
+    internal static CustomShadow GenerateCustomShadow(Vector2 position, Sprite shadowSprite, Color? shadowColor = null)
+    {
+        var shadowCam = NebulaGameManager.Instance!.WideCamera.SubShadowCam;
+        var renderer = UnityHelper.CreateObject<SpriteRenderer>("Shadow", null, position.AsVector3(-5.001f), LayerExpansion.GetDrawShadowsLayer());
+        renderer.sprite = shadowSprite;
+        renderer.material.shader = NebulaAsset.CustomShadowShader;
+
+        var mulRenderer = UnityHelper.CreateObject<SpriteRenderer>("Subrenderer", renderer.transform, new(0f, 0f, -0.001f), LayerExpansion.GetDefaultLayer());
+        mulRenderer.sprite = shadowSprite;
+        mulRenderer.material.shader = NebulaAsset.MultiplyShader;
+
+        var defRenderer = UnityHelper.CreateObject<SpriteRenderer>("Defaultrenderer", renderer.transform, new(0f, 0f, 0.002f), LayerExpansion.GetObjectsLayer());
+        defRenderer.sprite = shadowSprite;
+
+        var assist = renderer.gameObject.AddComponent<CustomShadow>();
+        assist.Renderer = renderer;
+        assist.MulRenderer = mulRenderer;
+        assist.DefaultRenderer = defRenderer;
+        assist.ShadowCollab = AmongUsUtil.GetShadowCollab();
+        renderer.material.SetColor("_ShadowColor", shadowColor ?? new(0.2745f, 0.2745f, 0.2745f));
+        renderer.material.SetTexture("_ShadowTex", shadowCam.targetTexture);
+        assist.SetBlend(1f);
+        return assist;
+    }
+
+    private static DividedSpriteLoader footprintSprite = DividedSpriteLoader.FromResource("Nebula.Resources.Footprint.png", 100f, 2, 1);
+    public static SpriteRenderer GenerateFootprint(VVector2 pos, VColor color, float? angle, float? duration, int type, Func<bool>? canSeeIn = null)
+    {
+        if (type == 1 && !angle.HasValue) return null!;//Type1の足跡は歩いているときだけ発生
+
+        var renderer = UnityHelper.CreateObject<SpriteRenderer>("Footprint", null, new Vector3(pos.x, pos.y, pos.y / 1000f + 0.001f), LayerExpansion.GetPlayersLayer());
+        renderer.sprite = footprintSprite.GetSprite(type);
+        renderer.color = color.ToUnityColor();
+        float footAngle = type switch
+        {
+            1 => angle!.Value + (System.Random.Shared.NextSingle() - 0.5f) * 4f,
+            _ => (float)System.Random.Shared.NextDouble() * 360f
+        };
+        renderer.transform.eulerAngles = new Vector3(0f, 0f, footAngle);
+        
+        IEnumerator CoDisappearFootprint()
+        {
+            if(canSeeIn == null) 
+                yield return new WaitForSeconds(duration!.Value);
+            else
+            {
+                float t = 0f;
+                while(t < duration)
+                {
+                    renderer.enabled = canSeeIn.Invoke();
+                    t += Time.deltaTime;
+                    yield return null;
+                }
+            }
+
+            while (renderer.color.a > 0f)
+            {
+                Color col = renderer.color;
+                col.a = Mathn.Clamp01(col.a - Time.deltaTime * 0.8f);
+                renderer.color = col;
+
+                renderer.enabled = canSeeIn?.Invoke() ?? true;
+
+                yield return null;
+            }
+            GameObject.Destroy(renderer.gameObject);
+        }
+
+        if(duration.HasValue) NebulaManager.Instance.StartCoroutine(CoDisappearFootprint().WrapToIl2Cpp());
+
+        return renderer;
+    }
+
+    
+    public static PlayerControl SpawnDummy()
+    {
+        
+        var playerControl = UnityEngine.Object.Instantiate(AmongUsClient.Instance.PlayerPrefab);
+        var i = playerControl.PlayerId = (byte)GameData.Instance.GetAvailableId();
+
+        playerControl.isDummy = true;
+
+        var playerInfo = GameData.Instance.AddDummy(playerControl);
+        
+        playerControl.transform.position = AmongUsLLImpl.LocalPlayer.transform.GetPositionFast();
+        playerControl.GetComponent<DummyBehaviour>().enabled = true;
+        playerControl.isDummy = true;
+        playerControl.SetName(AccountManager.Instance.GetRandomName());
+        playerControl.SetColor(i);
+        playerControl.SetHat(CosmeticsLayer.EMPTY_HAT_ID, i);
+        playerControl.SetVisor(CosmeticsLayer.EMPTY_VISOR_ID, i);
+        playerControl.SetSkin(CosmeticsLayer.EMPTY_SKIN_ID, i);
+        playerControl.SetPet(CosmeticsLayer.EMPTY_PET_ID, i);
+        playerControl.GetComponent<UncertifiedPlayer>().Certify();
+
+        AmongUsClient.Instance.Spawn(playerControl, -2, InnerNet.SpawnFlags.None);
+        playerInfo.RpcSetTasks(new byte[0]);
+
+        return playerControl;
+        
+    }
+    
+
+    public static readonly string[] AllVanillaOptions =
+    {
+        "vanilla.map",
+        "vanilla.impostors",
+        "vanilla.killDistance",
+        "vanilla.numOfEmergencyMeetings",
+        "vanilla.emergencyCoolDown",
+        "vanilla.discussionTime",
+        "vanilla.votingTime",
+        "vanilla.numOfCommonTasks",
+        "vanilla.numOfShortTasks",
+        "vanilla.numOfLongTasks",
+        "vanilla.visualTasks",
+        "vanilla.confirmImpostor",
+        "vanilla.anonymousVotes"
+    };
+
+    public static void ChangeOptionAs(string name,string value)
+    {
+        switch (name)
+        {
+            case "vanilla.map":
+                GameOptionsManager.Instance.CurrentGameOptions.SetByte(ByteOptionNames.MapId, (byte)Array.IndexOf(mapName, value.HeadLower()));
+                break;
+            case "vanilla.impostors":
+                GameOptionsManager.Instance.CurrentGameOptions.SetInt(Int32OptionNames.NumImpostors, int.Parse(value));
+                break;
+            case "vanilla.killDistance":
+                GameOptionsManager.Instance.CurrentGameOptions.SetInt(Int32OptionNames.KillDistance, int.Parse(value));
+                break;
+            case "vanilla.numOfEmergencyMeetings":
+                GameOptionsManager.Instance.CurrentGameOptions.SetInt(Int32OptionNames.NumEmergencyMeetings, int.Parse(value));
+                break;
+            case "vanilla.emergencyCoolDown":
+                GameOptionsManager.Instance.CurrentGameOptions.SetInt(Int32OptionNames.EmergencyCooldown, int.Parse(value));
+                break;
+            case "vanilla.discussionTime":
+                GameOptionsManager.Instance.CurrentGameOptions.SetInt(Int32OptionNames.DiscussionTime, int.Parse(value));
+                break;
+            case "vanilla.votingTime":
+                GameOptionsManager.Instance.CurrentGameOptions.SetInt(Int32OptionNames.VotingTime, int.Parse(value));
+                break;
+            case "vanilla.numOfCommonTasks":
+                GameOptionsManager.Instance.CurrentGameOptions.SetInt(Int32OptionNames.NumCommonTasks, int.Parse(value));
+                break;
+            case "vanilla.numOfShortTasks":
+                GameOptionsManager.Instance.CurrentGameOptions.SetInt(Int32OptionNames.NumShortTasks, int.Parse(value));
+                break;
+            case "vanilla.numOfLongTasks":
+                GameOptionsManager.Instance.CurrentGameOptions.SetInt(Int32OptionNames.NumLongTasks, int.Parse(value));
+                break;
+            case "vanilla.visualTasks":
+                GameOptionsManager.Instance.CurrentGameOptions.SetBool(BoolOptionNames.VisualTasks, bool.Parse(value));
+                break;
+            case "vanilla.confirmImpostor":
+                GameOptionsManager.Instance.CurrentGameOptions.SetBool(BoolOptionNames.ConfirmImpostor, bool.Parse(value));
+                break;
+            case "vanilla.anonymousVotes":
+                GameOptionsManager.Instance.CurrentGameOptions.SetBool(BoolOptionNames.AnonymousVotes, bool.Parse(value));
+                break;
+        }
+    }
+
+    public static string GetOptionAsString(string name)
+    {
+        switch (name)
+        {
+            case "vanilla.map":
+                return mapName[GameOptionsManager.Instance.CurrentGameOptions.GetByte(ByteOptionNames.MapId)].HeadUpper();
+            case "vanilla.impostors":
+                return GameOptionsManager.Instance.CurrentGameOptions.GetInt(Int32OptionNames.NumImpostors).ToString();
+            case "vanilla.killDistance":
+                return GameOptionsManager.Instance.CurrentGameOptions.GetInt(Int32OptionNames.KillDistance).ToString();
+            case "vanilla.numOfEmergencyMeetings":
+                return GameOptionsManager.Instance.CurrentGameOptions.GetInt(Int32OptionNames.NumEmergencyMeetings).ToString();
+            case "vanilla.emergencyCoolDown":
+                return GameOptionsManager.Instance.CurrentGameOptions.GetInt(Int32OptionNames.EmergencyCooldown).ToString();
+            case "vanilla.discussionTime":
+                return GameOptionsManager.Instance.CurrentGameOptions.GetInt(Int32OptionNames.DiscussionTime).ToString();
+            case "vanilla.votingTime":
+                return GameOptionsManager.Instance.CurrentGameOptions.GetInt(Int32OptionNames.VotingTime).ToString();
+            case "vanilla.numOfCommonTasks":
+                return GameOptionsManager.Instance.CurrentGameOptions.GetInt(Int32OptionNames.NumCommonTasks).ToString();
+            case "vanilla.numOfShortTasks":
+                return GameOptionsManager.Instance.CurrentGameOptions.GetInt(Int32OptionNames.NumShortTasks).ToString();
+            case "vanilla.numOfLongTasks":
+                return GameOptionsManager.Instance.CurrentGameOptions.GetInt(Int32OptionNames.NumLongTasks).ToString();
+            case "vanilla.visualTasks":
+                return GameOptionsManager.Instance.CurrentGameOptions.GetBool(BoolOptionNames.VisualTasks).ToString();
+            case "vanilla.confirmImpostor":
+                return GameOptionsManager.Instance.CurrentGameOptions.GetBool(BoolOptionNames.ConfirmImpostor).ToString();
+            case "vanilla.anonymousVotes":
+                return GameOptionsManager.Instance.CurrentGameOptions.GetBool(BoolOptionNames.AnonymousVotes).ToString();
+        }
+
+        return "Invalid";
+    }
+
+    static public int AdjustedImpostors(int players) => GameOptionsManager.Instance.CurrentGameOptions.GetAdjustedNumImpostorsModded(players);
+    static public int NumOfImpostors => GameOptionsManager.Instance.CurrentGameOptions.GetInt(Int32OptionNames.NumImpostors);
+    static public int NumOfShortTasks => GameOptionsManager.Instance.CurrentGameOptions.GetInt(Int32OptionNames.NumShortTasks);
+    static public int NumOfCommonTasks => GameOptionsManager.Instance.CurrentGameOptions.GetInt(Int32OptionNames.NumCommonTasks);
+    static public int NumOfLongTasks => GameOptionsManager.Instance.CurrentGameOptions.GetInt(Int32OptionNames.NumLongTasks);
+    static public int NumOfAllTasks => NumOfShortTasks + NumOfLongTasks + NumOfCommonTasks;
+
+    public static bool IsInGameScene => HudManager.InstanceExists;
+
+    public static R? GetRolePrefab<R>() where R : RoleBehaviour
+    {
+        foreach (RoleBehaviour role in RoleManager.Instance.AllRoles)
+        {
+            R? r = role.TryCast<R>();
+            if (r.AsBoolFast()) return r;
+        }
+        return null;
+    }
+
+    public static void SetEmergencyCoolDown(float coolDown, bool addVanillaCoolDown, bool addExtraCoolDown = true)
+    {
+        if (addVanillaCoolDown) coolDown += (float)GameManager.Instance.LogicOptions.GetEmergencyCooldown();
+
+        if (addExtraCoolDown && GeneralConfigurations.IsInEarlyPhase)
+            coolDown += GeneralConfigurations.EarlyExtraEmergencyCoolDownOption;
+
+        AmongUsLLImpl.ShipStatusInstance.EmergencyCooldown = coolDown;
+    }
+
+    public static void AddLobbyNotification(string message,UnityEngine.Color? color, Sprite? sprite = null,bool playSound = true)
+    {
+        var notifier = HudManager.Instance.Notifier;
+
+        LobbyNotificationMessage newMessage = GameObject.Instantiate<LobbyNotificationMessage>(notifier.notificationMessageOrigin, Vector3.zero, Quaternion.identity, notifier.transform);
+        newMessage.transform.localPosition = new Vector3(0f, 0f, -2f);
+        newMessage.SetUp(message, sprite ?? notifier.settingsChangeSprite, color ?? notifier.settingsChangeColor, (Il2CppSystem.Action)(()=> notifier.OnMessageDestroy(newMessage)));
+        notifier.ShiftMessages();
+        notifier.AddMessageToQueue(newMessage);
+
+
+        if (playSound) AmongUsLLImpl.SoundManagerInstance.PlaySoundImmediate(notifier.settingsChangeSound, false, 1f, 1f, null);
+    }
+
+    public static void SetHue(this GameObject rendererHolder, float hue)
+    {
+        rendererHolder.GetComponentsInChildren<Renderer>().Do(renderer =>
+        {
+            renderer.material = new Material(NebulaAsset.HSVShader);
+            renderer.sharedMaterial.SetFloat("_Hue", hue);
+        });
+    }
+    public static (GameObject obj, NoisemakerArrow arrow) InstantiateNoisemakerArrow(Vector2 targetPos, bool withSound = false, float? hue = null)
+    {
+        var noisemaker = AmongUsUtil.GetRolePrefab<NoisemakerRole>();
+        if (noisemaker.AsBoolFast())
+        {
+            if (withSound && Constants.ShouldPlaySfx())
+            {
+                AmongUsLLImpl.SoundManagerInstance.PlayDynamicSound("NoisemakerAlert", noisemaker.deathSound, false, (DynamicSound.GetDynamicsFunction)((source, dt) =>
+                {
+                    if (!AmongUsLLImpl.LocalPlayer)
+                    {
+                        source.volume = 0f;
+                        return;
+                    }
+                    source.volume = 1f;
+                    Vector2 truePosition = AmongUsLLImpl.LocalPlayer.GetTruePosition();
+                    source.volume = SoundManager.GetSoundVolume(targetPos, truePosition, 7f, 50f, 0.5f);
+                }), AmongUsLLImpl.SoundManagerInstance.SfxChannel);
+                VibrationManager.Vibrate(1f, AmongUsLLImpl.LocalPlayer.GetTruePosition(), 7f, 1.2f, VibrationManager.VibrationFalloff.None, null, false);
+            }
+            GameObject gameObject = GameObject.Instantiate<GameObject>(noisemaker.deathArrowPrefab, Vector3.zero, Quaternion.identity);
+            var deathArrow = gameObject.GetComponent<NoisemakerArrow>();
+            deathArrow.SetDuration(3f);
+            deathArrow.gameObject.SetActive(true);
+            deathArrow.target = targetPos;
+
+            if (hue.HasValue) deathArrow.gameObject.SetHue(hue.Value);
+            
+            return (gameObject, deathArrow);
+        }
+
+        return (null, null)!;
+    }
+
+    public static void Ping(Vector2[] pos, bool smallenNearPing, bool playSE = true, float pitch = 1f, Action<PingBehaviour>? postProcess = null)
+    {
+        if (!HudManager.InstanceExists) return;
+
+        var prefab = GameManagerCreator.Instance.HideAndSeekManagerPrefab.PingPool.Prefab.CastFast<PingBehaviour>();
+
+        PingBehaviour[] pings = new PingBehaviour[pos.Length];
+        int i = 0;
+        foreach (var p in pos)
+        {
+            var ping = GameObject.Instantiate(prefab);
+            ping.target = p;
+            ping.AmSeeker = smallenNearPing;
+            ping.UpdatePosition();
+            ping.gameObject.SetActive(true);
+
+            ping.image.enabled = true;
+            if (playSE) AmongUsLLImpl.SoundManagerInstance.PlaySound(ping.soundOnEnable, false, 1f, null).pitch = pitch;
+
+            pings[i++] = ping;
+
+            postProcess?.Invoke(ping);
+        }
+
+        IEnumerator GetEnumarator()
+        {
+            yield return new WaitForSeconds(2f);
+
+            foreach (var p in pings) GameObject.Destroy(p.gameObject);
+        }
+
+        HudManager.Instance.StartCoroutine(GetEnumarator().WrapToIl2Cpp());
+    }
+
+    public static bool IsCustomServer()
+    {
+        return ServerManager.Instance?.CurrentRegion.TranslateName is StringNames.NoTranslation or null;
+    }
+
+    public static bool IsLocalServer()
+    {
+        return AmongUsClient.Instance.NetworkMode == NetworkModes.LocalGame;
+    }
+
+    public static bool IsOnlineServer()
+    {
+        return AmongUsClient.Instance.NetworkMode == NetworkModes.OnlineGame;
+    }
+
+    public static void SetPlayerMaterial(Renderer renderer, VColor mainColor, VColor shadowColor, VColor visorColor)
+    {
+        renderer.material.SetColor(PlayerMaterial.BackColor, shadowColor.ToUnityColor());
+        renderer.material.SetColor(PlayerMaterial.BodyColor, mainColor.ToUnityColor());
+        renderer.material.SetColor(PlayerMaterial.VisorColor, visorColor.ToUnityColor());
+    }
+
+    public static Vector2 GetCorner(float xCoeff, float yCoeff, Vector2 offset, Camera camera)
+    {
+        return new((camera.orthographicSize / (float)NebulaAPI.AmongUs.ScreenHeight * (float)NebulaAPI.AmongUs.ScreenWidth - -offset.x) * xCoeff, (camera.orthographicSize - offset.y) * yCoeff);
+    }
+
+    public static Vector2 GetCorner(float xCoeff, float yCoeff) => GetCorner(xCoeff, yCoeff, Vector2.zero, Camera.main);
+
+
+    public static void PlayCinematicKill(GamePlayer killer, GamePlayer player, float delay, float view, CommunicableTextTag playerState, CommunicableTextTag? eventState, Func<(Vector3 position, GameObject showUpObj)> setUp)
+    {
+        player.VanillaPlayer.Visible = false;
+        player.VanillaPlayer.NetTransform.Halt();
+        player.VanillaPlayer.moveable = false;
+        player.Unbox().WillDie = true;
+        NebulaManager.Instance.StartDelayAction(1.3f + delay, () => player.VanillaPlayer.moveable = true);
+        if (player.AmOwner && Minigame.Instance.AsBoolFast()) Minigame.Instance.ForceClose();
+
+        (var position, var showUpObj) = setUp.Invoke();
+
+        if (player.AmOwner)
+        {
+            IEnumerator CoWaitAndKill()
+            {
+                float t = 0.7f;
+                while (t > 0f)
+                {
+                    //会議が始まったらそのタイミングで死亡
+                    if (MeetingHud.Instance.AsBoolFast())
+                    {
+                        killer.MurderPlayer(player, playerState, eventState, KillParameter.WithAssigningGhostRole | KillParameter.WithOverlay, KillCondition.TargetAlive);
+                        yield break;
+                    }
+
+                    t -= Time.deltaTime;
+                    yield return null;
+                }
+
+
+                killer.MurderPlayer(player, playerState, eventState, KillParameter.WithAssigningGhostRole, KillCondition.TargetAlive);
+
+                showUpObj.transform.SetWorldZ(-100f);
+                NebulaGameManager.Instance!.WideCamera.SetAttention(new SimpleAttention(10f, view, (Vector2)position - new Vector2(0.2f, 0f), FunctionalLifespan.GetTimeLifespan(2.2f)));
+
+                var overlay = HudManager.Instance.KillOverlay;
+                var overlayPrefab = UnityHelper.CreateObject<CustomKillOverlay>("overlayPrefab", null, Vector3.zero);
+                overlay.ShowKillAnimation(overlayPrefab, new CustomKillOverlayData(overlayPrefab.gameObject).VanillaData);
+            }
+            NebulaManager.Instance.StartCoroutine(CoWaitAndKill().WrapToIl2Cpp());
+            NebulaManager.Instance.StartDelayAction(2.45f + delay, () => showUpObj.transform.SetWorldZ(position.z));
+        }
+    }
+
+    public static Vector2? GetPetPosition(this CosmeticsLayer cLayer) => cLayer.currentPet ? cLayer.currentPet.transform.GetPositionFast() : null;
+
+    public static void ChangeMoveMode(this PlayerControl player, bool movable)
+    {
+        player.moveable = movable;
+        player.NetTransform.enabled = movable;
+        if(movable) player.SetKinematic(false);
+        player.NetTransform.SetPaused(!movable);
+    }
+
+    public static void SetAsUIAspectContent(this GameObject obj, AspectPosition.EdgeAlignments alignment, Vector3 distanceFromEdge)
+    {
+        var aspectPos = obj.AddComponent<AspectPosition>();
+        aspectPos.Alignment = alignment;
+        aspectPos.parentCam = HudManager.InstanceExists ? HudManager.Instance.UICamera : Camera.main; 
+        aspectPos.DistanceFromEdge = distanceFromEdge;
+        aspectPos.AdjustPosition();
+    }
+
+    public static void SetAsUIAspectContent(this GameObject obj, Vector2 anchorPoint, Vector3 distanceFromAnchor)
+    {
+        var aspectPos = obj.AddComponent<AspectPosition>();
+        aspectPos.Alignment = AspectPosition.EdgeAlignments.Center;
+        aspectPos.parentCam = HudManager.InstanceExists ? HudManager.Instance.UICamera : Camera.main;
+        aspectPos.anchorPoint = anchorPoint;
+        aspectPos.DistanceFromEdge = distanceFromAnchor;
+        aspectPos.AdjustPosition();
+    }
+
+    public static void AddScaledSprite(this AspectScaledAsset scaledAsset, SpriteRenderer renderer)
+    {
+        if (scaledAsset.initialized)
+            scaledAsset.allSprites.Add(new(renderer.size.x, renderer));
+        else
+            scaledAsset.spritesToScale.Add(renderer);
+    }
+
+    public static NormalGameOptionsV10 GetCurrentNormalOption() => GameOptionsManager.Instance.currentNormalGameOptions; //GameOptionsManager.Instance.CurrentGameOptions.CastFast<NormalGameOptionsV10>();
+
+    public static bool MapIsOpen => MapBehaviour.Instance.AsBoolFast() && MapBehaviour.Instance.IsOpen;
+
+    public static bool UsingMouseMovement
+    {
+        get
+        {
+            var settings = DataManager.Settings.Input;
+            var mode = settings.InputMode;
+            if (mode == ControlTypes.Keyboard)
+                return DataManager.Settings.Input.MouseMovementEnabled;
+            return mode == ControlTypes.ScreenJoystick;
+        }
+    }
+
+    public static HideAndSeekManager HnSPrefab => GameManagerCreator.Instance.HideAndSeekManagerPrefab;
+
+    public const float DeltaTime60 = 1f / 60f;
+    public const float DeltaTime70 = 1f / 70f;
+    public static bool IsInFastUpdate => Time.deltaTime < DeltaTime70;
+    public static float FastRate
+    {
+        get
+        {
+            var deltaTime = Time.deltaTime;
+            return deltaTime > 0f ? 1f / deltaTime / 60f : 1f;
+        }
+    }
+
+    public static RemoteProcess<string> RpcLobbyNotification = new("LobbyGearNotification", (message, _) =>
+    {
+        var notifier = HudManager.Instance.Notifier;
+        AmongUsUtil.AddLobbyNotification(message, notifier.settingsChangeColor, notifier.settingsChangeSprite);
+    });
+}
+

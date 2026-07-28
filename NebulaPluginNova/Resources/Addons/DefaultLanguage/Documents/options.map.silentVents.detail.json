@@ -1,0 +1,12 @@
+{
+	"Contents" : [
+		{
+			"TranslationKey" : "options.map.silentVents.detail",
+			"IsVariable" : True
+		},
+		{
+			"Image" : "Images.SilentVent.png",
+			"Width" : 1.6
+		}
+	]
+}

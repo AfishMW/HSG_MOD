@@ -1,0 +1,45 @@
+# Assignable
+
+"role.spy.name" : "スパイ"
+"role.spy.short" : "ス"
+"role.spy.blurb" : "インポスターを欺け"
+
+# Document
+
+"role.spy.doc" : "インポスターに自身を仲間だと誤認させるクルーメイトです。"
+"role.spy.ability.title" : "固有能力 "宇宙船の密偵""
+"role.spy.ability.main" : "インポスターからはスパイは仲間のインポスターのように見えます。<br>一方、スパイはインポスターを把握できません。"
+"role.spy.tips" : "・スパイが出現しうるゲームでは、インポスター同士でキルが可能になります。"
+
+# Options
+
+"options.role.spy.detail" : "インポスターを欺くクルーメイトです。"
+"options.role.spy.numOfExemptedTasks" : "タスクの免除数"
+"options.role.spy.numOfExemptedTasks.detail" : "指定した数だけ、スパイの総タスク数が少なくなります。"
+
+# Game
+
+
+# UI
+
+
+# Game Statictics
+
+# Status
+
+# Stats
+
+# Titles
+
+"achievement.spy.common1.title" : "生きて帰るまでが遠足です"
+"achievement.spy.common1.goal" : "生きてクルーメイト勝利で勝利する。"
+"achievement.spy.common1.flavor" : ""寄り道せず、まっすぐ帰りましょう。" ―遠足（ていさつ）のしおり"
+
+"achievement.spy.common2.title" : "かかったな！"
+"achievement.spy.common2.goal" : "インポスターによるキル現場を間近に目撃する。"
+
+"achievement.spy.another1.title" : "裏切り者には死を"
+"achievement.spy.another1.goal" : "インポスターにキルされるか推測され死亡する。"
+
+"achievement.spy.challenge.title" : "動乱を呼ぶ密偵"
+"achievement.spy.challenge.goal" : "1人以上のインポスターがインポスターにキルされたうえで<br>クルーメイト勝利によって勝利する。"

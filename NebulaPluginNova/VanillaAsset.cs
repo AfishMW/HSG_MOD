@@ -1,0 +1,289 @@
+﻿using Nebula.Behavior;
+using Nebula.Modules.Cosmetics;
+using TMPro;
+using Twitch;
+using UnityEngine;
+
+namespace Nebula;
+
+public class VanillaAsset
+{
+    public class VanillaAudioClip
+    {
+        private string name;
+        private AudioClip? clip = null;
+        public AudioClip Clip { get
+            {
+                if (clip) return clip;
+                clip = UnityHelper.FindAsset<AudioClip>(name);
+                return clip!;
+            } }
+
+        public VanillaAudioClip(string name)
+        {
+            this.name = name;
+        }
+    }
+    static public Sprite PopUpBackSprite { get; private set; } = null!;
+    static public Sprite FullScreenSprite { get; private set; } = null!;
+    static public Sprite TextButtonSprite { get; private set; } = null!;
+    static public Sprite CloseButtonSprite { get; private set; } = null!;
+    static public TMPro.TextMeshPro StandardTextPrefab { get; private set; } = null!;
+    static public VanillaAudioClip HoverClip { get; private set; } = new("UI_Hover");
+    static public VanillaAudioClip SelectClip { get; private set; } = new("UI_Select");
+    static public VanillaAudioClip HnSTransformClip { get; private set; } = new("HnS_ImpostorScream");
+    static public Material StandardMaskedFontMaterial { get {
+            if (standardMaskedFontMaterial == null) standardMaskedFontMaterial = UnityHelper.FindAsset<Material>("LiberationSans SDF - BlackOutlineMasked")!;
+            return standardMaskedFontMaterial!;
+        }
+    }
+    static public Material OblongMaskedFontMaterial { get { 
+            if(oblongMaskedFontMaterial == null) oblongMaskedFontMaterial = UnityHelper.FindAsset<Material>("Brook Atlas Material Masked");
+            return oblongMaskedFontMaterial!;
+        } }
+    
+    static private Material? standardMaskedFontMaterial = null;
+    static private Material? oblongMaskedFontMaterial = null;
+
+    static private TMP_FontAsset? versionFont = null;
+    static public TMP_FontAsset VersionFont
+    {
+        get
+        {
+            if (versionFont == null) versionFont = UnityHelper.FindAsset<TMP_FontAsset>("Barlow-Medium SDF");
+            return versionFont!;
+        }
+    }
+
+    static private TMP_FontAsset? preSpawnFont = null;
+    static public TMP_FontAsset PreSpawnFont { get
+        {
+            if(preSpawnFont==null) preSpawnFont = UnityHelper.FindAsset<TMP_FontAsset>("DIN_Pro_Bold_700 SDF")!;
+            return preSpawnFont;
+        }
+    }
+
+    static private TMP_FontAsset? brookFont = null;
+    static public TMP_FontAsset BrookFont
+    {
+        get
+        {
+            if (brookFont == null) brookFont = UnityHelper.FindAsset<TMP_FontAsset>("Brook SDF")!;
+            return brookFont;
+        }
+    }
+
+    static public PlayerCustomizationMenu PlayerOptionsMenuPrefab { get; private set; } = null!;
+
+    static public readonly ShipStatus[] MapAsset = new ShipStatus[6];
+
+    public record MapInfo(MapNames Name, Sprite MapIcon, Sprite MapImage, Sprite NameImage);
+    public static MapInfo[] MapImages = null!;
+    public static Sprite TitleBackgroundSprite = null!;
+
+    static public Material GetMapMaterial()
+    {
+        var mat = GetMinimapRenderer(0).material;
+        return mat;
+    }
+    static public Color MapBlue => new Color(0.05f, 0.2f, 1f, 1f);
+    static public SpriteRenderer GetMinimapRenderer(byte mapId) => MapAsset[mapId].MapPrefab.ColorControl.gameObject.GetComponent<SpriteRenderer>();
+    static public Vector2 GetMapCenter(byte mapId) => MapAsset[mapId].MapPrefab.transform.GetChild(5).localPosition;
+    static public float GetMapScale(byte mapId) => VanillaAsset.MapAsset[mapId].MapScale;
+    static public VVector2 ConvertToMinimapPos(VVector2 pos,VVector2 center, float scale)=> (pos / scale) + center;
+    static public VVector2 ConvertToMinimapPos(VVector2 pos, byte mapId) => ConvertToMinimapPos(pos, GetMapCenter(mapId), GetMapScale(mapId));
+    static public VVector2 ConvertFromMinimapPosToWorld(VVector2 minimapPos, VVector2 center, float scale) => (minimapPos - center) * scale;
+    static public VVector2 ConvertFromMinimapPosToWorld(VVector2 minimapPos, byte mapId) => ConvertFromMinimapPosToWorld(minimapPos, GetMapCenter(mapId), GetMapScale(mapId));
+
+    static public void LoadAssetAtInitialize()
+    {   
+        //PlayerOptionsMenuPrefab = UnityHelper.FindAsset<PlayerCustomizationMenu>("LobbyPlayerCustomizationMenu")!;
+    }
+
+    public static void PlaySelectSE() => AmongUsLLImpl.SoundManagerInstance.PlaySound(SelectClip.Clip, false, 0.8f);
+    public static void PlayHoverSE() => AmongUsLLImpl.SoundManagerInstance.PlaySound(HoverClip.Clip, false, 0.8f);
+
+    static private Dictionary<string, UnityEngine.Object> VanillaAudioClips = [];
+    static public AudioClip? GetAudioClip(string name)
+    {
+        if(VanillaAudioClips.TryGetValue(name, out var found))
+        {
+            return found.TryCast<AudioClip>();
+        }
+        return null;
+    }
+
+    static public string[] GetAudioKeys() => VanillaAudioClips.Keys.ToArray();
+
+    static public void LoadOnMainMenu(MainMenuManager mainMenu)
+    {
+        if (VanillaAsset.MapImages == null) VanillaAsset.MapImages = mainMenu.createGameScreen.mapPicker.AllMapIcons.ToArray().Select(m => new VanillaAsset.MapInfo(m.Name, m.MapIcon.MarkDontUnload(), m.MapImage.MarkDontUnload(), m.NameImage.MarkDontUnload())).ToArray();
+        if (VanillaAsset.TitleBackgroundSprite == null) VanillaAsset.TitleBackgroundSprite = mainMenu.transform.GetChild(5).GetChild(1).GetChild(2).GetComponent<SpriteRenderer>().sprite.MarkDontUnload();
+    }
+    static public IEnumerator CoLoadAssetOnTitle()
+    {
+        PlayerOptionsMenuPrefab = UnityHelper.FindAsset<PlayerCustomizationMenu>("LobbyPlayerCustomizationMenu")!;
+
+        var twitchPopUp = TwitchManager.Instance.transform.GetChild(0);
+        PopUpBackSprite = twitchPopUp.GetChild(3).GetComponent<SpriteRenderer>().sprite;
+        TextButtonSprite = twitchPopUp.GetChild(2).GetComponent<SpriteRenderer>().sprite;
+        FullScreenSprite = twitchPopUp.GetChild(0).GetComponent<SpriteRenderer>().sprite;
+        CloseButtonSprite = UnityHelper.FindAsset<Sprite>("closeButton")!;
+        
+
+        StandardTextPrefab = GameObject.Instantiate(twitchPopUp.GetChild(1).GetComponent<TMPro.TextMeshPro>(),null);
+        StandardTextPrefab.gameObject.hideFlags = HideFlags.HideAndDontSave;
+        GameObject.Destroy(StandardTextPrefab.spriteAnimator);
+        GameObject.DontDestroyOnLoad(StandardTextPrefab.gameObject);
+
+        while (AmongUsClient.Instance == null) yield return null;
+
+
+        //AsyncOperationHandle<GameObject> handle;
+        //AmongUsClient.Instance.ShipPrefabs[2].RuntimeKey;
+        //UnityEngine.AddressableAssets.Addressables.LoadAssetAsync(AmongUsClient.Instance.ShipPrefabs[0].RuntimeKey, null, false, false);
+        for (int i = 0; i < MapAsset.Length; i++) {
+            if (i == 3) continue;
+            var handle = UnityEngine.AddressableAssets.Addressables.LoadAssetAsync<GameObject>(AmongUsClient.Instance.ShipPrefabs[i].RuntimeKey);
+            yield return handle;
+            MapAsset[i] = handle.Result.GetComponent<ShipStatus>();
+        }
+
+        foreach(var audio in UnityEngine.Object.FindObjectsOfTypeAll(Il2CppType.Of<AudioClip>()))
+        {
+            if (audio.name != null) VanillaAudioClips[audio.name] = audio;
+        }
+
+        //マップの部屋名フォントを読み込んだうえで再度フォントを適用
+        Language.ReflectFallBackFont();
+
+        //Polus
+        //handle = AmongUsClient.Instance.ShipPrefabs[2].InstantiateAsync(null, false);
+        //yield return handle;
+        //var polus = handle.Result.GetComponent<PolusShipStatus>();
+
+
+        /*
+        //Airship
+        handle = AmongUsClient.Instance.ShipPrefabs[4].InstantiateAsync(null, false);
+        yield return handle;
+        */
+
+        yield break;
+    }
+
+    static public Scroller GenerateScroller(VVector2 size, Transform transform, VVector3 scrollBarLocalPos, Transform target, FloatRange bounds, float scrollerHeight)
+    {
+        var barBack = GameObject.Instantiate(PlayerOptionsMenuPrefab.transform.GetChild(4).FindChild("UI_ScrollbarTrack").gameObject, transform);
+        var bar = GameObject.Instantiate(PlayerOptionsMenuPrefab.transform.GetChild(4).FindChild("UI_Scrollbar").gameObject, transform);
+        barBack.transform.localPosition = scrollBarLocalPos + new VVector3(0.12f, 0f, 0f);
+        bar.transform.localPosition = scrollBarLocalPos;
+
+        var scrollBar = bar.GetComponent<Scrollbar>();
+
+        var scroller = UnityHelper.CreateObject<Scroller>("Scroller", transform, new(0, 0, 5));
+        var collider = scroller.gameObject.AddComponent<BoxCollider2D>();
+        collider.size = size;
+
+        scrollBar.parent = scroller;
+        scrollBar.graphic = bar.GetComponent<SpriteRenderer>();
+        scrollBar.trackGraphic = barBack.GetComponent<SpriteRenderer>();
+        scrollBar.trackGraphic.size = new Vector2(scrollBar.trackGraphic.size.x, scrollerHeight);
+
+        var ratio = scrollerHeight / 3.88f;
+
+        scroller.Inner = target;
+        scroller.SetBounds(bounds, null);
+        scroller.allowY = true;
+        scroller.allowX = false;
+        scroller.ScrollbarYBounds = new FloatRange(-1.8f * ratio + scrollBarLocalPos.y + 0.4f, 1.8f * ratio + scrollBarLocalPos.y - 0.4f);
+        scroller.ScrollbarY = scrollBar;
+        scroller.active = true;
+
+        scroller.name = ClickMaskName;
+        var instanceId = scroller.gameObject.GetInstanceIdFast();
+        var buttonManager = PassiveButtonManager.Instance;
+        var predicate = (Il2CppSystem.Predicate<PassiveUiElement>)(b => b != null && b && b.isActiveAndEnabled && b.name == ClickMaskName);
+        scroller.gameObject.AddComponent<ScriptBehaviour>().UpdateHandler += () =>
+        {
+            var found = buttonManager.Buttons.Find(predicate);
+            if (found.AsBoolFast() && found.gameObject.GetInstanceIdFast() == instanceId)
+            {
+                scroller.MouseMustBeOverToScroll = false;
+                collider.size = size;
+            }
+            else
+            {
+                scroller.MouseMustBeOverToScroll = true;
+                collider.size = Vector2.zero;
+                scroller.mouseOver = false;
+            }
+        };
+
+        //scroller.Colliders = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Collider2D>(new Collider2D[] { hitBox });
+
+        scroller.ScrollToTop();
+
+        return scroller;
+    }
+
+    private const string ClickMaskName = "NebulaScroller";
+
+    private static Material? highlightMaterial = null;
+    public static Material GetHighlightMaterial()
+    {
+        if (highlightMaterial != null) return new Material(highlightMaterial);
+        foreach (var mat in UnityEngine.Resources.FindObjectsOfTypeAll(Il2CppType.Of<Material>()))
+        {
+            if (mat.name == "HighlightMat")
+            {
+                highlightMaterial = mat.TryCast<Material>();
+                break;
+            }
+        }
+        return new Material(highlightMaterial);
+    }
+
+    private static Material? maskMaterial = null;
+    public static Material GetMaskingMaterial()
+    {
+        if (maskMaterial != null) return new Material(maskMaterial);
+        foreach (var mat in UnityEngine.Resources.FindObjectsOfTypeAll(Il2CppType.Of<Material>()))
+        {
+            if (mat.name == "MaskingShader")
+            {
+                maskMaterial = mat.TryCast<Material>();
+                break;
+            }
+        }
+        return new Material(maskMaterial);
+    }
+
+    public static PlayerDisplay GetPlayerDisplay(bool withPhysicComponents = false, bool withScaler = false)
+    {
+        AmongUsClient.Instance.PlayerPrefab.gameObject.SetActive(false);
+        var display = UnityEngine.Object.Instantiate(AmongUsClient.Instance.PlayerPrefab.gameObject);
+        AmongUsClient.Instance.PlayerPrefab.gameObject.SetActive(true);
+        
+        GameObject.Destroy(display.GetComponent<PlayerControl>());
+        GameObject.Destroy(display.GetComponent<PlayerPhysics>());
+        if (withScaler) PlayerExtension.SetUpScaler(display.gameObject);
+        if (!withPhysicComponents)
+        {
+            GameObject.Destroy(display.GetComponent<Rigidbody2D>());
+            GameObject.Destroy(display.GetComponent<CircleCollider2D>());
+            GameObject.Destroy(display.GetComponent<BoxCollider2D>());
+            GameObject.Destroy(display.GetComponent<AudioSource>());
+            GameObject.Destroy(display.GetComponent<PassiveButton>());
+        }
+        GameObject.Destroy(display.GetComponent<CustomNetworkTransform>());
+        GameObject.Destroy(display.GetComponent<DummyBehaviour>());
+        GameObject.Destroy(display.GetComponent<HnSImpostorScreamSfx>());
+
+        display.gameObject.SetActive(true);
+
+        GameObject.Destroy(display.GetComponent<UncertifiedPlayer>());
+        display.GetComponentInChildren<NebulaCosmeticsLayer>().RejectZOrdering = true;
+        return display.AddComponent<PlayerDisplay>();
+    }
+}

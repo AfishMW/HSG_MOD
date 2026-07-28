@@ -1,0 +1,1583 @@
+﻿using AmongUs.GameOptions;
+using BepInEx.Unity.IL2CPP.Utils;
+using Il2CppInterop.Runtime.Injection;
+using Nebula.Behavior;
+using Nebula.Modules.GUIWidget;
+using Nebula.Modules.Logging;
+using Nebula.Roles.Complex;
+
+
+#if PC
+using Steamworks;
+#endif
+using System.Diagnostics.CodeAnalysis;
+using System.Text;
+using TMPro;
+using UnityEngine.Rendering;
+using UnityEngine.SocialPlatforms.Impl;
+using Virial;
+using Virial.Achievements;
+using Virial.Assignable;
+using Virial.DI;
+using Virial.Events.Game.Meeting;
+using Virial.Events.Player;
+using Virial.Game;
+using Virial.Media;
+using Virial.Runtime;
+using Virial.Text;
+using static Il2CppSystem.Linq.Expressions.Interpreter.CastInstruction.CastInstructionNoT;
+using static Nebula.Modules.AbstractAchievement;
+using static Nebula.Modules.CameraAttention;
+
+namespace Nebula.Modules;
+
+abstract public class AchievementTokenBase
+{
+    public ProgressRecord Achievement { get; private init; }
+    abstract public AbstractAchievement.ClearDisplayState UniteTo(bool update = true);
+
+    public AchievementTokenBase(ProgressRecord achievement)
+    {
+        this.Achievement = achievement;
+
+        NebulaGameManager.Instance?.AllAchievementTokens.Add(this);
+    }
+}
+
+public class StaticAchievementToken : AchievementTokenBase
+{
+    public StaticAchievementToken(ProgressRecord record): base(record){}
+
+    public StaticAchievementToken(string achievement)
+        : base(NebulaAchievementManager.GetRecord(achievement, out var a) ? a : null!) {
+        if (Achievement == null) NebulaLogger.Instance.Error("Not found such achievement: " + achievement);
+    }
+
+
+    public override AbstractAchievement.ClearDisplayState UniteTo(bool update)
+    {
+        return Achievement?.Unite(1, update) ?? ClearDisplayState.None;
+    }
+}
+
+public class AchievementToken<T> : AchievementTokenBase
+{
+    public T Value;
+    public Func<T, ProgressRecord, int> Supplier { get; set; }
+
+    public AchievementToken(ProgressRecord achievement, T value, Func<T, ProgressRecord, int> supplier) : base(achievement)
+    {
+        Value = value;
+        Supplier = supplier;
+    }
+
+    public AchievementToken(string achievement, T value, Func<T, ProgressRecord, int> supplier) 
+        : this(NebulaAchievementManager.GetRecord(achievement,out var a) ? a : null!, value,supplier) { }
+
+    public AchievementToken(string achievement, T value, Func<T, ProgressRecord, bool> supplier)
+        : this(achievement, value, (t,ac)=> supplier.Invoke(t,ac) ? 1 : 0) { }
+
+
+    public override AbstractAchievement.ClearDisplayState UniteTo(bool update)
+    {
+        return Achievement.Unite(Supplier.Invoke(Value, (Achievement as ProgressRecord)!),update);
+    }
+}
+
+public class SimpleAchievementToken : AchievementTokenBase
+{
+    public Func<bool> Supplier { get; set; }
+
+
+
+    public SimpleAchievementToken(ProgressRecord achievement, Func<bool> supplier) : base(achievement)
+    {
+        Supplier = supplier;
+    }
+    public SimpleAchievementToken(string achievement, Func<bool> supplier) : this(NebulaAchievementManager.GetRecord(achievement, out var a) ? a : null!, supplier) { }
+
+    public override AbstractAchievement.ClearDisplayState UniteTo(bool update)
+    {
+        if (Supplier.Invoke()) return Achievement.Unite(1, update);
+        return ClearDisplayState.None;
+    }
+}
+
+public static class AchievementTokens
+{
+
+    /// <summary>
+    /// 条件に合わせてtriggeredを適当に立ててください。
+    /// </summary>
+    /// <param name="id"></param>
+    /// <param name="player"></param>
+    /// <param name="lifespan"></param>
+    /// <returns></returns>
+    public static AchievementToken<(bool triggered, bool blocked, bool isCleared)> FirstFailedAchievementToken(string id, GamePlayer player, ILifespan lifespan)
+    {
+        AchievementToken<(bool triggered, bool blocked, bool isCleared)> token = new(id, (false, false, false), (a, _) => a.isCleared);
+        GameOperatorManager.Instance?.Subscribe<MeetingEndEvent>(ev => token.Value.blocked = token.Value.triggered, lifespan);
+        GameOperatorManager.Instance?.Subscribe<PlayerDieEvent>(ev =>
+        {
+            //自身の死亡かつ死因が追放か推察
+            if (ev.Player == player && (ev.Player.PlayerState == PlayerState.Exiled || ev.Player.PlayerState == PlayerState.Guessed))
+                token.Value.isCleared |= token.Value.triggered && !token.Value.blocked;
+        }, lifespan);
+        return token;
+    }
+
+    public static AchievementTokenBase FunctionalToken(string id, Func<bool> checker)
+    {
+        AchievementToken<bool> token = new(id, false, (_, _) => checker.Invoke());
+        return token;
+    }
+}
+
+[NebulaPreprocess(PreprocessPhase.BuildNoSModule)]
+public class TitleHandlerImpl : AbstractModule<Virial.Game.Game>, ITitleHandler
+{
+    static private void Preprocess(NebulaPreprocessor preprocessor) => preprocessor.DIManager.RegisterModule(() => new TitleHandlerImpl());
+
+    void ITitleHandler.Progress(string id, int num) {
+        if (num == 1)
+        {
+            _ = new StaticAchievementToken(id);
+        }
+        else
+        {
+            _ = new AchievementToken<bool>(id, false, (_, _) => num);
+        }
+    }
+
+    void ITitleHandler.Progress(string id)
+    {
+        _ = new StaticAchievementToken(id);
+    }
+}
+
+public class AchievementType
+{
+    static public readonly AchievementType Challenge = new("challenge");
+    static public readonly AchievementType Secret = new("secret");
+    static public readonly AchievementType Seasonal = new("seasonal");
+    static public readonly AchievementType Costume = new("costume");
+    static public readonly AchievementType Innersloth = new("innersloth");
+    static public readonly AchievementType Perk = new("perk");
+    static public readonly AchievementType AeroGuesser = new("aeroGuesser");
+    static public readonly AchievementType PaintQuiz = new("paintQuiz");
+
+    //static public readonly AchievementType SomeCollab = new("collab");
+
+    static private readonly Dictionary<string, AchievementType> CollabTypes;
+    static public bool TryGetCollabType(string id, [MaybeNullWhen(false)] out AchievementType type) => CollabTypes.TryGetValue(id, out type);
+    static AchievementType()
+    {
+        CollabTypes = [];
+        //CollabTypes.Add("collab", SomeCollab);
+    }
+    private AchievementType(string key)
+    {
+        TranslationKey = "achievement.type." + key;
+    }
+    public string TranslationKey { get; private set; }
+}
+
+public class ProgressRecord
+{
+    private IntegerDataEntry entry;
+    private string key;
+    private string hashedKey;
+    private int goal;
+    private bool canClearOnce;
+
+    public int Progress => entry.Value;
+    public int Goal => goal;
+    public string? GroupId { get; private init; }
+    public bool AllowMinus { get; init; }
+
+    public bool IsCleared => !DebugTools.LockAllAchievement && (DebugTools.ReleaseAllAchievement || goal <= entry.Value);
+
+    public string OldEntryTag => "a." + key.ComputeConstantHashAsString();
+    public string EntryTag => GroupId != null ? ("a." + GroupId + "." + this.hashedKey) : ("a." + this.hashedKey);
+    
+    public ProgressRecord(string? group, string key, int goal, bool canClearOnce, string? defaultSource = null)
+    {
+        this.GroupId = group;
+        this.key = key;
+        this.hashedKey = key.ComputeConstantHashAsStringLong();
+        this.canClearOnce = canClearOnce;
+
+        string? defaultSourceHashed = null;
+        if (defaultSource != null) defaultSourceHashed = "a." + defaultSource.ComputeConstantHashAsStringLong();
+
+        var entryId = GroupId != null ? "a." + GroupId + "." + hashedKey : "a." + hashedKey;
+        this.entry = new IntegerDataEntry("a." + hashedKey, NebulaAchievementManager.AchievementDataSaver, 0, defaultSourceHashed, DebugTools.WriteAllAchievementsData);
+        this.goal = goal;
+        if (NebulaAchievementManager.AllRecords.Any(r => r.entry.Name == this.entry.Name)) NebulaLogger.Instance.Error("Duplicate achievement hash: " + key);
+        NebulaAchievementManager.RegisterRecord(this, Id);
+    }
+
+    public virtual string Id => GroupId == null ? key : (GroupId + "." + key);
+    public virtual string TranslationKey => "achievement." + Id + ".title";
+    public string GoalTranslationKey => "achievement." + Id + ".goal";
+    public string CondTranslationKey => "achievement." + Id + ".cond";
+    public string FlavorTranslationKey => "achievement." + Id + ".flavor";
+
+    protected void UpdateProgress(int newProgress) => entry.Value = newProgress;
+
+    //トークンによってクリアする場合はこちらから
+    virtual public ClearDisplayState Unite(int localValue, bool update)
+    {
+        if (localValue < 0 && !AllowMinus) return ClearDisplayState.None;
+
+        int lastValue = entry.Value;
+        int newValue = Mathn.Clamp(lastValue + localValue, -goal, goal);
+        if (update) entry.Value = newValue;
+
+        if (newValue >= goal && lastValue < goal)
+            return ClearDisplayState.FirstClear;
+
+        if (localValue >= goal && !canClearOnce)
+            return ClearDisplayState.Clear;
+
+        return ClearDisplayState.None;
+    }
+}
+
+public class DisplayProgressRecord : ProgressRecord
+{
+    string translationKey;
+    public DisplayProgressRecord(string? group, string key, int goal, string translationKey, string? defaultSource = null) : base(group, key, goal, true, defaultSource)
+    {
+        this.translationKey = translationKey;
+    }
+
+    public override string TranslationKey => translationKey;
+}
+
+public interface INebulaAchievement
+{
+    public enum SocialMessageType
+    {
+        FirstCleared,
+        Cleared,
+        ClearedMultiple
+    }
+
+    static public readonly TextComponent HiddenComponent = new TranslateTextComponent("achievement.title.unachieved");
+    static public readonly TextComponent HiddenDescriptiveComponent = new ColorTextComponent(new(0.4f, 0.4f, 0.4f), new TranslateTextComponent("achievement.title.hidden"));
+    static public readonly TextComponent HiddenDetailComponent = new ColorTextComponent(new(0.8f, 0.8f, 0.8f), new TranslateTextComponent("achievement.title.hiddenDetail"));
+    static public readonly TextAttribute DetailTitleAttribute = GUI.API.GetAttribute(AttributeAsset.OverlayTitle);
+    static public readonly TextAttribute SocialCaptionAttribute = new(GUI.API.GetAttribute(AttributeAsset.OverlayTitle)) { FontSize = new(1.3f) };
+    static public readonly TextAttribute SocialCategoryAttribute= new(GUI.API.GetAttribute(AttributeAsset.OverlayTitle)) { FontSize = new(1.2f) };
+    static public readonly TextAttribute SocialTitleAttribute = new(GUI.API.GetAttribute(AttributeAsset.OverlayTitle)) { FontSize = new(2f, 1f, 2f), Size = new(3f, 1f) };
+    static private readonly TextAttribute DetailContentAttribute = GUI.API.GetAttribute(AttributeAsset.OverlayContent);
+    static private readonly Virial.Color GlobalProgressColor = new(180,180,180);
+    string Id { get; }
+    int NumId { get; internal set; } //バージョン等が一致したゲーム内でのみ使用できるID。バージョンを跨いだIDの一貫性は保証されない。
+    string? Group { get; }
+    string TranslationKey => "achievement." + Id + ".title";
+    string GoalTranslationKey => "achievement." + Id + ".goal";
+    string CondTranslationKey => "achievement." + Id + ".cond";
+    string FlavorTranslationKey => "achievement." + Id + ".flavor";
+    string PrefixTranslationKey => "achievement." + Id + ".splitted.0";
+    string InfixTranslationKey => "achievement." + Id + ".splitted.1";
+    string SuffixTranslationKey => "achievement." + Id + ".splitted.2";
+
+    int Trophy { get; }
+    bool IsHidden { get; }
+    bool IsCleared { get; }
+    bool NoHint { get; }
+    int Attention { get; }
+    float GlobalProgress { get; internal set; }
+    IEnumerable<DefinedAssignable> RelatedRole { get; }
+    IEnumerable<AchievementType> AchievementType();
+    Image? BackImage { get => SpecifiedBackImage ?? RelatedRole.FirstOrDefault()?.ConfigurationHolder?.Illustration; }
+    Image? SpecifiedBackImage { get; }
+    internal bool HasPrefix { get; set; }
+    internal bool HasInfix { get; set; }
+    internal bool HasSuffix { get; set; }
+    internal bool IsAddonTitle => Group != null;
+
+    IEnumerable<string> GetKeywords()
+    {
+        foreach (var r in RelatedRole) yield return r.DisplayName;
+        yield return Language.Translate(GoalTranslationKey);
+        yield return Language.Find(CondTranslationKey) ?? "";
+        if (IsCleared) {
+            yield return Language.Translate(TranslationKey);
+            yield return Language.Find(FlavorTranslationKey) ?? "";
+        }
+        foreach (var type in AchievementType()) yield return Language.Translate(type.TranslationKey);
+    }
+    Virial.Media.GUIWidget GetOverlayWidget(bool hiddenNotClearedAchievement = true, bool showCleared = false, bool showTitleInfo = false, bool showTrophy = false, bool showFlavor = false, bool showGlobalProgress = true, bool showCraftingParts = false)
+    {
+        var gui = NebulaAPI.GUI;
+
+        List<Virial.Media.GUIWidget> list = [];
+
+        list.Add(new NoSGUIText(GUIAlignment.Left, DetailContentAttribute, GetHeaderComponent()));
+
+        List<Virial.Media.GUIWidget> titleList = [];
+        if (showTrophy)
+        {
+            titleList.Add(new NoSGUIMargin(GUIAlignment.Left, new(-0.04f, 0.2f)));
+            titleList.Add(new NoSGUIImage(GUIAlignment.Left, new WrapSpriteLoader(() => TrophySprite.GetSprite(Trophy)), new(0.3f, 0.3f)));
+            titleList.Add(new NoSGUIMargin(GUIAlignment.Left, new(0.05f, 0.2f)));
+        }
+
+        titleList.Add(new NoSGUIText(GUIAlignment.Left, DetailTitleAttribute, GetTitleComponent(hiddenNotClearedAchievement ? HiddenDescriptiveComponent : null)));
+        if (showCleared && IsCleared)
+        {
+            titleList.Add(new NoSGUIMargin(GUIAlignment.Left, new(0.2f, 0.2f)));
+            titleList.Add(new NoSGUIText(GUIAlignment.Left, DetailContentAttribute, gui.TextComponent(new(1f, 1f, 0f), "achievement.ui.cleared")));
+        }
+        list.Add(new HorizontalWidgetsHolder(GUIAlignment.Left, titleList));
+
+        list.Add(new NoSGUIText(GUIAlignment.Left, DetailContentAttribute, GetDetailComponent()));
+
+        if (showFlavor)
+        {
+            var flavor = GetFlavorComponent();
+            if (flavor != null)
+            {
+                list.Add(new NoSGUIMargin(GUIAlignment.Left, new(0f, 0.12f)));
+                list.Add(new NoSGUIText(GUIAlignment.Left, DetailContentAttribute, flavor) { PostBuilder = text => text.outlineColor = Color.clear });
+            }
+        }
+
+        if (showCraftingParts)
+        {
+            List<Virial.Media.GUIWidget> parts = [];
+            if (HasPrefix) parts.Add(GUI.API.LocalizedText(GUIAlignment.Center, AttributeAsset.OverlayContent, IsCleared ? PrefixTranslationKey : "achievement.part.unachieved"));
+            if (HasInfix) parts.Add(GUI.API.LocalizedText(GUIAlignment.Center, AttributeAsset.OverlayContent, IsCleared ?  InfixTranslationKey : "achievement.part.unachieved"));
+            if (HasSuffix) parts.Add(GUI.API.LocalizedText(GUIAlignment.Center, AttributeAsset.OverlayContent, IsCleared ? SuffixTranslationKey : "achievement.part.unachieved"));
+
+            if (parts.Count > 0)
+            {
+                list.Add(GUI.API.VerticalMargin(0.04f));
+                list.Add(GUI.API.HorizontalHolder(GUIAlignment.Left, parts.Join(GUI.API.RawText(GUIAlignment.Center, AttributeAsset.OverlayContent, ", ")).Prepend(GUI.API.LocalizedText(GUIAlignment.Center, AttributeAsset.OverlayContent, "achievement.ui.bonusParts"))));
+            }
+        }
+
+        if (showGlobalProgress && NebulaAchievementManager.GotOnlineProgress) list.Add(new NoSGUIText(GUIAlignment.Left, DetailContentAttribute, GetGlobalProgressComponent().Size(0.75f)));
+        
+
+        if (showTitleInfo && IsCleared)
+        {
+            list.Add(new NoSGUIMargin(GUIAlignment.Left, new(0f, 0.2f)));
+#if PC
+            list.Add(new NoSGUIText(GUIAlignment.Left, DetailContentAttribute, new LazyTextComponent(() =>
+            (NebulaAchievementManager.AmEquipping(this)) ?
+            (Language.Translate("achievement.ui.equipped").Color(VColor.Green).Bold() + "<br>" + Language.Translate("achievement.ui.unsetTitle")) :
+            Language.Translate("achievement.ui.setTitle"))));
+#elif ANDROID
+            list.Add(GUI.API.Button(GUIAlignment.Left, AttributeAsset.SmallWideButton, 
+                new LazyTextComponent(() => Language.Translate(NebulaAchievementManager.AmEquipping(this) ? "achievement.ui.unsetTitle.button" : "achievement.ui.setTitle.button")),
+                _ =>
+                {
+                    NebulaAchievementManager.SetOrToggleTitle(this);
+                    NebulaManager.Instance.HideHelpWidget();
+                }
+                ));
+#endif
+        }
+        return new VerticalWidgetsHolder(GUIAlignment.Left, list) { BackImage = BackImage, GrayoutedBackImage = !(IsCleared || !hiddenNotClearedAchievement) };
+    }
+    TextComponent? GetHeaderComponent()
+    {
+        List<TextComponent> list = new();
+        foreach(var r in RelatedRole)
+        {
+            if (list.Count != 0) list.Add(new RawTextComponent(" & "));
+            list.Add(NebulaGUIWidgetEngine.Instance.RawTextComponent(r.DisplayColoredName));
+        }
+
+        foreach(var type in AchievementType())
+        {
+            if (list.Count != 0) list.Add(new RawTextComponent(" "));
+            list.Add(new TranslateTextComponent(type.TranslationKey));
+        }
+
+        if (list.Count > 0)
+            return new CombinedTextComponent(list.ToArray());
+        else
+            return null;
+    }
+    TextComponent GetTitleComponent(TextComponent? hiddenComponent)
+    {
+        if (hiddenComponent != null && !IsCleared)
+            return hiddenComponent;
+        return new TranslateTextComponent(TranslationKey);
+    }
+    TextComponent GetGlobalProgressComponent()
+    {
+        float rate100 = GlobalProgress * 100f;
+        //(GlobalProgress * 100f).ToString("F1")
+        return GUI.API.FunctionalTextComponent(() => Language.Translate("achievement.ui.globalProgress").Replace("%RATE%", rate100 > 0f && rate100 < 0.1f ? "<0.1" : rate100.ToString("F1"))).Color(GlobalProgressColor);
+    }
+    TextComponent? GetFlavorComponent()
+    {
+        var text = Language.Find(FlavorTranslationKey);
+        if (text == null) return null;
+        return new RawTextComponent($"<color=#e7e5ca><size=78%><i>{text}</i></size></color>");
+    }
+    Virial.Media.GUIWidget? GetDetailWidget() => null;
+    TextComponent GetDetailComponent()
+    {
+        List<TextComponent> list = [];
+        if (!NoHint || IsCleared)
+            list.Add(new TranslateTextComponent(GoalTranslationKey));
+        else
+            list.Add(HiddenDetailComponent);
+        list.Add(new LazyTextComponent(() =>
+        {
+            StringBuilder builder = new();
+            var cond = Language.Find(CondTranslationKey);
+            if ((cond?.Length ?? 0) > 0)
+            {
+                builder.Append("<size=75%><br><br>");
+                builder.Append(Language.Translate("achievement.ui.cond"));
+                foreach (var c in cond.Split('+'))
+                {
+                    builder.Append("<br>  -");
+                    builder.Append(c.Replace("<br>", "<br>    "));
+                }
+                builder.Append("</size>");
+            }
+            return builder.ToString();
+        }));
+
+        return new CombinedTextComponent(list.ToArray());
+    }
+
+    static private string GetSocialText(SocialMessageType type, string playerName, int others) => type switch { 
+        SocialMessageType.FirstCleared => Language.Translate("achievement.social.firstClear").Replace("%PLAYER%", playerName.Sized(130)),
+        SocialMessageType.Cleared => Language.Translate("achievement.social.clear").Replace("%PLAYER%", playerName.Sized(130)),
+        SocialMessageType.ClearedMultiple => Language.Translate("achievement.social.clearMultiple").Replace("%PLAYER%", playerName.Sized(130)).Replace("%OTHERS%", others.ToString()),
+        _ => "UNDEFINED MESSAGE"
+    };
+    Virial.Media.GUIWidget GetSocialWidget(SocialMessageType type, string playerName, int others = 0)
+    {
+        return GUI.API.VerticalHolder(GUIAlignment.Center,
+            GUI.API.Text(GUIAlignment.Center, SocialCaptionAttribute, GUI.API.RawTextComponent(GetSocialText(type, playerName, others))),
+            GUI.API.VerticalMargin(0.015f),
+            GUI.API.Text(GUIAlignment.Center, SocialCategoryAttribute, GetHeaderComponent() ?? GUI.API.RawTextComponent("")),
+            GUI.API.VerticalMargin(-0.03f),
+            GUI.API.Text(GUIAlignment.Center, SocialTitleAttribute, GUI.API.FunctionalTextComponent(()=> string.Join("",GetTitleComponent(null).GetString().Select(c => 'あ' <= c && c <= 'ゔ' ? (c.ToString().Sized(90)) : c.ToString()))))
+            );
+    }
+
+    IEnumerator CoShowSocialBillboard(Vector2 pos, SocialMessageType type, string playerName, int others = 0)
+    {
+        return ModSingleton<ShowUp>.Instance.CoShowSocial("SocialAchievement", pos, GetSocialWidget(type, playerName, others), (widget, size) =>
+        {
+            var button = widget.SetUpButton(true);
+            button.gameObject.layer = LayerExpansion.GetUILayer();
+            button.OnMouseOver.AddListener(() => NebulaManager.Instance.SetHelpWidget(button, GetOverlayWidget(false, true, IsCleared, true, true, true, true)));
+            button.OnMouseOut.AddListener(() => NebulaManager.Instance.HideHelpWidgetIf(button));
+#if PC
+            if (IsCleared)
+            {
+                button.OnClick.AddListener(() =>
+                {
+                    NebulaAchievementManager.SetOrToggleTitle(this, false);
+                    button.OnMouseOut.Invoke();
+                    button.OnMouseOver.Invoke();
+                });
+            }
+#endif
+            var collider = button.gameObject.AddComponent<BoxCollider2D>();
+            collider.isTrigger = true;
+            collider.size = size.ToUnityVector();
+        }, 7.5f, null, false,considerPlayerAppeal: true, considerOnlyLobby: true);
+    }
+
+    //他のレコードの進捗によって勝手にクリアする場合にここから進捗を確認する。副作用のある関数。
+    ClearDisplayState CheckClear() { return ClearDisplayState.None; }
+}
+
+public class AbstractAchievement : ProgressRecord, INebulaAchievement
+{
+    public static AchievementToken<(bool isCleared, bool triggered)> GenerateSimpleTriggerToken(string achievement) => new(achievement,(false,false),(val,_)=>val.isCleared);
+
+    static public readonly IDividedSpriteLoader TrophySprite = XOnlyDividedSpriteLoader.FromResource("Nebula.Resources.Trophy.png", 100f, 5);
+
+    bool isSecret;
+    bool noHint;
+
+    public IEnumerable<DefinedAssignable> role;
+    public IEnumerable<AchievementType> type;
+    public Cache<INebulaAchievement>? preAchievement;
+    public int NumId { get; set; }
+    public int Trophy { get; private init; }
+    public bool NoHint => noHint;
+    public IEnumerable<DefinedAssignable> RelatedRole => role;
+    public IEnumerable<AchievementType> AchievementType() => type;
+    public Image? SpecifiedBackImage { get; set; } = null;
+    public int Attention { get; private init; }
+    public float GlobalProgress { get; set; }
+    public bool HasPrefix { get; set; }
+    public bool HasSuffix { get; set; }
+    public bool HasInfix { get; set; }
+    public bool IsHidden { get => (isSecret || !(preAchievement?.Get()?.IsCleared ?? true)) && !IsCleared; }
+    string? INebulaAchievement.Group => GroupId;
+
+    public AbstractAchievement(string? groupId, bool canClearOnce, bool isSecret, bool noHint, string key, int goal, IEnumerable<DefinedAssignable> role, IEnumerable<AchievementType> type, int trophy, int attention, Image? specifiedImage, string? preAchievement) : base(groupId, key, goal, canClearOnce) 
+    {
+        this.isSecret = isSecret;
+        this.noHint = noHint;
+        this.type = type;
+        this.role = role;
+        this.Trophy = trophy;
+        this.Attention = attention;
+        this.SpecifiedBackImage = specifiedImage;
+        this.preAchievement = preAchievement == null ? null : new(() => NebulaAchievementManager.GetAchievement(preAchievement, out var ach) ? ach : null!);
+    }
+
+    /// <summary>
+    /// クリア状況の表示
+    /// </summary>
+    public enum ClearDisplayState
+    {
+        Clear,
+        FirstClear,
+        None
+    }
+}
+
+public class StandardAchievement : AbstractAchievement
+{
+    public StandardAchievement(bool canClearOnce, bool isSecret, bool noHint, string key, int goal, IEnumerable<DefinedAssignable> role, IEnumerable<AchievementType> type, int trophy,int attention, Image? specifiedImage, string? preAchievement)
+        : this(null, canClearOnce, isSecret, noHint, key, goal, role, type, trophy, attention, specifiedImage, preAchievement) { }
+
+    public StandardAchievement(string? group, bool canClearOnce, bool isSecret, bool noHint, string key, int goal, IEnumerable<DefinedAssignable> role, IEnumerable<AchievementType> type, int trophy, int attention, Image? specifiedImage, string? preAchievement)
+        : base(group, canClearOnce, isSecret, noHint, key, goal, role, type, trophy, attention, specifiedImage, preAchievement) { }
+}
+
+public class InnerslothAchievement : INebulaAchievement
+{
+    private bool noHint;
+    private readonly Image? specifiedImage;
+
+    public bool NoHint => noHint;
+    public int Attention => 0;
+
+    public string Id { get; private init; }
+    public int NumId { get; set; }
+    int INebulaAchievement.Trophy => 3;
+
+    bool INebulaAchievement.IsHidden => false;
+    Image? INebulaAchievement.SpecifiedBackImage => specifiedImage;
+    public float GlobalProgress { get; set; }
+    public bool HasPrefix { get; set; }
+    public bool HasSuffix { get; set; }
+    public bool HasInfix { get; set; }
+    public bool IsAddonTitle => false;
+    string? INebulaAchievement.Group => null;
+#if PC
+    bool IsClearedSteam => SteamUserStats.GetAchievement(Id.Split('.', 2)[1], out var cleared) && cleared;
+#else
+    bool IsClearedSteam => false;
+#endif
+
+    bool INebulaAchievement.IsCleared
+    {
+        get
+        {
+            try
+            {
+                if (Constants.GetCurrentPlatformName() == "Steam")
+                    return IsClearedSteam;
+                else
+                    return false;
+            }
+            catch 
+            {
+                //Steamプラットフォームでも初期化失敗で取得できないことがあるらしい。
+                return false;
+            }
+        }
+    }
+
+    IEnumerable<DefinedAssignable> INebulaAchievement.RelatedRole => [];
+
+    public InnerslothAchievement(bool noHint, string key, Image? specifiedImage)
+    {
+        Id = key;
+        this.specifiedImage = specifiedImage;
+        this.noHint = noHint;
+        NebulaAchievementManager.RegisterNonrecord(this, key);
+    }
+
+    IEnumerable<AchievementType> INebulaAchievement.AchievementType()
+    {
+        yield return AchievementType.Innersloth;
+    }
+}
+
+public class SumUpReferenceAchievement : INebulaAchievement
+{
+    public SumUpReferenceAchievement(string? groupId, bool isSecret, string key, string reference, int goal, IEnumerable<DefinedAssignable> role, IEnumerable<AchievementType> type, int trophy, int attention, Image? specifiedImage, string? preAchievement)
+    {
+        this.Group = groupId;
+        this.key = key;
+        this.Trophy = trophy;
+        this.IsSecret = isSecret;
+        this.goal = goal;
+        this.reference = reference;
+        this.RelatedRole = role;
+        this.achievementType = type;
+        this.Attention = attention;
+        this.SpecifiedBackImage = specifiedImage;
+        this.preAchievement = preAchievement == null ? null : new(() => NebulaAchievementManager.GetAchievement(preAchievement, out var ach) ? ach : null!);
+        NebulaAchievementManager.RegisterNonrecord(this, Id);
+    }
+
+    private readonly Cache<INebulaAchievement>? preAchievement;
+    static readonly SpriteLoader gaugeSprite = SpriteLoader.FromResource("Nebula.Resources.ProgressGauge.png", 100f);
+
+    static private TextAttribute OblongAttribute = new(GUI.Instance.GetAttribute(AttributeParams.Oblong)) { FontSize = new(1.6f), Size = new(0.6f, 0.2f), Color = new(163, 204, 220) };
+
+    private string key { get; init; }
+    public string Id => Group != null ? (Group + "." + key) : key;
+    public int NumId { get; set; }
+    public int Attention { get; private init; }
+
+    public int Trophy { get; private init; }
+    private bool IsSecret { get; init; }
+    public bool IsHidden => (IsSecret || !(preAchievement?.Get()?.IsCleared ?? true)) && !IsCleared;
+    private int goal { get; init; }
+    private string reference { get; init; }
+    public float GlobalProgress { get; set; }
+    public bool HasPrefix { get; set; }
+    public bool HasSuffix { get; set; }
+    public bool HasInfix { get; set; }
+    public string? Group { get; private set; }
+    private ProgressRecord? referenceRecord = null;
+    private readonly IEnumerable<AchievementType> achievementType =[];
+    public Image? SpecifiedBackImage { get; set; }
+    public ProgressRecord? ReferenceRecord { get
+        {
+            if(referenceRecord == null) NebulaAchievementManager.GetRecord(reference, out referenceRecord);
+            return referenceRecord;
+        } }
+
+    public bool IsCleared => !DebugTools.LockAllAchievement && (DebugTools.ReleaseAllAchievement || (ReferenceRecord?.Progress ?? 0) >= goal);
+
+    private bool lastCleared = false;
+    ClearDisplayState INebulaAchievement.CheckClear() {
+        bool alreadyCleared = lastCleared;
+        bool isCleared = IsCleared;
+        lastCleared = isCleared;
+        if(isCleared && !alreadyCleared) return ClearDisplayState.FirstClear;
+        return ClearDisplayState.None;
+    }
+
+    bool INebulaAchievement.NoHint => false;
+
+    public IEnumerable<DefinedAssignable> RelatedRole { get; init; }
+
+    protected virtual void OnWidgetGenerated(GameObject obj) { }
+    Virial.Media.GUIWidget? INebulaAchievement.GetDetailWidget()
+    {
+        //クリア済み、あるいは1回で達成なら何も出さない
+        if (IsCleared || goal == 1) return null;
+
+        return new NoSGameObjectGUIWrapper(GUIAlignment.Left, () =>
+        {
+            var obj = UnityHelper.CreateObject("Progress", null, Vector3.zero, LayerExpansion.GetUILayer());
+            var backGround = UnityHelper.CreateObject<SpriteRenderer>("Background", obj.transform, new Vector3(0f, 0f, 0f));
+            var colored = UnityHelper.CreateObject<SpriteRenderer>("Colored", obj.transform, new Vector3(0f, 0f, -0.1f));
+
+            backGround.sprite = gaugeSprite.GetSprite();
+            backGround.color = new(0.21f, 0.21f, 0.21f);
+            backGround.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
+            backGround.sortingOrder = 1;
+
+            colored.sprite = gaugeSprite.GetSprite();
+            colored.material.shader = NebulaAsset.ProgressShader;
+            colored.sharedMaterial.SetFloat("_Guage", Mathn.Min(1f, (float)(referenceRecord?.Progress ?? 0) / (float)goal));
+            colored.sharedMaterial.color = new(56f / 255f, 110f / 255f, 191f / 255f);
+            colored.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
+            colored.sortingOrder = 2;
+
+            var text = new NoSGUIText(GUIAlignment.Center, OblongAttribute, new RawTextComponent((referenceRecord?.Progress ?? 0) + "  /  " + goal)).Instantiate(new(1f, 0.2f), out _);
+            text!.transform.SetParent(obj.transform);
+
+            OnWidgetGenerated(obj);
+
+            return (obj, new(2f, 0.17f));
+        });
+    }
+
+    IEnumerable<AchievementType> INebulaAchievement.AchievementType() => achievementType;
+}
+
+public class SumUpAchievement : AbstractAchievement, INebulaAchievement
+{
+    public SumUpAchievement(string? group, bool isSecret, bool noHint, string key, int goal, IEnumerable<DefinedAssignable> role, IEnumerable<AchievementType> type, int trophy, int attention, Image? specifiedImage, string? preAchievement)
+        : base(group, true, isSecret, noHint, key, goal, role, type, trophy, attention, specifiedImage, preAchievement)
+    {
+    }
+
+    static readonly SpriteLoader gaugeSprite = SpriteLoader.FromResource("Nebula.Resources.ProgressGauge.png", 100f);
+
+    static private TextAttribute OblongAttribute = new(GUI.Instance.GetAttribute(AttributeParams.Oblong)) { FontSize = new(1.6f), Size = new(0.6f, 0.2f), Color = new(163,204,220) };
+    protected virtual void OnWidgetGenerated(GameObject obj) { }
+    Virial.Media.GUIWidget? INebulaAchievement.GetDetailWidget()
+    {
+        //クリア済みなら何も出さない
+        if (IsCleared) return null;
+
+        return new NoSGameObjectGUIWrapper(GUIAlignment.Left, () =>
+        {
+            var obj = UnityHelper.CreateObject("Progress", null, Vector3.zero, LayerExpansion.GetUILayer());
+            var backGround = UnityHelper.CreateObject<SpriteRenderer>("Background", obj.transform, new Vector3(0f, 0f, 0f));
+            var colored = UnityHelper.CreateObject<SpriteRenderer>("Colored", obj.transform, new Vector3(0f, 0f, -0.1f));
+
+            backGround.sprite = gaugeSprite.GetSprite();
+            backGround.color = new(0.21f, 0.21f, 0.21f);
+            backGround.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
+            backGround.sortingOrder = 1;
+
+            colored.sprite = gaugeSprite.GetSprite();
+            colored.material.shader = NebulaAsset.ProgressShader;
+            colored.sharedMaterial.SetFloat("_Guage", Mathn.Min(1f, (float)Progress / (float)Goal));
+            colored.sharedMaterial.color = new(56f / 255f, 110f / 255f, 191f / 255f);
+            colored.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
+            colored.sortingOrder = 2;
+
+            var text = new NoSGUIText(GUIAlignment.Center, OblongAttribute, new RawTextComponent(Progress + "  /  " + Goal)).Instantiate(new(1f,0.2f),out _);
+            text!.transform.SetParent(obj.transform);
+
+            OnWidgetGenerated(obj);
+
+            return (obj, new(2f, 0.17f));
+        });
+    }
+}
+
+public class CompleteAchievement : SumUpAchievement, INebulaAchievement
+{
+    ProgressRecord[] records;
+    public CompleteAchievement(string? group, ProgressRecord[] allRecords, bool isSecret, bool noHint, string key, IEnumerable<DefinedAssignable> role, IEnumerable<AchievementType> type, int trophy, int attention, Image? specifiedImage, string? preAchievement)
+        : base(group, isSecret, noHint, key, allRecords.Length, role,type, trophy, attention, specifiedImage, preAchievement) {
+        this.records = allRecords;
+    }
+
+    ClearDisplayState INebulaAchievement.CheckClear() {
+        bool wasCleared = IsCleared;
+        UpdateProgress(records.Count(r => r.IsCleared));
+
+        if(!wasCleared) return IsCleared ? ClearDisplayState.FirstClear : ClearDisplayState.None;
+        return ClearDisplayState.None;
+    }
+
+    static private TextAttribute TextAttr = new(GUI.Instance.GetAttribute(AttributeParams.StandardBaredLeft)) { FontSize = new(1.25f) };
+    protected override void OnWidgetGenerated(GameObject obj) {
+        var collider = UnityHelper.CreateObject<BoxCollider2D>("Overlay", obj.transform, Vector3.zero);
+        collider.size = new(2f, 0.17f);
+        collider.isTrigger = true;
+
+        var button = collider.gameObject.SetUpButton();
+        button.OnMouseOver.AddListener(() =>
+        {
+            string text = string.Join("\n", records.Select(r => "- " + Language.Translate(r.TranslationKey).Color(r.IsCleared ? VColor.Green : VColor.White)));
+            NebulaManager.Instance.SetHelpWidget(button, new NoSGUIText(GUIAlignment.Left, TextAttr, new RawTextComponent(text)));
+        });
+        button.OnMouseOut.AddListener(() => NebulaManager.Instance.HideHelpWidgetIf(button));
+    }
+}
+
+public class TitleRegisterImpl : ITitlesRegister
+{
+    static public TitleRegisterImpl Instance
+    {
+        get
+        {
+            if (field == null) field = new();
+            return field;
+        }
+    }
+
+    private List<TitleBuilder> titleBuilders = [];
+    private List<RecordBuilder> recordBuilders = [];
+
+    void ITitlesRegister.Register(TitleBuilder builder) => titleBuilders.Add(builder);
+    void ITitlesRegister.Register(RecordBuilder builder) => recordBuilders.Add(builder);
+    public void BuildAll()
+    {
+        //CompleteAchievement未実装
+
+        foreach (var builder in recordBuilders)
+        {
+            var id = builder.Id;
+            var group = builder.Group;
+            if (id == null || group == null) continue;
+            new DisplayProgressRecord(group, id,  builder.Goal, "record." + group + "." + id, builder.MigrationSource);
+        }
+        foreach (var builder in titleBuilders)
+        {
+            var id = builder.Id;
+            var group = builder.Group;
+            int trophy = Mathn.Clamp((int)builder.Rank, 0, 2);
+            int goal = Mathn.Max(builder.Goal ?? 1, 1);
+            if (id == null || group == null) continue;
+
+            DefinedAssignable[] relatedRoles = builder.RelatedRole != null ? [builder.RelatedRole] : [];
+
+            if (builder.RelatedRecord != null)
+            {
+                new SumUpReferenceAchievement(group, builder.IsSecret, id, builder.RelatedRecord, builder.Goal ?? 1, relatedRoles, [], trophy, 0, null, null);
+            }else if(goal > 1)
+            {
+                new SumUpAchievement(group, builder.IsSecret, false, id, goal, relatedRoles, [], trophy, 0, null, null);
+            }
+            else
+            {
+                new StandardAchievement(group, false, builder.IsSecret, false, id, 1, relatedRoles, [], trophy, 0, null, null);
+            }
+        }
+    }
+}
+
+[NebulaPreprocess(PreprocessPhase.PostFixStructure)]
+[NebulaRPCHolder]
+static public class NebulaAchievementManager
+{
+    static public readonly DataSaver AchievementDataSaver = new("Achievements");
+    static private readonly Dictionary<string, ProgressRecord> allRecords = [];
+    static private readonly Dictionary<string, INebulaAchievement> allNonrecords = [];
+    static private readonly Dictionary<long, INebulaAchievement> fastAchievements = [];
+    static private readonly StringDataEntry myTitleEntry = new("MyTitle", AchievementDataSaver, "-");
+    static private readonly LongDataEntry onlineEntry = new("Hash", AchievementDataSaver, 0);
+    static private readonly CustomAchievement[] customAchievements = [new("custom.0"), new("custom.1"), new("custom.2")];
+    static private readonly List<INebulaAchievement> allAchievements = [];
+    static private readonly List<GameStatsEntry> allStats = [];
+
+    static internal CustomAchievement GetCustomAchievement(int index) => customAchievements[index];
+
+    static public bool AmEquipping(INebulaAchievement ach) => myTitleEntry.Value == ach.Id;
+    static internal bool AmEquipping(CustomAchievement ach) => myTitleEntry.Value == ach.Id;
+    static public string[] MyTitleData { get
+        {
+            var title = myTitleEntry.Value;
+            if (title.StartsWith("custom."))
+            {
+                if (title == "custom.0") return customAchievements[0].ToArray();
+                if (title == "custom.1") return customAchievements[1].ToArray();
+                if (title == "custom.2") return customAchievements[2].ToArray();
+            }
+            return [title];
+        } 
+    }
+    internal class CustomAchievement
+    {
+        internal record TitleTip(INebulaAchievement achievement, string localizedTip);
+        private StringDataEntry prefixEntry, infixEntry1, infixEntry2, suffixEntry;
+        public string Id { get; }
+        public CustomAchievement(string id)
+        {
+            this.Id = id;
+            prefixEntry = new(id + ".prefix", AchievementDataSaver, "-");
+            infixEntry1 = new(id + ".infix1", AchievementDataSaver, "-");
+            infixEntry2 = new(id + ".infix2", AchievementDataSaver, "-");
+            suffixEntry = new(id + ".suffix", AchievementDataSaver, "-");
+        }
+
+        public string LocalizedTitle => 
+            (GetPrefix()?.localizedTip ?? "") + 
+            (GetInfix1()?.localizedTip ?? "") + 
+            (GetInfix2()?.localizedTip ?? "") + 
+            (GetSuffix()?.localizedTip ?? "");
+        public bool IsEmpty => LocalizedTitle.Length == 0;
+
+        public TitleTip? GetPrefix() => NebulaAchievementManager.GetAchievement(prefixEntry.Value, out var ach) ? new(ach, Language.Translate(ach.PrefixTranslationKey)) : null;
+        public TitleTip? GetInfix1() => NebulaAchievementManager.GetAchievement(infixEntry1.Value, out var ach) ? new(ach, Language.Translate(ach.InfixTranslationKey)) : null;
+        public TitleTip? GetInfix2() => NebulaAchievementManager.GetAchievement(infixEntry2.Value, out var ach) ? new(ach, Language.Translate(ach.InfixTranslationKey)) : null;
+        public TitleTip? GetSuffix() => NebulaAchievementManager.GetAchievement(suffixEntry.Value, out var ach) ? new(ach, Language.Translate(ach.SuffixTranslationKey)) : null;
+        public TitleTip? Get(int index) => index switch
+        {
+            0 => GetPrefix(),
+            1 => GetInfix1(),
+            2 => GetInfix2(),
+            _ => GetSuffix()
+        };
+        public string[] ToArray() => [prefixEntry.Value, infixEntry1.Value, infixEntry2.Value, suffixEntry.Value];
+
+        public IEnumerable<INebulaAchievement> Achievements => GetAchievements();
+        private IEnumerable<INebulaAchievement> GetAchievements()
+        {
+            if (NebulaAchievementManager.GetAchievement(prefixEntry.Value, out var ach0)) yield return ach0;
+            if (NebulaAchievementManager.GetAchievement(infixEntry1.Value, out var ach1)) yield return ach1;
+            if (NebulaAchievementManager.GetAchievement(infixEntry2.Value, out var ach2)) yield return ach2;
+            if (NebulaAchievementManager.GetAchievement(suffixEntry.Value, out var ach3)) yield return ach3;
+        }
+
+        public void Update(INebulaAchievement? prefix, INebulaAchievement? infix1, INebulaAchievement? infix2, INebulaAchievement? suffix)
+        {
+            prefixEntry.Value = prefix?.Id ?? "-";
+            infixEntry1.Value = infix1?.Id ?? "-";
+            infixEntry2.Value = infix2?.Id ?? "-";
+            suffixEntry.Value = suffix?.Id ?? "-";
+        }
+    }
+
+    static private INebulaAchievement[] LastFirstClearedArchive = [];
+    static private List<INebulaAchievement> ClearedAllOrderedArchive = [];
+    static public IEnumerable<INebulaAchievement> RecentlyCleared => ClearedAllOrderedArchive;
+    static private HashSet<INebulaAchievement> ClearedArchive = [];
+
+    static public IEnumerable<ProgressRecord> AllRecords => allRecords.Values;
+    static public IEnumerable<INebulaAchievement> AllAchievements => allAchievements;
+    static public IEnumerable<GameStatsEntry> AllStats => allStats;
+
+    static public bool TryGetAchievement(long hash, [MaybeNullWhen(false)] out INebulaAchievement? achievement) => fastAchievements.TryGetValue(hash, out achievement);
+    
+            
+
+    static public void SetOrToggleTitle(INebulaAchievement? achievement, bool canUnset = true)
+    {
+        if (achievement?.IsCleared ?? false)
+        {
+            if(!canUnset || myTitleEntry.Value != achievement.Id)
+                myTitleEntry.Value = achievement.Id;
+            else
+                myTitleEntry.Value = "-";
+        }
+        else
+            myTitleEntry.Value = "-";
+
+        if (AmongUsLLImpl.LocalPlayer.AsBoolFast() && !AmongUsLLImpl.ShipStatusInstance.AsBoolFast()) Certification.RpcShareAchievement.Invoke((AmongUsLLImpl.LocalPlayer.PlayerId, MyTitleData));
+    }
+
+    static internal void SetCustomTitle(CustomAchievement achievement, bool canUnset = true)
+    {
+        if(!canUnset || myTitleEntry.Value != achievement.Id)
+            myTitleEntry.Value = achievement.Id;
+        else
+            myTitleEntry.Value = "-";
+        if (AmongUsLLImpl.LocalPlayer.AsBoolFast() && !AmongUsLLImpl.ShipStatusInstance.AsBoolFast()) Certification.RpcShareAchievement.Invoke((AmongUsLLImpl.LocalPlayer.PlayerId, MyTitleData));
+    }
+
+    static public (int num,int max, int hidden)[] Aggregate(Predicate<INebulaAchievement>? predicate)
+    {
+        (int num, int max, int hidden)[] result = new (int num, int max, int hidden)[4];
+        for (int i = 0; i < result.Length; i++) result[i] = (0, 0, 0);
+        return AllAchievements.Where(a => !a.IsAddonTitle && (predicate?.Invoke(a) ?? true)).Aggregate(result,
+            (ac,achievement) => {
+                if (!achievement.IsHidden)
+                {
+                    ac[achievement.Trophy].max++;
+                    if (achievement.IsCleared) ac[achievement.Trophy].num++;
+                }
+                else
+                {
+                    ac[achievement.Trophy].hidden++;
+                }
+                return ac;
+            });
+    }
+
+    static IEnumerator Preprocess(NebulaPreprocessor preprocessor) {
+        yield return preprocessor.SetLoadingText("Loading Titles");
+
+        {
+            int num = 0;
+            PlayerState.AllDeadStates.Do(state =>
+            {
+                RegisterStats("stats.kill." + state.TranslateKey, GameStatsCategory.Kill, null, new LazyTextComponent(() => Language.Translate("stats.common.kill").Replace("%STATE%", state.Text)), -num);
+                RegisterStats("stats.death." + state.TranslateKey, GameStatsCategory.Death, null, new LazyTextComponent(() => Language.Translate("stats.common.death").Replace("%STATE%", state.Text)), -num);
+                num++;
+            });
+        }
+        GameEnd.AllEndConditions.Do(end =>
+        {
+            RegisterStats("stats.end.win." + end.ImmutableId, GameStatsCategory.Game, null, new LazyTextComponent(() => Language.Translate("stats.common.win").Replace("%END%", end.DisplayText.GetString().Replace("%EXTRA%", "").Color(end.Color))), 80);
+            RegisterStats("stats.end.lose." + end.ImmutableId, GameStatsCategory.Game, null, new LazyTextComponent(() => Language.Translate("stats.common.defeat").Replace("%END%", end.DisplayText.GetString().Replace("%EXTRA%", "").Color(end.Color))), 70);
+        });
+        RegisterStats("stats.gamePlay", GameStatsCategory.Game, null, null, 81);
+        RegisterStats("stats.plants.gain.normal", GameStatsCategory.Perks, null, null, 101);
+        RegisterStats("stats.plants.gain.warped", GameStatsCategory.Perks, null, null, 100);
+
+        Roles.Roles.AllRoles.Where(r => r.WithStatistics).Do(r =>
+        {
+            RegisterStats("stats.role." + r.InternalName + ".assigned", GameStatsCategory.Roles, r, new LazyTextComponent(() => Language.Translate("stats.role.common.assigned").Replace("%ROLE%", r.DisplayColoredName)), 101);
+            RegisterStats("stats.role." + r.InternalName + ".won", GameStatsCategory.Roles, r, new LazyTextComponent(() => Language.Translate("stats.role.common.won").Replace("%ROLE%", r.DisplayColoredName)), 100);
+        });
+        Roles.Roles.AllModifiers.Where(m => m.WithStatistics).Do(m =>
+        {
+            RegisterStats("stats.modifier." + m.InternalName + ".assigned", GameStatsCategory.Roles, m, new LazyTextComponent(() => Language.Translate("stats.modifier.common.assigned").Replace("%MODIFIER%", m.DisplayColoredName)), 101);
+            RegisterStats("stats.modifier." + m.InternalName + ".won", GameStatsCategory.Roles, m, new LazyTextComponent(() => Language.Translate("stats.modifier.common.won").Replace("%MODIFIER%", m.DisplayColoredName)), 100);
+        });
+        Roles.Roles.AllGhostRoles.Where(g => g.WithStatistics).Do(g =>
+        {
+            RegisterStats("stats.ghostRole." + g.InternalName + ".assigned", GameStatsCategory.Roles, g, new LazyTextComponent(() => Language.Translate("stats.ghostRole.common.assigned").Replace("%GHOSTROLE%", g.DisplayColoredName)), 101);
+            RegisterStats("stats.ghostRole." + g.InternalName + ".won", GameStatsCategory.Roles, g, new LazyTextComponent(() => Language.Translate("stats.ghostRole.common.won").Replace("%GHOSTROLE%", g.DisplayColoredName)), 100);
+        });
+        Roles.Roles.AllPerks.Do(p => RegisterStats("stats.perk." + p.Id + ".gain", GameStatsCategory.Perks, null, new LazyTextComponent(()=> Language.Translate("stats.perk.common.gain").Replace("%PERK%", p.PerkDefinition.DisplayName.Color(p.PerkDefinition.perkColor))), 50));
+
+        RegisterStats("stats.aeroGuesser.gamePlay", GameStatsCategory.AeroGuesser, null, null, 1);
+        RegisterStats("stats.aeroGuesser.totalScore", GameStatsCategory.AeroGuesser, null, null, 2);
+        RegisterStats("stats.aeroGuesser.perfectScore", GameStatsCategory.AeroGuesser, null, null, 3);
+
+        RegisterStats("stats.paintQuiz.gamePlay", GameStatsCategory.PaintQuiz, null, null, 1);
+        RegisterStats("stats.paintQuiz.gamePlay.host", GameStatsCategory.PaintQuiz, null, null, 2);
+        RegisterStats("stats.paintQuiz.totalScore.double", GameStatsCategory.PaintQuiz, null, null, 3, val => ((float)(val / 2)).ToString("0.#").Color(val < 0 ? new(1f, 0.7f, 0.7f) : VColor.White), true);
+        RegisterStats("stats.paintQuiz.score.give.0", GameStatsCategory.PaintQuiz, null, null, 7);
+        RegisterStats("stats.paintQuiz.score.give.1", GameStatsCategory.PaintQuiz, null, null, 8);
+        RegisterStats("stats.paintQuiz.score.give.2", GameStatsCategory.PaintQuiz, null, null, 6);
+        RegisterStats("stats.paintQuiz.score.give.3", GameStatsCategory.PaintQuiz, null, null, 5);
+        RegisterStats("stats.paintQuiz.score.give.4", GameStatsCategory.PaintQuiz, null, null, 4);
+        RegisterStats("stats.paintQuiz.score.get.0", GameStatsCategory.PaintQuiz, null, null, 12);
+        RegisterStats("stats.paintQuiz.score.get.1", GameStatsCategory.PaintQuiz, null, null, 13);
+        RegisterStats("stats.paintQuiz.score.get.2", GameStatsCategory.PaintQuiz, null, null, 11);
+        RegisterStats("stats.paintQuiz.score.get.3", GameStatsCategory.PaintQuiz, null, null, 10);
+        RegisterStats("stats.paintQuiz.score.get.4", GameStatsCategory.PaintQuiz, null, null, 9);
+
+
+        NebulaAchievementManager.SortStats();
+
+        //組み込みレコード
+        ProgressRecord[] killRecord = PlayerState.AllKillStates.Select(tag => new DisplayProgressRecord(null, "kill." + tag.TranslateKey, 1, tag.TranslateKey)).ToArray();
+        ProgressRecord[] deathRecord = PlayerState.AllDeadStates.Select(tag => new DisplayProgressRecord(null, "death." + tag.TranslateKey, 1, tag.TranslateKey)).ToArray();
+
+
+        //読み込み
+        using var reader = new StreamReader(NebulaResourceManager.NebulaNamespace.GetResource("Achievements.dat")!.AsStream()!);
+
+        List<ProgressRecord> recordsList = new();
+        List<AchievementType> types = new();
+        
+        while (true) {
+            types.Clear();
+
+            var line = reader.ReadLine();
+            if(line == null) break;
+
+            if (line.StartsWith("#")) continue;
+
+            var args = line.Split(',');
+
+            if (args.Length < 2) continue;
+
+            AcceptArguments(args);
+        }
+
+        void AcceptArguments(string[] args) {
+            bool clearOnce = false;
+            bool noHint = false;
+            bool secret = false;
+            bool isNotChallenge = false;
+            bool isRecord = false;
+            bool innersloth = false;
+            bool hasPrefix = false, hasPostfix = false, hasInfix = false;
+            string? reference = null;
+            string? defaultSource = null;
+            string? preAchievement = null;
+            int attention = 0;
+            IEnumerable<ProgressRecord>? records = recordsList;
+
+            IEnumerable<DefinedAssignable> relatedRoles = [];
+            Image? specifiedImage = null;
+
+            int rarity = int.Parse(args[1]);
+            int goal = 1;
+            for (int i = 2; i < args.Length - 1; i++)
+            {
+                var arg = args[i];
+
+                switch (arg)
+                {
+                    case "once":
+                        clearOnce = true;
+                        break;
+                    case "noHint":
+                        noHint = true;
+                        break;
+                    case "secret":
+                        secret = true;
+                        break;
+                    case "aeroGuesser":
+                        types.Add(AchievementType.AeroGuesser);
+                        break;
+                    case "paintQuiz":
+                        types.Add(AchievementType.PaintQuiz);
+                        break;
+                    case "seasonal":
+                        types.Add(AchievementType.Seasonal);
+                        break;
+                    case "costume":
+                        types.Add(AchievementType.Costume);
+                        break;
+                    case "perk":
+                        types.Add(AchievementType.Perk);
+                        break;
+                    case "nonChallenge":
+                        isNotChallenge = true;
+                        break;
+                    case "innersloth":
+                        innersloth = true;
+                        break;
+                    case string a when a.StartsWith("goal-"):
+                        goal = int.Parse(a.Substring(5));
+                        break;
+                    case "builtIn-kill":
+                        records = killRecord;
+                        break;
+                    case "builtIn-death":
+                        records = deathRecord;
+                        break;
+                    case "isRecord":
+                        isRecord = true;
+                        break;
+                    case "sp0":
+                        hasPrefix = true;
+                        break;
+                    case "sp1":
+                        hasInfix = true;
+                        break;
+                    case "sp2":
+                        hasPostfix = true;
+                        break;
+                    case string a when a.StartsWith("record-"):
+                        if (allRecords.TryGetValue(a.Substring(7), out var r))
+                            recordsList.Add(r);
+                        else
+                            NebulaLogger.Instance.Error("The record \"" + a.Substring(7) + "\" was not found.");
+                        break;
+                    case string a when a.StartsWith("sync-"):
+                        reference = a.Substring(5);
+                        break;
+                    case string a when a.StartsWith("default-"):
+                        defaultSource = a.Substring(8);
+                        break;
+                    case string a when a.StartsWith("a-"):
+                        if (int.TryParse(a.AsSpan(2), out var val)) attention = val;
+                        break;
+                    case string a when a.StartsWith("image-role-"):
+                        var roleName = a.Substring(11);
+                        specifiedImage = Roles.Roles.AllAssignables().FirstOrDefault(a => a.LocalizedName == roleName)?.ConfigurationHolder?.Illustration;
+                        break;
+                    case string a when a.StartsWith("image-combi-"):
+                        var combiName = a.Substring(12);
+                        specifiedImage = CombiImageInfo.FastImages.TryGetValue(combiName.HeadUpper(), out var combiInfo) ? combiInfo.Image : null;
+                        break;
+                    case string a when a.StartsWith("image-"):
+                        specifiedImage = new NebulaSpriteLoader("Assets/NebulaAssets/Sprites/Achievements/" + a.Substring(6) + ".png");
+                        break;
+                    case string a when a.StartsWith("collab-"):
+                        if (AchievementType.TryGetCollabType(a.Substring(7), out var aType)) types.Add(aType);
+                        break;
+                    case string a when a.StartsWith("pre-"):
+                        preAchievement = a.Substring(4);
+                        break;
+                }
+            }
+
+            if (secret) types.Add(AchievementType.Secret);
+
+            var nameSplitted = args[0].Split('.');
+            if (nameSplitted.Length > 1)
+            {
+                if (nameSplitted[0] == "combination" && nameSplitted.Length > 2 && int.TryParse(nameSplitted[1], out var num) && nameSplitted.Length >= 2 + num)
+                {
+                    relatedRoles = Helpers.Sequential(num).Select(i =>
+                    {
+                        var roleName = nameSplitted[2 + i].Replace('-', '.');
+                        return Roles.Roles.AllAssignables().FirstOrDefault(a => a.LocalizedName == roleName);
+                    }).Where(r => r != null).ToArray()!;
+                    if (rarity == 2 && !isNotChallenge) types.Add(AchievementType.Challenge);
+                }
+                else
+                {
+                    nameSplitted[0] = nameSplitted[0].Replace('-', '.');
+                    var cand = Roles.Roles.AllAssignables().FirstOrDefault(a => a.LocalizedName == nameSplitted[0]);
+                    if (cand != null)
+                    {
+                        relatedRoles = [cand];
+                        if (rarity == 2 && !isNotChallenge)
+                        {
+                            types.Add(AchievementType.Challenge);
+                            if (attention < 80) attention = 80;
+                        }
+                    }
+                }
+            }
+
+            if (innersloth)
+                new InnerslothAchievement(noHint, args[0], specifiedImage) { HasInfix = hasInfix, HasPrefix = hasPrefix, HasSuffix = hasPostfix };
+            else if (isRecord)
+                new DisplayProgressRecord(null, args[0], goal, "record." + args[0], defaultSource);
+            else if (!records.IsEmpty())
+                new CompleteAchievement(null, records.ToArray(), secret, noHint, args[0], relatedRoles, types.ToArray(), rarity, attention, specifiedImage, preAchievement) { HasInfix = hasInfix, HasPrefix = hasPrefix, HasSuffix = hasPostfix };
+            else if (reference != null)
+                new SumUpReferenceAchievement(null, secret, args[0], reference, goal, relatedRoles, types.ToArray(), rarity, attention, specifiedImage, preAchievement) { HasInfix = hasInfix, HasPrefix = hasPrefix, HasSuffix = hasPostfix };
+            else if (goal > 1)
+                new SumUpAchievement(null, secret, noHint, args[0], goal, relatedRoles, types.ToArray(), rarity, attention, specifiedImage, preAchievement) { HasInfix = hasInfix, HasPrefix = hasPrefix, HasSuffix = hasPostfix };
+            else
+                new StandardAchievement(clearOnce, secret, noHint, args[0], goal, relatedRoles, types.ToArray(), rarity, attention, specifiedImage, preAchievement) { HasInfix = hasInfix, HasPrefix = hasPrefix, HasSuffix = hasPostfix };
+
+            if (recordsList.Count > 0) recordsList.Clear();
+        }
+
+        TitleRegisterImpl.Instance.BuildAll();
+
+        for(int i = 0;i < allAchievements.Count;i++)
+        {
+            allAchievements[i].NumId = i;
+            allAchievements[i].CheckClear();
+        }
+
+        //進捗を記録する。 
+        SendOnlineProgress(true).StartOnProcess();
+        GetOnlineGlobalProgress().StartOnProcess();
+
+
+    }
+
+    static public INebulaAchievement? GetFromNumId(int id) => allAchievements!.Get(id, null);
+    
+    static private void RegisterAchievement(INebulaAchievement ach)
+    {
+        allAchievements.Add(ach);
+
+        long hash = ach.Id.ComputeConstantLongHash();
+        if (!fastAchievements.TryAdd(hash, ach)) NebulaLogger.Instance.Warning($"Duplicated Achievement! (Hash: {hash}, Achievement: {ach.Id} & {fastAchievements[hash].Id})");
+    }
+    static internal GameStatsEntry RegisterStats(string id, GameStatsCategory category, DefinedAssignable? relatedAssignable, TextComponent? displayName = null, int innerPriority = 0, Func<int, string>? valueDecorator = null, bool allowMinus = false)
+    {
+        var record = new ProgressRecord(null, id, 800000000, false) {  AllowMinus = allowMinus };
+        var statsEntry = new GameStatsEntryImpl(record, category, relatedAssignable, displayName, innerPriority, valueDecorator);
+        allStats.Add(statsEntry);
+        return statsEntry;
+    }
+    static internal void SortStats()
+    {
+        static string AssignableToStr(DefinedAssignable? assignable)
+        {
+            if (assignable == null) return "4";
+            if (assignable is DefinedRole role) return "1." + (int)role.Category + "." + role.InternalName;
+            if (assignable is DefinedModifier) return "2." + assignable.InternalName;
+            if (assignable is DefinedGhostRole) return "3." + assignable.InternalName;
+            return "5";
+        }
+        allStats.Sort((stats1, stats2) =>
+        {
+            if (stats1.Category != stats2.Category) return (int)stats1.Category - (int)stats2.Category;
+            if (stats1.RelatedAssignable != stats2.RelatedAssignable)
+            {
+                int comp = AssignableToStr(stats1.RelatedAssignable).CompareTo(AssignableToStr(stats2.RelatedAssignable));
+                if (comp != 0) return comp;
+            }
+            if (stats1.InnerPriority != stats2.InnerPriority) return stats2.InnerPriority - stats1.InnerPriority;
+            return stats1.Id.CompareTo(stats2.Id);
+        });
+    }
+    static internal void RegisterRecord(ProgressRecord progressRecord,string id)
+    {
+        allRecords[id] = progressRecord;
+        if (progressRecord is INebulaAchievement ach) RegisterAchievement(ach);
+    }
+
+    static internal void RegisterNonrecord(INebulaAchievement achievement, string id)
+    {
+        allNonrecords[id] = achievement;
+        RegisterAchievement(achievement);
+    }
+
+    static public bool GetRecord(string id, [MaybeNullWhen(false)] out ProgressRecord record)
+    {
+        return allRecords.TryGetValue(id, out record);
+    }
+
+    static public bool GetAchievement(string id, [MaybeNullWhen(false)] out INebulaAchievement achievement)
+    {
+        achievement = (allRecords.TryGetValue(id, out var rec) && rec is AbstractAchievement ach) ? ach : null;
+        if (achievement == null) allNonrecords.TryGetValue(id, out achievement);
+        return achievement != null;
+    }
+
+    static public void ClearHistory()
+    {
+        LastFirstClearedArchive = [];
+    }
+    static public (INebulaAchievement achievement, AbstractAchievement.ClearDisplayState clearState)[] UniteAll()
+    {
+        List<(INebulaAchievement achievement, AbstractAchievement.ClearDisplayState clearState)> result  =[];
+
+        bool mayChangeClearState = false;
+
+        //トークンによるクリア
+        foreach (var token in NebulaGameManager.Instance!.AllAchievementTokens)
+        {
+            var state = token.UniteTo();
+            if (state == AbstractAchievement.ClearDisplayState.None) continue;
+            mayChangeClearState |= state == AbstractAchievement.ClearDisplayState.FirstClear;
+
+            //実績のみ結果に表示(他実績用のレコードは対象外)
+            if(token.Achievement is AbstractAchievement ach && result.All(a => a.achievement != ach)) result.Add(new(ach, state));
+        }
+
+        //他レコードの更新によるクリア
+        foreach(var achievement in AllAchievements)
+        {
+            var state = achievement.CheckClear();
+            if (state == AbstractAchievement.ClearDisplayState.None) continue;
+            mayChangeClearState |= state == AbstractAchievement.ClearDisplayState.FirstClear;
+
+            result.Add(new(achievement, state));
+        }
+
+        result.Sort((val1, val2) => val1.clearState - val2.clearState);//昇順
+
+        //履歴への追加
+        var lastFirstCleared = result.Where(r => r.clearState == ClearDisplayState.FirstClear && r.achievement.Attention >= 50).Select(r => r.achievement).ToArray();
+        LastFirstClearedArchive = lastFirstCleared;
+        result.Where(r => r.achievement.Attention >= 80).Do(r => ClearedArchive.Add(r.achievement));
+
+        //無条件に追加するクリア履歴
+        ClearedAllOrderedArchive.RemoveAll(a => result.Any(r => r.achievement == a));
+        ClearedAllOrderedArchive.InsertRange(0, result.Select(r => r.achievement));
+        if (ClearedAllOrderedArchive.Count > 10) ClearedAllOrderedArchive.RemoveRange(10, ClearedAllOrderedArchive.Count - 10);
+
+        if (mayChangeClearState) SendOnlineProgress(false).StartOnProcess();
+
+        //重複を許さない
+        return result.DistinctBy(a=>a.achievement).ToArray();
+    }
+
+    static XOnlyDividedSpriteLoader trophySprite = XOnlyDividedSpriteLoader.FromResource("Nebula.Resources.Trophy.png", 220f, 5);
+    static public bool HasAnyAchievementResult { get; private set; } = false;
+    static public IEnumerator CoShowAchievements(MonoBehaviour coroutineHolder, params (INebulaAchievement achievement, AbstractAchievement.ClearDisplayState clearState)[] achievements)
+    {
+        HasAnyAchievementResult = true;
+
+        int num = 0;
+        (GameObject holder, GameObject animator, GameObject body, SpriteRenderer white) CreateBillboard(INebulaAchievement achievement, AbstractAchievement.ClearDisplayState clearState)
+        {
+            var billboard = UnityHelper.CreateObject("Billboard", null, new Vector3(3.85f, 1.75f - (float)num * 0.6f, -100f));
+            var animator = UnityHelper.CreateObject("Animator", billboard.transform, new Vector3(0f, 0f, 0f));
+            var body = UnityHelper.CreateObject("Body", animator.transform, new Vector3(0f, 0f, 0f));
+            var background = UnityHelper.CreateObject<SpriteRenderer>("Background", body.transform, new Vector3(0f,0f,1f));
+            var white = UnityHelper.CreateObject<SpriteRenderer>("White", animator.transform, new Vector3(0f, 0f, -2f));
+            var icon = UnityHelper.CreateObject<SpriteRenderer>("Icon", body.transform, new Vector3(-0.95f, 0f, 0f));
+
+            background.color = clearState == AbstractAchievement.ClearDisplayState.FirstClear ? Color.yellow : new UnityEngine.Color(0.7f, 0.7f, 0.7f);
+
+            billboard.AddComponent<SortingGroup>();
+
+            new MetaWidgetOld.Text(new(Nebula.Utilities.TextAttributeOld.BoldAttr) { Font = VanillaAsset.BrookFont, Size = new(2f, 0.4f), FontSize = 1.16f, FontMaxSize = 1.16f, FontMinSize  = 1.16f }) { MyText = achievement.GetHeaderComponent() }.Generate(body, new Vector2(0.25f, 0.13f), out _);
+            new MetaWidgetOld.Text(new(Nebula.Utilities.TextAttributeOld.NormalAttr) { Font = VanillaAsset.BrookFont, Size = new(2f, 0.4f) }) { MyText = achievement.GetTitleComponent(null) }.Generate(body, new Vector2(0.25f, -0.06f), out _);
+
+            foreach (var renderer in new SpriteRenderer[] { background, white }) {
+                renderer.sprite = VanillaAsset.TextButtonSprite;
+                renderer.drawMode = SpriteDrawMode.Sliced;
+                renderer.tileMode = SpriteTileMode.Continuous;
+                renderer.size = new Vector2(2.6f, 0.55f);
+            }
+            num++;
+
+            var collider = billboard.AddComponent<BoxCollider2D>();
+            collider.isTrigger = true;
+            collider.size = new Vector2(2.6f, 0.55f);
+            var button = billboard.SetUpButton();
+            button.OnMouseOver.AddListener(() => NebulaManager.Instance.SetHelpWidget(button, achievement.GetOverlayWidget(true, false, true, false, true, true, true)));
+            button.OnMouseOut.AddListener(() => NebulaManager.Instance.HideHelpWidgetIf(button));
+
+#if PC
+            button.OnClick.AddListener(() => {
+                NebulaAchievementManager.SetOrToggleTitle(achievement);
+                button.OnMouseOut.Invoke();
+                button.OnMouseOver.Invoke();
+            });
+#endif
+
+            white.material.shader = NebulaAsset.WhiteShader;
+            icon.sprite = trophySprite.GetSprite(achievement.Trophy);
+
+            return (billboard, animator, body, white);
+        }
+
+        IEnumerator CoShowFirstClear((GameObject holder, GameObject animator, GameObject body, SpriteRenderer white) billboard)
+        {
+            IEnumerator Shake(Transform target, float duration, float halfWidth)
+            {
+                Vector3 origin = target.localPosition;
+                for (float timer = 0f; timer < duration; timer += Time.deltaTime)
+                {
+                    float num = timer / duration;
+                    Vector3 vector = UnityEngine.Random.insideUnitCircle * halfWidth;
+                    target.localPosition = origin + vector;
+                    yield return null;
+                }
+                target.localPosition = origin;
+                yield break;
+            }
+
+            billboard.body.SetActive(false);
+            billboard.holder.transform.localScale = Vector3.one * 1.1f;
+
+            var billboardAnimTransform = billboard.animator.transform;
+            coroutineHolder.StartCoroutine(ManagedEffects.Sequence(
+                Shake(billboardAnimTransform, 0.1f, 0.01f),
+                Shake(billboardAnimTransform, 0.2f, 0.02f),
+                Shake(billboardAnimTransform, 0.3f, 0.03f),
+                Shake(billboardAnimTransform, 0.3f, 0.04f)
+                ).WrapToIl2Cpp());
+
+            float t;
+            
+            t = 0f;
+            while(t < 0.9f)
+            {
+                billboard.holder.transform.localScale = Vector3.one * (1.1f + (t / 0.9f * 0.2f));
+                billboard.white.color = new Color(1f, 1f, 1f, t / 0.9f);
+                t += Time.deltaTime;
+                yield return null;
+            }
+
+            billboard.body.SetActive(true);
+
+            float p = 1f;
+            while (p > 0.0001f)
+            {
+                billboard.holder.transform.localScale = Vector3.one * (1f + (p * 0.2f));
+                billboard.white.color = new Color(1f, 1f, 1f, p);
+                p -= p * 5f * Time.deltaTime; 
+                yield return null;
+            }
+
+            billboard.white.gameObject.SetActive(false);
+            billboard.holder.transform.localScale = Vector3.one;
+        }
+
+        IEnumerator CoShowClear((GameObject holder, GameObject animator, GameObject body, SpriteRenderer white) billboard)
+        {
+            billboard.white.gameObject.SetActive(false);
+            float p = 3f;
+            while (p > 0.0001f)
+            {
+                billboard.animator.transform.localPosition = new Vector3(p, 0f, 0f);
+                p -= p * 8f * Time.deltaTime;
+                yield return null;
+            }
+            billboard.animator.transform.localPosition = Vector3.zero;
+        }
+
+
+        yield return new WaitForSeconds(1.5f);
+
+        foreach (var ach in achievements)
+        {
+            var billboard = CreateBillboard(ach.achievement,ach.clearState);
+
+            if (ach.clearState == AbstractAchievement.ClearDisplayState.FirstClear)
+            {
+                coroutineHolder.StartCoroutine(CoShowFirstClear(billboard).WrapToIl2Cpp());
+                yield return new WaitForSeconds(1.05f);
+            }
+            else
+            {
+                coroutineHolder.StartCoroutine(CoShowClear(billboard).WrapToIl2Cpp());
+                yield return new WaitForSeconds(0.45f);
+            }
+            yield return null;
+        }
+
+        yield break;
+    }
+
+    static public readonly RemoteProcess<(string achievement, GamePlayer player)> RpcClearAchievement = new("ClearAchievement", (message, _) =>
+    {
+        if (message.player.AmOwner) new StaticAchievementToken(message.achievement);
+    });
+    static public RemoteProcess<(string achievement, GamePlayer player)> RpcProgressStats => RpcClearAchievement;
+
+    static public void SendLastClearedAchievements()
+    {
+        if(LastFirstClearedArchive.Length > 0) RpcShareClearedAchievement.Invoke((AmongUsLLImpl.LocalPlayer.name, LastFirstClearedArchive));
+    }
+
+    static public void SendPickedUpAchievements()
+    {
+        if (ClearedArchive.Count > 0) RpcSharePickedUpAchievement.Invoke((AmongUsLLImpl.LocalPlayer.name, ClearedArchive.ToArray()));
+    }
+
+    static public readonly RemoteProcess<(string playerName, INebulaAchievement[] achievements)> RpcShareClearedAchievement = new("ShareClearedAchievement", (message, _) =>
+    {
+        ModSingleton<ShowUp>.Instance?.PutLastClearedAchievements(message.playerName, message.achievements);
+    });
+
+    public static readonly RemoteProcess<(string playerName, INebulaAchievement[] achievements)> RpcSharePickedUpAchievement = new("SharePickedUpAchievement", (message, _) =>
+    {
+        ModSingleton<ShowUp>.Instance?.PutPickedUpAchievements(message.playerName, message.achievements);
+    });
+
+
+    /// <summary>
+    /// 称号の獲得状況を送信します。
+    /// </summary>
+    /// <param name="initialize"></param>
+    static private IEnumerator SendOnlineProgress(bool initialize)
+    {
+        if (DebugTools.DebugMode) yield break;
+
+        while (!EOSManager.InstanceExists || EOSManager.Instance.friendCode == null || EOSManager.Instance.friendCode.Length == 0) yield return null;
+
+
+        var text = "[" + string.Join(",", NebulaAchievementManager.AllAchievements.Where(a => a.IsCleared).Select(a => "\"" + a.Id + "\"")) + "]";
+        var currentHash = text.ComputeConstantLongHash();
+        if (currentHash != onlineEntry.Value)
+        {
+            yield return NebulaWebRequest.CoPost(NebulaWebRequest.GetNoSAPI("titles/push/"), "{" + $"\"titles\":{text},\"friendCode\":\"{EOSManager.Instance.FriendCode}\"" + "}", true, _ =>
+            {
+                onlineEntry.Value = currentHash;
+            });
+        }
+    }
+
+    static public bool GotOnlineProgress { get; private set; } = false;
+    static private IEnumerator GetOnlineGlobalProgress()
+    {
+        Virial.Compat.Wrapping<Dictionary<string, float>> result = new(null);
+        yield return RestAPIHelpers.CoGetRequest(NebulaWebRequest.GetNoSAPI("titles/get/"), [], result);
+
+        if ((result.Value?.Count ?? 0) > 0)
+        {
+            foreach (var entry in result.Value!)
+            {
+                if (NebulaAchievementManager.GetAchievement(entry.Key, out var achievement)) achievement.GlobalProgress = entry.Value;
+            }
+            GotOnlineProgress = true;
+        }
+    }
+}
+
+file class GameStatsEntryImpl : GameStatsEntry
+{
+    private ProgressRecord myRecord;
+    private GameStatsCategory category;
+    private DefinedAssignable? relatedAssignable;
+    private TextComponent? displayName;
+    private Func<int, string>? valueDecorator = null;
+    private int innerPriority = 0;
+    public GameStatsEntryImpl(ProgressRecord record, GameStatsCategory category, DefinedAssignable? relatedAssignable, TextComponent? displayName, int innerPriority, Func<int, string>? valueDecorator = null)
+    {
+        this.myRecord = record;
+        this.category = category;
+        this.relatedAssignable = relatedAssignable;
+        this.displayName = displayName;
+        this.innerPriority = innerPriority;
+        this.valueDecorator = valueDecorator;
+    }
+    string GameStatsEntry.Id => myRecord.Id;
+    TextComponent GameStatsEntry.DisplayName => displayName ?? GUI.API.LocalizedTextComponent(myRecord.Id);
+    int GameStatsEntry.Progress => myRecord.Progress;
+    GameStatsCategory GameStatsEntry.Category => category;
+    DefinedAssignable? GameStatsEntry.RelatedAssignable => relatedAssignable;
+    int GameStatsEntry.InnerPriority => innerPriority;
+    string GameStatsEntry.DisplayValue => valueDecorator?.Invoke(myRecord.Progress) ?? myRecord.Progress.ToString("N0");
+}
+

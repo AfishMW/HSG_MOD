@@ -1,0 +1,139 @@
+﻿using Nebula.Utilities;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading.Tasks;
+using UnityEngine.UIElements;
+using Virial.Media;
+
+namespace Nebula.Modules.Cosmetics;
+
+
+internal class RingMenu
+{
+    public record RingMenuElement(GUIWidgetSupplier Widget, Action OnClick, GUIWidgetSupplier? Overlay = null);
+    GameObject obj = null!;
+    SpriteRenderer ringRenderer = null!;
+    PassiveButton button = null!;
+    Func<bool> showWhile = null!;
+    RingMenuElement[] elements = null!;
+    (GameObject obj, VVector2 origScale)[] generated = null!;
+    int currentSelection = -1;
+
+    public RingMenu()
+    {
+
+    }
+
+    static private Image backgroundSprite = SpriteLoader.FromResource("Nebula.Resources.RingMenu.png", 100f);
+
+
+    public void Show(RingMenuElement[] elements, Func<bool> showWhile, VVector2? menuPosition)
+    {
+        if (obj.AsBoolFast()) UnityEngine.Object.Destroy(obj);
+
+        obj = UnityHelper.CreateObject("RingMenu", HudManager.Instance.transform, menuPosition?.AsUnityVector3() ?? Vector3.zero);
+        obj.transform.SetLocalZ(-780f);
+
+        generated = new (GameObject obj, VVector2 origScale)[elements.Length];
+        for (int i = 0; i < elements.Length; i++)
+        {
+            var element = elements[i];
+            var widget = element.Widget.Invoke().Instantiate(new(2f, 2f), out _);
+            if (widget != null)
+            {
+                widget.transform.SetParent(obj.transform);
+                widget.transform.localPosition = Vector3.right.RotateZ(-180f + (0.5f + i) * 360f / elements.Length) * 0.68f;
+
+                generated[i] = (widget, widget.transform.localScale);
+
+                widget.transform.localScale *= 0.9f;
+            }
+        }
+
+        var collider = obj.AddComponent<CircleCollider2D>();
+        collider.radius = 2.2f;
+        collider.isTrigger = true;
+        ringRenderer = UnityHelper.CreateObject<SpriteRenderer>("Background", obj.transform, new Vector3(0f, 0f, 0.1f));
+        ringRenderer.sprite = backgroundSprite.GetSprite();
+        ringRenderer.material.shader = NebulaAsset.RingMenuShader;
+        ringRenderer.material.SetColor("_Color1", Color.green.AlphaMultiplied(0.5f));
+        ringRenderer.material.SetColor("_Color2", new Color(0.2f, 0.2f, 0.2f, 0.7f));
+        ringRenderer.material.SetFloat("_Guage", 0f);
+        button = obj.SetUpButton(false);
+        button.OnClick.AddListener(() =>
+        {
+            if (currentSelection != -1)
+            {
+                VanillaAsset.PlaySelectSE();
+
+                elements[currentSelection].OnClick.Invoke();
+                UnityEngine.Object.Destroy(obj);
+                obj = null!;
+                showWhile = null!;
+            }
+        });
+        this.showWhile = showWhile;
+        this.elements = elements;
+        currentSelection = -1;
+    }
+
+
+    public void Update()
+    {
+        if (obj.AsBoolFast())
+        {
+            if (!(showWhile?.Invoke() ?? true))
+            {
+                if (currentSelection != -1)
+                {
+                    VanillaAsset.PlaySelectSE();
+                    elements[currentSelection].OnClick.Invoke();
+                }
+
+                UnityEngine.Object.Destroy(obj);
+                obj = null!;
+                showWhile = null!;
+            }
+            else
+            {
+                var pos = UnityHelper.ScreenToLocalPoint(Input.mousePosition, LayerExpansion.GetUILayer(), obj.transform);
+                pos.z = 0f;
+                if (pos.magnitude > 0.3f && PassiveButtonManager.Instance.currentOver.AsBoolFast(out var currentOver) && currentOver.GetInstanceIdFast() == button.GetInstanceIdFast())
+                {
+                    int length = elements.Length;
+                    var nextSelection = (int)((float)(Mathn.Atan2(pos.y, pos.x) + Mathn.PI) / (Mathn.PI * 2.0) * length);
+                    if (nextSelection != currentSelection)
+                    {
+                        var overlay = elements.Get(nextSelection, null)?.Overlay;
+                        if (overlay != null)
+                            NebulaManager.Instance.SetHelpWidget(button, overlay.Invoke());
+                        else
+                            NebulaManager.Instance.HideHelpWidgetIf(button);
+
+                            ringRenderer.material.SetFloat("_Guage", 1f / length);
+                        var unit = 360f / length;
+                        ringRenderer.transform.localEulerAngles = new(0f, 0f, -90f - 180f + unit * (nextSelection + 1));
+                        currentSelection = nextSelection;
+
+                        VanillaAsset.PlayHoverSE();
+                    }
+                }
+                else if (currentSelection != -1)
+                {
+                    NebulaManager.Instance.HideHelpWidgetIf(button);
+                    currentSelection = -1;
+                    ringRenderer.material.SetFloat("_Guage", 0f);
+                }
+
+                for (int i = 0; i < generated.Length; i++)
+                {
+                    generated[i].obj.transform.localScale = (generated[i].origScale * (currentSelection == i ? 1.4f : 0.9f)).AsVector3(1f);
+                    generated[i].obj.transform.SetLocalZ(currentSelection == i ? -0.5f : -0.05f);
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,10 @@
+services:
+  interstellar-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    command: ["0.0.0.0:8000"]

@@ -1,0 +1,470 @@
+﻿using Il2CppInterop.Runtime.Injection;
+using Nebula.Game.Statistics;
+using TMPro;
+using Virial;
+using Virial.Configuration;
+
+namespace Nebula.Behavior;
+
+public class NebulaPreSpawnLocation
+{
+    static public string[] MapName = new string[] { "Skeld", "Mira", "Polus", "Invalid", "Airship", "Fungle", "Submerged" };
+
+    static public NebulaPreSpawnLocation[][] Locations = [
+        [ 
+            new("Admin", new Vector2(2.9753f, -7.4595f), "panel_enterID01"),
+            new("Cafeteria", new Vector2(-0.8721f, 3.6115f), "FootstepMetal07"),
+            new("Comms", new Vector2(4.5986f, -15.618f)),
+            new("Electrical", new Vector2(-7.6091f, -8.7664f), "AMB_Electricshock1"),
+            new("LifeSupport", new Vector2(6.5236f, -3.5375f)),
+            new("LowerEngine", new Vector2(-17.1282f, -13.2787f), "rollover_engine"),
+            new("MedBay", new Vector2(-8.6636f, -4.4547f), "panel_medtext"), 
+            new("Navigation", new Vector2(16.6989f, -4.7736f)),
+            new("Reactor", new Vector2(-20.9127f, -5.5454f), "panel_reactorhand"),
+            new("Security", new Vector2(-13.2544f, -4.1371f), "utility_security_close"),
+            new("Shields", new Vector2(9.1997f, -12.3562f)),
+            new("Storage", new Vector2(-2.3901f, -15.1296f), "panel_O2Drop"),
+            new("UpperEngine", new Vector2(-17.6972f, -0.9157f), "rollover_engine"),
+            new("Weapons", new Vector2(9.5354f, 1.3911f), "panel_weaponfire")
+        ],
+        [
+            new("Admin", new Vector2(19.4462f, 19.0366f), "panel_enterID01"),
+            new("Balcony", new Vector2(26.7091f, -1.9142f), "Door_balconyOpen"),
+            new("Cafeteria", new Vector2(25.433f, 2.553f), "panel_emergencyButton"), 
+            new("Comms", new Vector2(14.4909f, 4.0153f), "panel_enterIDBad"),
+            new("Decontamination", new Vector2(6.1333f, 6.27f), "Decontamination_Button"),
+            new("Greenhouse", new Vector2(17.857f, 23.5425f), "panel_storagePlantFinish03"),
+            new("Laboratory", new Vector2(9.0136f, 12.081f), "task_samples_correct"),
+            new("Launchpad", new Vector2(-4.4f, 2.1969f), "panel_beverageLand"),
+            new("LockerRoom", new Vector2(9.0862f, 1.3112f), "panel_safespin"),
+            new("MedBay", new Vector2(15.3094f, -0.4085f), "panel_medtext"), 
+            new("Office", new Vector2(14.7004f, 20.0933f), "FootstepMetal07"),
+            new("Reactor", new Vector2(2.4809f, 13.2443f)),
+            new("Rendezvous", new Vector2(17.8176f, 11.3095f)),
+            new("Storage", new Vector2(19.9159f, 4.718f), "panel_storageGrabcan")
+        ],
+        [
+            new("Abditory", new Vector2(25.7226f, -12.8779f), "ventMoveGround2"),
+            new("Admin", new Vector2(21.1384f, -22.7731f), "panel_enterID01"),
+            new("Drill", new Vector2(27.5518f, -7.3609f)),
+            new("Dropship", new Vector2(16.6f, -1.5f), "rollover_brig"),
+            new("Ejection", new Vector2(32.1547f, -15.7529f)),
+            new("Electrical", new Vector2(7.4f, -9.6f), "AMB_Electricshock1"),
+            new("Laboratory", new Vector2(34.8f, -6.0f), "panel_weatherSwitch"), 
+            new("LifeSupport", new Vector2(3.5f, -21.5f), "panel_storagePlantFinish03"),
+            new("Office", new Vector2(19.5f, -17.6f), "FootstepMetal07"),
+            new("Security", new Vector2(3.0694f, -11.9939f), "utility_security_close"),
+            new("Snowdrift", new Vector2(12.918f, -13.0296f), "FootstepSnow05"),
+            new("Specimens", new Vector2(36.5f, -21.2f), "panel_specimenOpen"),
+            new("Storage", new Vector2(20.6f, -11.7f), "panel_O2Drop"),
+            new("Weapons", new Vector2(12.2f, -23.3f), "panel_weaponfire")
+        ],
+        [],
+        [
+            new("Brig",0,140,new(-0.5f,8.5f)),
+            new("Engine",1,180,new(0f,-1f)),
+            new("Hallway",2,226, new(15.5f,0f)),
+            new("Kitchen",3,180,new(-7f,-11.5f)),
+            new("Record",4,173,new(19.8f,10.3f)),
+            new("Storage",5,188,new(33.5f,0f)),
+            new("Armory", new Vector2(-10.141f, -6.3739f), "panel_gungrabrifle"),
+            new("Cockpit", new Vector2(-23.5643f, -1.4405f), "task_crank_turn2"),
+            new("Comms", new Vector2(-12.9433f, 1.4259f), "panel_enterIDBad"),
+            new("Electrical", new Vector2(16.3201f, -8.808f), "AMB_Electricshock4"),
+            new("GapRoom", new Vector2(11.9727f, 8.6011f), "task_weights_fail"),
+            new("Lounge", new Vector2(24.8702f, 6.459f)),
+            new("Medical", new Vector2(28.4471f, -5.8789f), "panel_medtext"), 
+            new("MeetingRoom", new Vector2(11.1469f, 16.0138f), "panel_cafeteria_leverpull"),
+            new("Security", new Vector2(7.0693f, -11.6312f), "utility_security_close"),
+            new("Shower", new Vector2(24.0106f, 2.0266f), "panel_towelland"),
+            new("Toilet", new Vector2(32.3184f, 7.0118f), "panel_toiletFlush"),
+            new("Vault", new Vector2(-8.789f, 8.049f)),
+            new("ViewingDeck", new Vector2(-13.9798f, -15.8316f), "panel_beverageLand")
+        ],
+        [
+            new("Campfire", new Vector2(-9.79f, 3.0949f), "task_roast_burnt"), 
+            new("Comms", new Vector2(24.0248f, 13.625f), "panel_enterIDBad"),
+            new("Laboratory", new Vector2(-5.2573f, -9.1099f), "task_samples_pickupmush"), 
+            new("Greenhouse", new Vector2(9.3125f, -11.8004f), "panel_storageWaterplant"),
+            new("MeetingRoom", new Vector2(-1.2941f, -1.5503f), "panel_safespin"), 
+            new("Cafeteria", new Vector2(-16.2874f, 7.1993f), "FootstepSand01"),
+            new("Dropship", new Vector2(-9.4613f, 13.3676f), "rollover_brig"),
+            new("SplashZone", new Vector2(-16.9936f, -0.2838f), "task_sandcastle_grab"),
+            new("Kitchen", new Vector2(-17.0477f, -7.7723f), "task_fish_onhook"),
+            new("Storage", new Vector2(1.2842f, 4.2345f), "rollover_storage"),
+            new("UpperEngine", new Vector2(21.9515f, 2.8107f), "rollover_engine"),
+            new("MiningPit", new Vector2(11.9868f, 9.4421f), "task_mine_rockrelease2"),
+            new("Lookout", new Vector2(7.1789f, 1.5662f), "utility_security_close"),
+            new("Reactor", new Vector2(21.9125f, -7.0967f), "panel_reactorhand"),
+            new("Jungle", new Vector2[]{
+                new Vector2(-0.3278f, -10.797f),//グリーンハウス・ラボ間
+                new Vector2(18.44f, -12.3383f),//リアクター左下
+                new Vector2(10.6214f, -14.7586f),//グリーンハウス下
+                new Vector2(3.8322f, -6.0519f),//グリーンハウス左上
+                new Vector2(-4.2053f, -14.8184f),//ラボ下
+                new Vector2(15.2272f, -6.1833f)//リアクター左
+                }, "sporemushroom_respawn")
+        ],
+        []
+        ];
+
+    //task_crank_turn2
+    //panel_admin_cardaccept
+    //panel_sortsampleDrop04
+
+    public string LocationName { get; private init; }
+    public string GetDisplayName(byte mapId)
+    {
+        return "location." + MapName[mapId].HeadLower() + "." + LocationName.HeadLower();
+    }
+    public string? AudioClip { get; private init; }
+    private AudioClip? clipCache = null;
+    public AudioClip? GetClip()
+    {
+        if (AudioClip == null) return null;
+        clipCache ??= VanillaAsset.GetAudioClip(AudioClip);
+        return clipCache;
+    }
+    public Vector2[]? Positions { get; set; }
+    public Vector2? Position => Positions != null ? Positions[System.Random.Shared.Next(Positions.Length)] : null;
+    public Vector2? FixedPosition => Positions != null ? Positions[0] : null;
+    public int? VanillaIndex { get; private init; }
+    public string AssetImagePath(byte mapId) => "assets/SpawnCandidates/" + MapName[mapId] + "/" + LocationName + ".png";
+    public IDividedSpriteLoader GetSprite(byte mapId) => new DividedSpriteLoader(new AssetTextureLoader(AssetImagePath(mapId)), 115f, ImageSize, ImageSize, true) { Pivot = new(0.5f, 0f) };
+    private int ImageSize { get; set; } = 200;
+    public IOrderedSharableVariable<bool> Configuration { get; set; }
+    public NebulaPreSpawnLocation(string locationName,Vector2 pos,string? audioClip = null) { 
+        this.LocationName = locationName;
+        this.Positions = new Vector2[] { pos };
+        this.AudioClip = audioClip;
+    }
+
+    public NebulaPreSpawnLocation(string locationName, Vector2[] pos, string? audioClip = null)
+    {
+        this.LocationName = locationName;
+        this.Positions = pos;
+        this.AudioClip = audioClip;
+    }
+
+    public NebulaPreSpawnLocation(string locationName, int vanillaIndex,int imageSize,Vector2 tempPosition)
+    {
+        this.LocationName= locationName;
+        this.VanillaIndex= vanillaIndex;
+        this.ImageSize = imageSize;
+        this.Positions = new Vector2[] { tempPosition };
+    }
+}
+
+public class NebulaPreSpawnMinigame : Minigame
+{
+    public static NebulaPreSpawnMinigame PreSpawnMinigame = null!;
+
+    static NebulaPreSpawnMinigame() => ClassInjector.RegisterTypeInIl2Cpp<NebulaPreSpawnMinigame>();
+    public NebulaPreSpawnMinigame(System.IntPtr ptr) : base(ptr) { }
+    public NebulaPreSpawnMinigame() : base(ClassInjector.DerivedConstructorPointer<NebulaPreSpawnMinigame>())
+    { ClassInjector.DerivedConstructorBody(this); }
+
+    TMPro.TextMeshPro UnderText = null!;
+
+    Vector2 spawnAt = new Vector2(0, 0);
+
+    public static NebulaPreSpawnLocation[] PreSpawnLocations { get
+        {
+            byte mapId = NebulaAPI.AmongUs.MapId;
+            var cand = NebulaPreSpawnLocation.Locations[mapId];
+
+            //スポーンポイントを抽出する
+            if (GeneralConfigurations.SpawnMethodOption.GetValue() == 0)
+            {
+                //Default
+                cand = cand.Where(l => l.VanillaIndex.HasValue).ToArray();
+            }
+            else
+            {
+                cand = cand.Where(l => l.Configuration.Value).ToArray();
+            }
+
+            if(cand.Length == 0) cand = NebulaPreSpawnLocation.Locations[mapId].Where(l => l.VanillaIndex.HasValue).ToArray();
+
+            return cand;
+        } }
+    public IEnumerator CoClose()
+    {
+        var gathering = NebulaGameManager.Instance!.GameStatistics.Gathering[GameStatisticsGatherTag.Spawn];
+        NebulaAPI.CurrentGame?.GetModule<Synchronizer>()?.ResetSyncOnlyHistory(SynchronizeTag.PreSpawnMinigame);
+
+        foreach (var p in GamePlayer.AllPlayers)
+        {
+            if (p.IsDead) continue;
+            if (!gathering.ContainsKey(p.PlayerId)) continue;
+
+            p.VanillaPlayer.NetTransform.SnapTo(gathering[p.PlayerId]);
+        }
+        AmongUsLLImpl.LocalPlayer.NetTransform.RpcSnapTo(spawnAt);
+
+        for (float timer = 0f; timer < 0.25f; timer += Time.deltaTime)
+        {
+            float num = timer / 0.25f;
+            base.transform.localPosition = new Vector3(0f, Mathn.SmoothStep(0f, -8f, num), -50f);
+            yield return null;
+        }
+
+        GameObject.Destroy(base.gameObject);
+    }
+
+    public override void Begin(PlayerTask task)
+    {
+        PreSpawnMinigame = this;
+        Minigame.Instance = this;
+        this.amOpening = true;
+        this.amClosing = Minigame.CloseState.None;
+
+        if (AmongUsLLImpl.LocalPlayer.AsBoolFast()) AmongUsLLImpl.LocalPlayer.NetTransform.Halt();
+        
+        byte mapId = NebulaAPI.AmongUs.MapId;
+
+        var cand = PreSpawnLocations;
+        var rand = Helpers.GetRandomArray(cand.Length);
+
+        SpawnInMinigame? minigamePrefab = null;
+        if (mapId == 4) minigamePrefab = AmongUsLLImpl.ShipStatusInstance.Cast<AirshipStatus>().SpawnInGame;
+
+        UnderText = GameObject.Instantiate(VanillaAsset.StandardTextPrefab,transform);
+        UnderText.transform.localPosition = new Vector3(0,-1.18f,0f);
+        UnderText.transform.localScale= Vector3.one;
+        UnderText.fontSizeMax = 4;
+        UnderText.fontSizeMin = 1;
+        UnderText.fontSize = 4;
+        UnderText.rectTransform.sizeDelta = new Vector2(6.2f, 0.68f);
+
+        UnderText.text = "";
+
+
+        int candidates = Mathn.Min(GeneralConfigurations.SpawnCandidatesOption, cand.Length);
+
+        if (GeneralConfigurations.SpawnMethodOption.GetValue() == 2) candidates = 1;
+
+        Tuple<SpriteRenderer, TextMeshPro>[] allButton = new Tuple<SpriteRenderer, TextMeshPro>[candidates];
+        IDividedSpriteLoader[] allSprite = new IDividedSpriteLoader[candidates];
+        Coroutine? currentAnim = null;
+
+        IEnumerator CoAnim(SpriteRenderer renderer,IDividedSpriteLoader sprite)
+        {
+            float t = 0f;
+            int i = 0;
+            while (true)
+            {
+                t += Time.deltaTime;
+                if (t > 0.06f)
+                {
+                    i++;
+                    if (i >= sprite.Length) break;
+
+                    renderer.sprite = sprite.GetSprite(i);
+                    t = 0f;
+                }
+
+                yield return null;
+            }
+            renderer.sprite = sprite.GetSprite(0);
+        }
+
+        bool gotSelect = false;
+
+        IEnumerator CoFadeOutOthers(int selected)
+        {
+            float othersAlpha = 1f;
+
+            while (true)
+            {
+                othersAlpha = Mathn.Clamp01(othersAlpha - Time.deltaTime * 1.45f);
+
+                for (int i = 0; i < candidates; i++)
+                {
+                    if (i == selected) continue;
+                    allButton[i].Item1.color = Color.white.AlphaMultiplied(othersAlpha);
+                    allButton[i].Item2.color = Color.white.AlphaMultiplied(othersAlpha);
+                }
+
+                yield return null;
+            }
+        }
+
+        IEnumerator CoSelect(int selected)
+        {
+            gotSelect = true;
+            spawnAt= cand![rand[selected]].Position!.Value;
+
+            foreach (var button in allButton) button.Item1.GetComponent<PassiveButton>().enabled = false;
+            if (currentAnim != null) StopCoroutine(currentAnim);
+
+            StartCoroutine(CoFadeOutOthers(selected).WrapToIl2Cpp());
+
+            var selectedTransform = allButton[selected].Item1.transform;
+
+            for(int i = 0; i < 3; i++)
+            {
+                yield return new WaitForSeconds(0.02f);
+                allButton[selected].Item1.color = Color.clear;
+                allButton[selected].Item2.color = Color.clear;
+                yield return new WaitForSeconds(0.02f);
+                allButton[selected].Item1.color = Color.white;
+                allButton[selected].Item2.color = Color.white;
+            }
+
+            StartCoroutine(CoAnim(allButton[selected].Item1, allSprite[selected]).WrapToIl2Cpp());
+
+            //点滅しおわってからスポーン
+            NebulaGameManager.Instance?.RpcPreSpawn(PlayerControl.LocalPlayer.PlayerId, spawnAt);
+
+            while (true)
+            {
+                var deltaTime = Time.deltaTime;
+                selectedTransform.localPosition -= new Vector3(selectedTransform.localPosition.x * deltaTime * 3.2f, 0f, 0f);
+                selectedTransform.localScale -= (((VVector3)selectedTransform.localScale - VVector3.One) * deltaTime * 3.2f).ToUnityVector();
+
+                yield return null;
+            }
+        }
+
+        //選択肢が2つ以上ある場合
+        IEnumerator CoCountDown()
+        {
+            float t = 10f;
+            int ceilCount = -1;
+
+            while (t > 0f)
+            {
+                t -= Time.deltaTime;
+                int next = Mathn.CeilToInt(t);
+                if (next != ceilCount)
+                {
+                    ceilCount = next;
+                    UnderText.text = Language.Translate("game.prespawn.countdown").Replace("%SECOND%", ceilCount.ToString());
+
+                    if (ceilCount <= 0)
+                    {
+                        if (!gotSelect) StartCoroutine(CoSelect(System.Random.Shared.Next(candidates)).WrapToIl2Cpp());
+                        break;
+                    }
+                }
+
+                if(gotSelect) break;
+
+                yield return null;
+            }
+            UnderText.text = Language.Translate("game.prespawn.waiting");
+        }
+
+        //選択肢が1つしかない場合
+        IEnumerator CoSpawning()
+        {
+            UnderText.text = Language.Translate("game.prespawn.spawnIn");
+            yield return new WaitForSeconds(0.2f);
+            StartCoroutine(CoAnim(allButton[0].Item1, allSprite[0]).WrapToIl2Cpp());
+            yield return new WaitForSeconds(1.4f);
+            StartCoroutine(CoSelect(0).WrapToIl2Cpp());
+        }
+
+        float width = new float[] { 0f, 0f, 2.8f, 2.2f, 2.2f, 1.9f, 1.7f, 1.5f, 1.26f }[candidates];
+        float scale = new float[] { 1f, 1f, 1f, 1f, 1f, 0.95f, 0.8f, 0.7f, 0.6f }[candidates];
+        
+        foreach(var loc in cand)
+        {
+            if (loc.VanillaIndex.HasValue)
+                loc.Positions = new Vector2[] { minigamePrefab!.Locations[loc.VanillaIndex.Value].Location };
+        }
+
+        //ランダムなスポーン先を適当に代入しておく
+        spawnAt = cand[rand[System.Random.Shared.Next(candidates)]].Position!.Value;
+
+        for (int i = 0; i < candidates; i++){
+            int copiedIndex = i;
+
+            var loc = cand[rand[i]];
+
+            var sprite = loc.GetSprite(mapId);
+            allSprite[i] = sprite;
+
+            var renderer = UnityHelper.CreateObject<SpriteRenderer>("Button", transform, new Vector3(width * (float)(i - (candidates - 1) / 2f), -0.25f, 0), LayerExpansion.GetUILayer());
+            renderer.transform.localScale = new Vector3(scale, scale, 1f);
+
+            renderer.sprite = sprite.GetSprite(0);
+
+            var text = GameObject.Instantiate(VanillaAsset.StandardTextPrefab,renderer.transform);
+            text.transform.localPosition=new Vector3(0f,-0.31f,0f);
+            text.transform.localScale= Vector3.one;
+            text.fontSize = 2.85f;
+            text.fontSizeMax = 3f;
+            text.fontSizeMin = 1f;
+            text.text = Language.Translate(loc.GetDisplayName(mapId));
+            text.font = VanillaAsset.PreSpawnFont;
+            AudioClip hoverClip = loc.GetClip() ?? VanillaAsset.HoverClip.Clip;
+
+            if (loc.VanillaIndex.HasValue)
+                hoverClip = minigamePrefab!.Locations[loc.VanillaIndex.Value].RolloverSfx;
+            
+
+            var collider = renderer.gameObject.AddComponent<BoxCollider2D>();
+            collider.size = new Vector2(1.5f, 1.45f);
+            collider.isTrigger = true;
+
+            var button = renderer.gameObject.SetUpButton();
+            button.OnMouseOver.AddListener(() => {
+                SoundManager.instance.PlaySound(hoverClip, false, 0.8f);
+                text.color = Color.green;
+
+                if (currentAnim != null) StopCoroutine(currentAnim);
+
+                for (int i = 0; i < candidates; i++) allButton[i].Item1.sprite = allSprite[i].GetSprite(0);
+                
+                currentAnim = StartCoroutine(CoAnim(renderer,sprite).WrapToIl2Cpp());
+            });
+            button.OnMouseOut.AddListener(() => {
+                text.color = Color.white;
+            });
+            button.OnClick.AddListener(() => {
+                text.color = Color.white;
+                StartCoroutine(CoSelect(copiedIndex).WrapToIl2Cpp());
+            });
+
+            //候補数が1つしかない場合は押させない
+            button.enabled = candidates > 1;
+
+            allButton[i] = new(renderer,text);
+        }
+
+        StartCoroutine(candidates == 1 ? CoSpawning().WrapToIl2Cpp() : CoCountDown().WrapToIl2Cpp());
+
+        //Dummyのスポーン先を決定する
+        foreach (var p in PlayerControl.AllPlayerControls.GetFastEnumerator())
+        {
+            if (!p.isDummy) continue;
+
+            GameStatistics.RpcPoolPosition.LocalInvoke(new(GameStatisticsGatherTag.Spawn, p.PlayerId, cand![System.Random.Shared.Next(cand!.Length)].Position!.Value));
+        }
+
+    }
+
+    public override void Close()
+    {
+        
+    }
+
+    public void CloseSpawnInMinigame()
+    {
+        ControllerManager.Instance.CloseOverlayMenu(base.name);
+        this.amClosing = Minigame.CloseState.Closing;
+        StartCoroutine(CoClose().WrapToIl2Cpp());
+    }
+
+    public IEnumerator WaitForFinish()
+    {
+        yield return null;
+        while (this.amClosing == Minigame.CloseState.None)
+        {
+            yield return null;
+        }
+        yield break;
+    }
+}

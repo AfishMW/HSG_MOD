@@ -1,0 +1,416 @@
+﻿using Il2CppInterop.Runtime.Injection;
+using Nebula.Behavior;
+using Nebula.Documents;
+using Nebula.Modules.Cosmetics;
+using Nebula.Modules.GUIWidget;
+using Nebula.Roles.Abilities;
+using Newtonsoft.Json.Utilities;
+using System.Text;
+using TMPro;
+using Virial;
+using Virial.Assignable;
+using Virial.Configuration;
+using Virial.Events.Game;
+using Virial.Events.Game.Meeting;
+using Virial.Events.Game.Minimap;
+using Virial.Events.Player;
+using Virial.Game;
+using Virial.Helpers;
+
+namespace Nebula.Roles.Impostor;
+
+
+public class TrackerTaskMapLayer : MonoBehaviour
+{
+    ObjectPool<PooledMapIcon> iconPool = null!;
+
+    static TrackerTaskMapLayer() => ClassInjector.RegisterTypeInIl2Cpp<TrackerTaskMapLayer>();
+
+
+    public void Awake()
+    {
+        iconPool = new(AmongUsLLImpl.ShipStatusInstance.MapPrefab.taskOverlay.icons.Prefab.GetComponent<PooledMapIcon>(), transform);
+        iconPool.OnInstantiated = icon =>
+        {
+            icon.rend.color = Color.yellow;
+            icon.alphaPulse.enabled = false;
+        };
+    }
+
+    public void SetIcons(Vector2[] locations)
+    {
+        iconPool.RemoveAll();
+
+        foreach (var location in locations)
+        {
+            var icon = iconPool.Instantiate();
+            Vector3 localPos = location / AmongUsLLImpl.ShipStatusInstance.MapScale;
+            localPos.z = -1f;
+            icon.transform.localPosition = localPos;
+        }
+    }
+}
+
+public class TrackerPlayerMapLayer : MonoBehaviour
+{
+    ObjectPool<SpriteRenderer> iconPool = null!;
+    public GamePlayer? Target = null;
+
+    static TrackerPlayerMapLayer() => ClassInjector.RegisterTypeInIl2Cpp<TrackerPlayerMapLayer>();
+
+    public void Awake()
+    {
+        iconPool = new(AmongUsLLImpl.ShipStatusInstance.MapPrefab.HerePoint, transform);
+        iconPool.OnInstantiated = icon => PlayerMaterial.SetColors(Target?.PlayerId ?? 0, icon);
+    }
+
+    public void ClearPool()
+    {
+        iconPool.DestroyAll();
+    }
+    public void Update()
+    {
+        if (Target == null) return;
+        iconPool.RemoveAll();
+
+        var currentMapId = NebulaAPI.AmongUs.MapId;
+        var center = VanillaAsset.GetMapCenter(currentMapId);
+        var scale = VanillaAsset.GetMapScale(currentMapId);
+
+
+        if (!Target!.IsDead && !MeetingHud.Instance)
+        {
+            var icon = iconPool.Instantiate();
+            icon.transform.localPosition = VanillaAsset.ConvertToMinimapPos(Target.Position, center, scale).AsUnityVector3();
+        }
+
+    }
+}
+
+public class EvilTracker : DefinedSingleAbilityRoleTemplate<EvilTracker.Ability>, HasCitation, DefinedRole, IAssignableDocument
+{
+    private EvilTracker() : base("evilTracker", VColor.ImpostorColor, RoleCategory.ImpostorRole, Impostor.MyTeam, [
+        ShowKillFlashOption, TrackImpostorsOption,
+        new GroupConfiguration("options.role.evilTracker.group.playerTracking", [TrackCoolDownOption, CanChangeTargetOption, CanChangeTargetOnMeetingOption, UpdateArrowIntervalOption, ShowTrackingTargetOnMapOption, ShowWhereTrackingIsOption], GroupConfigurationColor.ImpostorRed),
+        new GroupConfiguration("options.role.evilTracker.group.taskTracking", [TaskTrackingOption,CanCheckTrackingTasksInTaskPhaseOption], GroupConfigurationColor.ImpostorRed)
+        ]) { }
+    Citation? HasCitation.Citation => Citations.TheOtherRolesGMH;
+
+    static private readonly BoolConfiguration ShowKillFlashOption = NebulaAPI.Configurations.Configuration("options.role.evilTracker.showKillFlash", false);
+    static private readonly ValueConfiguration<int> TaskTrackingOption = NebulaAPI.Configurations.Configuration("options.role.evilTracker.taskTracking", ["options.role.evilTracker.taskTracking.off", "options.role.evilTracker.taskTracking.onlyTarget", "options.role.evilTracker.taskTracking.on"], 0);
+    static private readonly FloatConfiguration TrackCoolDownOption = NebulaAPI.Configurations.Configuration("options.role.evilTracker.trackCoolDown", (10f, 60f, 2.5f), 20f, FloatConfigurationDecorator.Second);
+    static private readonly BoolConfiguration CanChangeTargetOption = NebulaAPI.Configurations.Configuration("options.role.evilTracker.canChangeTarget", false);
+    static private readonly BoolConfiguration CanChangeTargetOnMeetingOption = NebulaAPI.Configurations.Configuration("options.role.evilTracker.canChangeTargetOnMeeting", false);
+    static private readonly FloatConfiguration UpdateArrowIntervalOption = NebulaAPI.Configurations.Configuration("options.role.evilTracker.updateArrowInterval", (0f, 30f, 2.5f), 10f, FloatConfigurationDecorator.Second);
+    static private readonly BoolConfiguration TrackImpostorsOption = NebulaAPI.Configurations.Configuration("options.role.evilTracker.trackImpostors", false);
+    static private readonly BoolConfiguration ShowTrackingTargetOnMapOption = NebulaAPI.Configurations.Configuration("options.role.evilTracker.showTrackingTargetOnMap", false);
+    static private readonly BoolConfiguration CanCheckTrackingTasksInTaskPhaseOption = NebulaAPI.Configurations.Configuration("options.role.evilTracker.canCheckTrackingTasksInTaskPhase", false);
+    static private readonly BoolConfiguration ShowWhereTrackingIsOption = NebulaAPI.Configurations.Configuration("options.role.evilTracker.showWhereTrackingIs", false);
+    //private NebulaConfiguration ShowRoomWhereTrackingTargetIsOption = null!;
+
+    public override Ability CreateAbility(GamePlayer player, int[] arguments) => new(player, arguments.GetAsBool(0));
+    AbilityAssignmentStatus DefinedRole.AssignmentStatus => AbilityAssignmentStatus.KillersSide;
+
+    static public readonly EvilTracker MyRole = new();
+
+    MultipleAssignmentType DefinedRole.MultipleAssignment => MultipleAssignmentType.Allowed;
+
+    bool IAssignableDocument.HasTips => false;
+    bool IAssignableDocument.HasAbility => true;
+    IEnumerable<AssignableDocumentImage> IAssignableDocument.GetDocumentImages()
+    {
+        yield return new(buttonSprite, CanChangeTargetOption ? "role.evilTracker.ability.track.canChange" : "role.evilTracker.ability.track.cannotChange");
+        yield return new(RoleDocumentHelper.ArrowImage, TrackImpostorsOption ? "role.evilTracker.ability.arrow.withImpostor" : "role.evilTracker.ability.arrow.onlyTarget");
+        if(ShowTrackingTargetOnMapOption) yield return new(RoleDocumentHelper.MinimapCrewImage, "role.evilTracker.ability.track.minimap");
+        if(CanCheckTrackingTasksInTaskPhaseOption) yield return new(taskButtonSprite, "role.evilTracker.ability.task");
+        string? meetingIconKey = null;
+        var taskTracking = TaskTrackingOption.GetValue();
+        if (CanChangeTargetOnMeetingOption)
+        {
+            meetingIconKey = taskTracking switch
+            {
+                0 => "role.evilTracker.ability.meeting.changeOnly",
+                1 => "role.evilTracker.ability.meeting.checkChange",
+                2 => "role.evilTracker.ability.meeting.checkChange",
+                _ => null
+            };
+        }
+        else
+        {
+            meetingIconKey = taskTracking switch
+            {
+                1 => "role.evilTracker.ability.meeting.targetOnly",
+                2 => "role.evilTracker.ability.meeting.checkOnly",
+                _ => null
+            };
+        }
+        if(meetingIconKey != null) yield return new(MeetingIcon, meetingIconKey);
+    }
+
+    IEnumerable<AssignableDocumentReplacement> IAssignableDocument.GetDocumentReplacements()
+    {
+        yield return new("%ARROWSEC%", UpdateArrowIntervalOption.GetValue().DecimalToString("1"));
+    }
+
+    static private Image MeetingIcon => MeetingPlayerButtonManager.Icons.AsLoader(1);
+
+    static private readonly Image buttonSprite = SpriteLoader.FromResource("Nebula.Resources.Buttons.TrackButton.png", 115f);
+    static private readonly Image taskButtonSprite = SpriteLoader.FromResource("Nebula.Resources.Buttons.TaskTrackButton.png", 115f);
+    [NebulaRPCHolder]
+    public class Ability : AbstractPlayerUsurpableAbility, IPlayerAbility 
+    {
+
+        private ModAbilityButtonImpl? trackButton = null;
+
+        GamePlayer? trackingTarget = null;
+
+        TrackingArrowAbility? arrowAbility = null;
+
+        AchievementToken<(Vector2[]? locs, byte target, bool cleared)>? challengeToken = null;
+
+        List<TrackingArrowAbility> impostorArrows = new();
+
+        private void TryRegisterArrow(GamePlayer player) {
+            if (!MyPlayer.IsImpostor) return;
+            if(!impostorArrows.Any(a => a.MyPlayer == player)) impostorArrows.Add(new TrackingArrowAbility(player.Unbox(), 0f, VColor.ImpostorColor).Register(this));
+        }
+
+        //役職変化に応じて矢印を付ける
+        [Local]
+        void OnSetRole(PlayerRoleSetEvent ev)
+        {
+            if (TrackImpostorsOption && MyPlayer.IsImpostor)
+            {
+                if (!ev.Player.AmOwner && ev.Player.IsImpostor)
+                    TryRegisterArrow(ev.Player);
+                else
+                {
+                    impostorArrows.RemoveAll(a => { if (a.MyPlayer == ev.Player) { a.Release(); return true; } else return false; });
+                }
+            }
+        }
+
+        void ChangeTrackingTarget(GamePlayer target)
+        {
+            trackingTarget = target;
+
+            if (TrackingIcon.AsBoolFast()) GameObject.Destroy(TrackingIcon?.gameObject);
+            if (trackingTarget != null)
+            {
+                TrackingIcon = trackButton!.GeneratePlayerIcon(trackingTarget);
+
+                if (arrowAbility != null) arrowAbility.Release();
+                arrowAbility = new TrackingArrowAbility(trackingTarget, UpdateArrowIntervalOption, VColor.White).Register(this);
+            }
+        }
+
+        PoolablePlayer? TrackingIcon = null;
+        int[] IPlayerAbility.AbilityArguments => [IsUsurped.AsInt()];
+        public Ability(GamePlayer player, bool isUsurped) : base(player, isUsurped)
+        {
+            if (AmOwner)
+            {
+                if (ShowWhereTrackingIsOption)
+                {
+                    Helpers.TextHudContent("TrackingText", this, (tmPro) =>
+                    {
+                        StringBuilder text = new();
+
+                        if (trackingTarget != null && !trackingTarget.IsDead) text.AppendLine((trackingTarget.Name + ": " + AmongUsUtil.GetRoomName(trackingTarget.TruePosition, true)).Color(VColor.Lerp(DynamicPalette.PlayerColors[trackingTarget.PlayerId], VColor.White, 0.25f)));
+                        if (MyPlayer.IsImpostor) foreach (var p in NebulaGameManager.Instance!.AllPlayerInfo.Where(p => !p.AmOwner && p.IsImpostorlike && !p.IsDead)) text.AppendLine((p.Name + ": " + AmongUsUtil.GetRoomName(p.TruePosition, true)).Color(Palette.ImpostorRed));
+
+                        tmPro.text = text.ToString();
+                    });
+                }
+                //インポスターに矢印を付ける
+                if (TrackImpostorsOption && (MyPlayer.IsImpostor)) NebulaGameManager.Instance?.AllPlayerInfo.Where(p => !p.AmOwner && p.IsImpostorlike).Do(p => TryRegisterArrow(p));
+
+                var trackTracker = ObjectTrackers.ForPlayerlike(this, null, MyPlayer, p => ObjectTrackers.PlayerlikeStandardPredicate(p));
+
+                trackButton = new ModAbilityButtonImpl().KeyBind(Virial.Compat.VirtualKeyInput.Ability).Register(this);
+                trackButton.SetSprite(buttonSprite.GetSprite());
+                trackButton.Availability = (button) => trackTracker.CurrentTarget != null && MyPlayer.CanMove;
+                trackButton.Visibility = (button) => !MyPlayer.IsDead && (CanChangeTargetOption || trackingTarget == null);
+                trackButton.OnClick = (button) =>
+                {
+                    trackButton.StartCoolDown();
+                    ChangeTrackingTarget(trackTracker.CurrentTarget!.RealPlayer);
+                };
+                trackButton.CoolDownTimer = new TimerImpl(TrackCoolDownOption).SetAsAbilityCoolDown().Start().Register(this);
+                trackButton.SetLabel("track");
+                trackButton.RelatedAbility = this;
+
+                if (CanCheckTrackingTasksInTaskPhaseOption)
+                {
+                    var mapButton = new ModAbilityButtonImpl().KeyBind(Virial.Compat.VirtualKeyInput.SecondaryAbility).Register(this);
+                    mapButton.SetSprite(taskButtonSprite.GetSprite());
+                    mapButton.Availability = (button) => MyPlayer.CanMove;
+                    mapButton.Visibility = (button) => mapLayer;
+                    mapButton.OnClick = (button) =>
+                    {
+                        MapBehaviour.Instance.ShowNormalMap();
+                        MapBehaviour.Instance.taskOverlay.gameObject.SetActive(false);
+                        mapLayer!.gameObject.SetActive(true);
+                    };
+                    mapButton.SetLabel("task");
+                    mapButton.RelatedAbility = this;
+                }
+
+                challengeToken = new("evilTracker.challenge",(null,255,false),(val,_) => val.cleared);
+            }
+        }
+
+        
+        TrackerTaskMapLayer? mapLayer = null;
+        TrackerPlayerMapLayer? playerMapLayer = null;
+
+        [Local]
+        void OnMeetingStart(MeetingStartEvent ev)
+        {
+            int taskTrackingOption = TaskTrackingOption.GetValue();
+            //タスク追跡Offかつ会議中の追跡対象の変更オフ
+            if (taskTrackingOption == 0 && !CanChangeTargetOnMeetingOption) return;
+
+            bool canSelectOnlyCurrentTarget = taskTrackingOption == 1 && !CanChangeTargetOnMeetingOption;
+
+            GamePlayer? isChecked = null;
+            NebulaAPI.CurrentGame?.GetModule<MeetingPlayerButtonManager>()?.RegisterMeetingAction(new Behavior.MeetingPlayerAction(
+                MeetingIcon,
+                p =>
+                {
+                    if (isChecked == null)
+                    {
+                        if (taskTrackingOption != 0) RpcShareTaskLoc.Invoke((MyPlayer.PlayerId, p.MyPlayer.PlayerId));
+                        isChecked = p.MyPlayer;
+                        if (CanChangeTargetOnMeetingOption) ChangeTrackingTarget(p.MyPlayer);
+                    }
+                    else if (taskTrackingOption != 0 && mapLayer)
+                    {
+                        MapBehaviour.Instance.ShowNormalMap();
+                        MapBehaviour.Instance.taskOverlay.gameObject.SetActive(false);
+                        mapLayer!.gameObject.SetActive(true);
+                    }
+                },
+                p => !p.MyPlayer.IsDead && !p.MyPlayer.AmOwner &&
+                (!canSelectOnlyCurrentTarget || trackingTarget == p.MyPlayer) && 
+                (isChecked == null || (taskTrackingOption != 0 && isChecked == p.MyPlayer)) && 
+                (taskTrackingOption != 0 || trackingTarget != p.MyPlayer)
+                ));
+
+        }
+
+        [Local]
+        void OnMeetingEnd(MeetingStartEvent ev)
+        {
+            if (mapLayer.AsBoolFast())
+            {
+                GameObject.Destroy(mapLayer!.gameObject);
+                mapLayer = null;
+            }
+        }
+
+        [Local]
+        void OnPlayerMurdered(PlayerMurderedEvent ev)
+        {
+            if(ShowKillFlashOption && !ev.Murderer.AmOwner) AmongUsUtil.PlayQuickFlash(VColor.ImpostorColor);
+        }
+
+
+        [Local]
+        void OnOpenSabotageMap(AbstractMapOpenEvent ev)
+        {
+            if(ev is MapOpenAdminEvent)
+            {
+                if (playerMapLayer.AsBoolFast()) playerMapLayer!.gameObject.SetActive(false);
+                if (mapLayer.AsBoolFast()) mapLayer!.gameObject.SetActive(false);
+                return;
+            }
+
+            if (MeetingHud.Instance.AsBoolFast())
+            {
+                if (AmOwner && mapLayer.AsBoolFast()) mapLayer!.gameObject.SetActive(false);
+                if (playerMapLayer.AsBoolFast()) playerMapLayer!.gameObject.SetActive(false);
+            }
+            else if(!IsUsurped)
+            {
+                if (ShowTrackingTargetOnMapOption)
+                {
+                    if (!playerMapLayer.AsBoolFast())
+                    {
+                        playerMapLayer = UnityHelper.CreateObject<TrackerPlayerMapLayer>("TrackerPlayerLayer", MapBehaviour.Instance.transform, new(0f, 0f, -1f));
+                        this.BindGameObject(playerMapLayer.gameObject);
+                    }
+
+                    playerMapLayer!.ClearPool();
+                    playerMapLayer!.Target = trackingTarget;
+                    playerMapLayer!.gameObject.SetActive(trackingTarget != null);
+                }
+                if (mapLayer.AsBoolFast()) mapLayer!.gameObject.SetActive(false);
+            }
+        }
+
+
+        [OnlyMyPlayer, Local]
+        void OnKillPlayer(PlayerKillPlayerEvent ev)
+        {
+            //タスク周辺でキルしたらチャレンジ実績達成
+            if (challengeToken != null && challengeToken.Value.locs != null && challengeToken.Value.target == ev.Dead.PlayerId)
+            {
+                challengeToken.Value.cleared |= challengeToken.Value.locs.Any(l => l.Distance(ev.Dead.Position) < 3f);
+            }
+        }
+
+        [Local]
+        void OnPlayerDead(PlayerDieEvent ev)
+        {
+            if (trackingTarget == ev.Player) new StaticAchievementToken("evilTracker.another1");
+        }
+
+        static private RemoteProcess<(byte myId, byte targetId)> RpcShareTaskLoc = QueryRPC.Generate<(byte myId, byte targetId), (byte myId, byte targetId, Vector2[] vec)>(
+            "ShareTaskLoc",
+            q => q.targetId == AmongUsLLImpl.LocalPlayer.PlayerId,
+            q =>
+            {
+                List<Vector2> list = new();
+                foreach(var t in AmongUsLLImpl.LocalPlayer.myTasks.GetFastEnumerator().Where(t => !t.IsComplete && t.HasLocation))
+                {
+                    foreach (var l in t.Locations) list.Add(l);
+                }
+                return (q.myId, q.targetId, list.ToArray());
+            },
+            (message, _) =>
+            {
+                if(message.myId == AmongUsLLImpl.LocalPlayer.PlayerId)
+                {
+                    HudManager.Instance.InitMap();
+                    if (MapBehaviour.Instance.IsOpen) MapBehaviour.Instance.Close();
+                    MapBehaviour.Instance.ShowNormalMap();
+
+                    var eTracker = GamePlayer.LocalPlayer!.Role.GetAbility<Ability>();
+                    if (eTracker != null)
+                    {
+                        if (!eTracker.mapLayer)
+                        {
+                            eTracker.mapLayer = UnityHelper.CreateObject<TrackerTaskMapLayer>("TrackerLayer", MapBehaviour.Instance.taskOverlay.transform.parent, Vector3.zero);
+                            eTracker.BindGameObject(eTracker.mapLayer.gameObject);
+                        }
+                        eTracker.mapLayer!.gameObject.SetActive(true);
+                        eTracker.mapLayer!.SetIcons(message.vec);
+                        MapBehaviour.Instance.taskOverlay.gameObject.SetActive(false);
+
+                        if (eTracker.challengeToken != null)
+                        {
+                            if (message.vec.Length <= 3)
+                            {
+                                eTracker.challengeToken.Value.locs = message.vec;
+                                eTracker.challengeToken.Value.target = message.targetId;
+                            }else
+                                eTracker.challengeToken.Value.locs = null;
+                        }
+                        new StaticAchievementToken("evilTracker.common1");
+                    }
+                }
+            }
+            );
+    }
+}

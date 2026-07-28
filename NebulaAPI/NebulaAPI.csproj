@@ -1,0 +1,42 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+	<AssemblyName>NebulaAPI</AssemblyName>
+    <RootNamespace>Virial</RootNamespace>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <NoWin32Manifest>true</NoWin32Manifest>
+    <PackageId>NebulaAPI</PackageId>
+    <Title>Nebula API</Title>
+	<LangVersion>latest</LangVersion>
+    <Version>8.0.0</Version>
+    <Authors>Dolly</Authors>
+    <Description>Among UsのMod "Nebula on the Ship"におけるスクリプトで使用できるAPIです。</Description>
+    <PackageProjectUrl>https://dolly1016.github.io/Virial.Doc/</PackageProjectUrl>
+    <NeutralLanguage>ja-JP</NeutralLanguage>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	<DebugType>embedded</DebugType>
+	<WarningLevel>7</WarningLevel>
+	<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+	<Reference Include="$(AmongUs)\BepInEx\core\*.dll" />
+	<Reference Include="$(AmongUs)\BepInEx\interop\*.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Fast\" />
+  </ItemGroup>
+	
+  <Target Name="CopyCustomContent" AfterTargets="AfterBuild">
+	<Message Text="Second occurrence" />
+	<Copy SourceFiles="bin\Release\net6.0\NebulaAPI.dll" DestinationFolder="$(AmongUsRelease)\" />
+	<Copy SourceFiles="bin\Release\net6.0\NebulaAPI.dll" DestinationFolder="..\NebulaPluginNova\Resources\Libs\" />
+  </Target>
+	
+	
+</Project>

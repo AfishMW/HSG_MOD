@@ -1,0 +1,1664 @@
+﻿using AmongUs.GameOptions;
+using Nebula.Bridge;
+using Nebula.Game.Achievements;
+using Nebula.Game.Statistics;
+using Nebula.Modules.Cosmetics;
+using Nebula.Roles;
+using Nebula.Roles.Complex;
+using Nebula.Roles.Crewmate;
+using Nebula.Roles.Impostor;
+using Sentry.Unity.NativeUtils;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
+using UnityEngine.Rendering;
+using Virial;
+using Virial.Assignable;
+using Virial.Command;
+using Virial.Common;
+using Virial.DI;
+using Virial.Events.Game;
+using Virial.Events.Player;
+using Virial.Game;
+using Virial.Game.Object;
+using Virial.Media;
+using Virial.Text;
+using static Nebula.Roles.Crewmate.Investigator;
+using static TMPro.SpriteAssetUtilities.TexturePacker_JsonArray;
+using static UnityEngine.GraphicsBuffer;
+
+namespace Nebula.Player;
+
+public enum RoleType
+{
+    Role = 0,
+    Modifier = 1,
+    GhostRole = 2,
+}
+
+
+[NebulaPreprocess(PreprocessPhase.PostBuildNoS)]
+public static class PlayerState
+{
+    public static TranslatableTag Alive = new("state.alive");
+    public static TranslatableTag Dead = new("state.dead");
+    public static TranslatableTag Exiled = new("state.exiled");
+    public static TranslatableTag Misfired = new("state.misfired");
+    public static TranslatableTag Sniped = new("state.sniped");
+    public static TranslatableTag Beaten = new("state.beaten");
+    public static TranslatableTag Guessed = new("state.guessed");
+    public static TranslatableTag Misguessed = new("state.misguessed");
+    public static TranslatableTag Embroiled = new("state.embroiled");
+    public static TranslatableTag Suicide = new("state.suicide");
+    public static TranslatableTag Trapped = new("state.trapped");
+    public static TranslatableTag Revived = new("state.revived");
+    public static TranslatableTag Pseudocide = new("state.pseudocide");
+    public static TranslatableTag Deranged = new("state.deranged");
+    public static TranslatableTag Cursed = new("state.cursed");
+    public static TranslatableTag Crushed = new("state.crushed");
+    public static TranslatableTag Frenzied = new("state.frenzied");
+    public static TranslatableTag Gassed = new("state.gassed");
+    public static TranslatableTag Bubbled = new("state.bubbled");
+    public static TranslatableTag Meteor = new("state.meteor");
+    public static TranslatableTag Starved = new("state.starved");
+    public static TranslatableTag Balloon = new("state.balloon");
+    public static TranslatableTag Lost = new("state.lost");
+    public static TranslatableTag Laser = new("state.laser");
+    public static TranslatableTag Drill = new("state.drill");
+    public static TranslatableTag Dissolved = new("state.dissolved");
+    public static TranslatableTag Poisoned = new("state.poisoned");
+    public static TranslatableTag Layoff = new("state.layoff");
+    public static TranslatableTag Punished = new("state.punished");
+    public static TranslatableTag Disconnected = new("state.disconnected") { Color = Color.gray };
+    public static TranslatableTag[] AllKillStates = [Dead, Guessed, Embroiled, Trapped, Deranged, Cursed, Crushed, Frenzied, Gassed, Bubbled, Meteor, Starved, Balloon, Laser, Drill, Dissolved, Poisoned];
+    public static TranslatableTag[] AllDeadStates = [..AllKillStates, Lost, Suicide, Misguessed, Pseudocide, Exiled, Layoff, Punished];
+    static PlayerState()
+    {
+        Virial.Text.PlayerStates.Alive = Alive;
+        Virial.Text.PlayerStates.Dead = Dead;
+        Virial.Text.PlayerStates.Exiled = Exiled;
+        Virial.Text.PlayerStates.Misfired = Misfired;
+        Virial.Text.PlayerStates.Sniped = Sniped;
+        Virial.Text.PlayerStates.Beaten = Beaten;
+        Virial.Text.PlayerStates.Guessed = Guessed;
+        Virial.Text.PlayerStates.Misguessed = Misguessed;
+        Virial.Text.PlayerStates.Embroiled = Embroiled;
+        Virial.Text.PlayerStates.Suicide = Suicide;
+        Virial.Text.PlayerStates.Trapped = Trapped;
+        Virial.Text.PlayerStates.Revived = Revived;
+        Virial.Text.PlayerStates.Pseudocide = Pseudocide;
+        Virial.Text.PlayerStates.Gassed = Gassed;
+        Virial.Text.PlayerStates.Bubbled = Bubbled;
+        Virial.Text.PlayerStates.Meteor = Meteor;
+        Virial.Text.PlayerStates.Balloon = Balloon;
+        Virial.Text.PlayerStates.Lost = Lost;
+        Virial.Text.PlayerStates.Punished = Punished;
+    }
+}
+
+
+[NebulaPreprocess(PreprocessPhase.PostBuildNoS)]
+public class PlayerAttributeImpl : IPlayerAttribute
+{
+    public int Id { get; init; }
+    public string Name { get; init; }
+    public string? UIName { get; init; }
+    public Virial.Media.Image Image { get; private init; }
+    public Predicate<GamePlayer>? Cognizable { get; init; }
+    public bool CanCognize(GamePlayer player) => Cognizable?.Invoke(player) ?? true;
+    public IPlayerAttribute? IdenticalAttribute { get; init; } = null;
+    static private List<IPlayerAttribute> allAttributes = new();
+    static public IEnumerable<IPlayerAttribute> AllAttributes => allAttributes;
+
+    //カテゴライズする際の分類用属性(基本的な効果を持つ属性にまとめたいところ)
+    public IPlayerAttribute CategorizedAttribute => IdenticalAttribute ?? this;
+
+    static public IPlayerAttribute GetAttributeById(int id) => allAttributes[id];
+
+
+    public PlayerAttributeImpl(int imageId, string name, string? uiId = null)
+    {
+        this.Id = allAttributes.Count;
+        this.Image = AttributeShower.AttributeIcon.GetIconSprite(imageId);
+        allAttributes.Add(this);
+        Name = name;
+        UIName = uiId;
+    }
+
+    static PlayerAttributeImpl()
+    {
+        PlayerAttributes.Accel = new PlayerAttributeImpl(0, "$accel", "accel");
+        PlayerAttributes.Decel = new PlayerAttributeImpl(1, "$decel", "decel");
+        PlayerAttributes.Drunk = new PlayerAttributeImpl(5, "$inverse", "inverse");
+        PlayerAttributes.Size = new PlayerAttributeImpl(6, "$size", "size");
+        PlayerAttributes.Invisible = new PlayerAttributeImpl(2, "invisible", "invisible");
+        PlayerAttributes.InvisibleElseImpostor = new PlayerAttributeImpl(2, "$invisible") { Cognizable = p => p.IsImpostor, IdenticalAttribute = PlayerAttributes.Invisible };
+        PlayerAttributes.CurseOfBloody = new PlayerAttributeImpl(3, "curseOfBloody", "curseOfBloody");
+        PlayerAttributes.Footprint = new PlayerAttributeImpl(3, "footprint", "footprint") { Cognizable = _ => false };
+        PlayerAttributes.Isolation = new PlayerAttributeImpl(4, "$isolation", "isolation") { Cognizable = p => p.IsImpostor };
+        PlayerAttributes.BuskerEffect = new PlayerAttributeImpl(4, "busker", "busker") { Cognizable = _ => false };
+        PlayerAttributes.InternalInvisible = new PlayerAttributeImpl(2, "$internalInvisible") { Cognizable = _ => false, IdenticalAttribute = PlayerAttributes.Invisible };
+
+        PlayerAttributes.FlipXY = new PlayerAttributeImpl(7, "$flip", "flip");
+        PlayerAttributes.FlipX = new PlayerAttributeImpl(7, "$flipX") { IdenticalAttribute = PlayerAttributes.FlipXY };
+        PlayerAttributes.FlipY = new PlayerAttributeImpl(7, "$flipY") { IdenticalAttribute = PlayerAttributes.FlipXY };
+
+        PlayerAttributes.ScreenSize = new PlayerAttributeImpl(8, "$screenSize", "screenSize");
+        PlayerAttributes.Eyesight = new PlayerAttributeImpl(9, "$eyesight", "eyesight");
+        PlayerAttributes.Roughening = new PlayerAttributeImpl(10, "$rough", "rough");
+
+        PlayerAttributes.Thurifer = new PlayerAttributeImpl(11, "$thurifer", "thurifer");
+        PlayerAttributes.CooldownSpeed = new PlayerAttributeImpl(12, "cooldown", "cooldown");
+    }
+}
+
+[NebulaRPCHolder]
+internal class PlayerModInfo : AbstractModuleContainer, IRuntimePropertyHolder, Virial.Game.Player, ICommandExecutor, IPermissionHolder
+{
+
+    public PlayerControl MyControl { get; private set; }
+    private Virial.Compat.ModGameObject MyControlObj { get; set; }
+    public PlayerPhysics MyPhysics { get; private set; }
+    public BPlayerAnimation MyAnimations { get; private set; }
+    public CosmeticsLayer MyLayer { get; private set; }
+    public NebulaCosmeticsLayer MyModLayer { get; private set; }
+    public NetworkedPlayerInfo MyVanillaData { get; private set; }
+    private TextMeshProHandler? playerNameText, playerRoleText;
+    private Transform playerNameParent;
+    private GameObject playerNameParentObj;
+
+    private static HashSet<DefinedAssignable> RecentPlayed = [];
+    internal static bool IsPlayedRecently(DefinedAssignable assignable) => RecentPlayed.Contains(assignable);
+
+    public byte PlayerId { get; private set; }
+    public bool AmOwner { get; private set; }
+    public bool AmController => AmOwner;
+    public bool IsDisconnected { get; set; } = false;
+    public bool IsDead { get => IsDisconnected || field; private set => field = value; }
+    //以前の実装(field部分)
+    //(MyVanillaData.AsBoolFast() ? MyVanillaData.IsDead : ((this as GamePlayer).PlayerState != PlayerStates.Alive && (this as GamePlayer).PlayerState != PlayerStates.Revived))
+
+    public bool IsActive => MyControl.AsBoolFast();
+    public PlayerDiving? CurrentDiving { get; set; }
+    public bool IsBlown => MyAnimations.Animator.m_currAnim.EqualsFast(MyAnimations.SpawnAnim); //MyAnimations.IsPlayingSpawnAnimation()
+    public bool IsTeleporting { get; internal set; } = false;
+
+    public PlayerDeathPosition DeathPosition { get; set; }
+
+    /// <summary>
+    /// マウスの角度を弧度法で返します。
+    /// -PIからPIの範囲で返します。
+    /// </summary>
+    public float MouseAngle { get; private set; }
+    private bool requiredUpdateMouseAngle { get; set; }
+    public void RequireUpdateMouseAngle() => requiredUpdateMouseAngle = true;
+
+    public Virial.Game.DeadBody? HoldingDeadBody { get; private set; } = null;
+    public bool HoldingAnyDeadBody => HoldingDeadBody != null;
+
+    public bool AmHost => MyControl.AmHost();
+
+    public RuntimeRole Role => myRole;
+    private RuntimeRole myRole = null!;
+
+    public RuntimeGhostRole? GhostRole => myGhostRole;
+    private RuntimeGhostRole? myGhostRole = null;
+
+    private List<RuntimeModifier> myModifiers = new();
+
+    RuntimeRole Virial.Game.Player.Role => myRole;
+    IEnumerable<RuntimeModifier> Virial.Game.Player.Modifiers => myModifiers;
+    public Vector2 PreMeetingPoint { get; private set; } = Vector2.zero;
+
+    private List<Virial.Game.OutfitCandidate> outfits = new();
+
+    TMPro.TextMeshPro GamePlayer.RoleText => playerRoleText?.MyTextComponent!;
+
+
+    public FakeSabotageStatus FakeSabotage { get; private set; } = new();
+    
+    public bool WillDie { get; set; } = false;
+
+    /// <summary>
+    /// Among Usの通常のタスクを所持しているか
+    /// </summary>
+    public bool HasAnyTasks
+    {
+        get
+        {
+            bool hasTasks = Role.HaveNormalTask;
+            //実際は持っていなくとも、クルータスクを持っていると思しきプレイヤーの場合
+            if (Role.TaskType == RoleTaskType.CrewmateTask) hasTasks = FeelLikeHaveCrewmateTasks;
+            return hasTasks;
+        }
+    }
+
+    public bool HasTaskProgress
+    {
+        get
+        {
+            if (HasAnyTasks) return true;
+            if (Role.TaskType == RoleTaskType.SpecialRoleTask || Role.TaskType == RoleTaskType.SpecialCrewmateTask) return (this as GamePlayer).Tasks.Quota > 0;
+            return false;
+        }
+    }
+
+    public bool HasCrewmateTasks
+    {
+        get
+        {
+            bool hasCrewmateTasks = Role.TaskType == RoleTaskType.CrewmateTask;
+            AssignableAction((assignable) => { hasCrewmateTasks &= !(assignable.InvalidateCrewmateTask || assignable.MyCrewmateTaskIsIgnored); });
+            return hasCrewmateTasks;
+        }
+    }
+
+    public bool FeelLikeHaveCrewmateTasks
+    {
+        get
+        {
+            if (NebulaGameManager.Instance?.CanBeSpectator ?? false) return HasCrewmateTasks;
+
+            bool hasCrewmateTasks = Role.TaskType == RoleTaskType.CrewmateTask || Role.TaskType == RoleTaskType.SpecialCrewmateTask;
+            AssignableAction((assignable) => { hasCrewmateTasks &= !assignable.InvalidateCrewmateTask; });
+            return hasCrewmateTasks;
+        }
+    }
+
+    public bool FeelBeTrueCrewmate { get => (this as GamePlayer).IsTrueCrewmate || field; set {
+            field = value;
+            GameOperatorManager.Instance?.Run<PlayerUpdateCrewRecognitionEvent>(new(this));
+        }
+    }
+    
+
+    public VariablePermissionHolder PermissionHolder = new([]);
+    bool IPermissionHolder.Test(Virial.Common.Permission permission) => PermissionHolder.Test(permission);
+
+    public IStampShower? SpecialStampShower = null;
+    public IStampShower DefaultStampShower = null!;
+    public IStampShower StampShower => (SpecialStampShower?.IsValid ?? false) ? SpecialStampShower : DefaultStampShower;
+
+    private readonly List<SpriteRenderer> playerAdditionalRenderers = [];
+    private readonly List<(MeshRenderer renderer, MeshFilter? filter)> playerAdditionalMeshRenderers = [];
+    public void AddPlayerColorRenderers(params SpriteRenderer[] renderers)
+    {
+        playerAdditionalRenderers.RemoveAll(r => !r);
+        playerAdditionalRenderers.AddRange(renderers);
+    }
+    public void RemovePlayerColorRenderer(SpriteRenderer renderer)
+    {
+        int instanceId = renderer.GetInstanceIdFast();
+        playerAdditionalRenderers.RemoveAll(r => r.GetInstanceIdFast() == instanceId);
+    }
+    public void RemovePlayerColorRenderers(params SpriteRenderer[] renderers) => renderers.Do(r => RemovePlayerColorRenderer(r));
+
+    public void AddPlayerColorRenderers(params (MeshRenderer renderer, MeshFilter? filter)[] renderers)
+    {
+        playerAdditionalMeshRenderers.RemoveAll(r => !r.renderer);
+        playerAdditionalMeshRenderers.AddRange(renderers);
+    }
+    public void RemovePlayerColorRenderer(MeshRenderer renderer)
+    {
+        int instanceId = renderer.GetInstanceIdFast();
+        playerAdditionalMeshRenderers.RemoveAll(r => r.renderer.GetInstanceIdFast() == instanceId);
+    }
+    public void RemovePlayerColorRenderers(params MeshRenderer[] renderers) => renderers.Do(r => RemovePlayerColorRenderer(r));
+    
+    //各種収集データ
+    public GamePlayer? MyKiller = null;
+    public GamePlayer.ExtraDeadInfo? PlayerStateExtraInfo { get; set; }
+    public float? DeathTimeStamp = null;
+    public CommunicableTextTag? MyState = PlayerState.Alive;
+
+    public IEnumerable<RuntimeAssignable> AllAssigned()
+    {
+        if (Role != null) yield return Role;
+        if (GhostRole != null) yield return GhostRole;
+        foreach (var m in myModifiers) yield return m;
+    }
+
+    public void AssignableAction(Action<RuntimeAssignable> action)
+    {
+        foreach (var role in AllAssigned()) action(role);
+    }
+
+    public void ModifierAction(Action<RuntimeModifier> action)
+    {
+        foreach (var role in myModifiers) action(role);
+    }
+
+    public IEnumerable<Modifier> GetModifiers<Modifier>() where Modifier : RuntimeModifier
+    {
+        foreach (var m in myModifiers) if (m is Modifier targetM) yield return targetM;
+    }
+
+    public bool TryGetModifier<Modifier>([MaybeNullWhen(false)] out Modifier modifier) where Modifier : class, RuntimeModifier {
+        foreach (var m in myModifiers)
+        {
+            if (m is Modifier result)
+            {
+                modifier = result;
+                return true;
+            }
+        }
+        modifier = null;
+        return false;
+    }
+
+    internal void SetPlayer(PlayerControl myPlayer)
+    {
+        this.MyControl = myPlayer;
+        this.MyControlObj = myPlayer.ModGameObject();
+        this.MyPhysics = myPlayer.MyPhysics;
+        this.MyAnimations = new(MyPhysics.Animations);
+        this.MyLayer = myPlayer.cosmetics;
+        this.MyVanillaData = myPlayer.Data;
+        this.MyModLayer = MyLayer.GetComponent<NebulaCosmeticsLayer>();
+
+        PlayerId = myPlayer.PlayerId;
+        AmOwner = myPlayer.AmOwner;
+
+        var outfitId = OutfitDefinition.OutfitId.PlayersDefault(myPlayer.PlayerId);
+        var outfit = new OutfitDefinition(outfitId, MyVanillaData.DefaultOutfit, OutfitTag.GetAllTags().Where(tag => tag.Checker.Invoke(MyVanillaData.DefaultOutfit)).ToArray());
+        NebulaGameManager.Instance!.OutfitMap[outfitId] = outfit;
+        DefaultOutfit = new(outfit, "", -100, true);
+
+        var nameText = MyLayer.nameText;
+        var roleText = GameObject.Instantiate(nameText, nameText.transform);
+        roleText.transform.localPosition = new Vector3(0, 0.185f, 0f);
+        roleText.fontSize = 1.7f;
+        roleText.text = "Unassigned";
+        roleText.UseRoleIcon();
+
+        playerNameText = new(nameText);
+        playerRoleText = new(roleText);
+        playerNameParent = nameText.transform.parent;
+        playerNameParentObj = playerNameParent.gameObject;
+
+        nameText.UseRoleIcon();
+
+        PlayerScaler = myPlayer.transform.FindChild("Scaler");
+
+        DefaultStampShower = new ArrowStampShower(this);
+
+        playerLogic = new(myPlayer, this);
+
+        //一部オブジェクトがDefaultレイヤーになっている問題を修正。
+        MyLayer.bodySprites.GetFastEnumerator().Do(pbs => pbs.BodySprite.gameObject.layer = LayerExpansion.GetPlayersLayer());
+
+        //PlayerScaler.gameObject.AddComponent<SortingGroup>();
+        //PlayerScaler.gameObject.GetComponentsInChildren<SpriteRenderer>(true).Do(r => r.sortingOrder = 10);
+
+        if (myPlayer.AmOwner)
+        {
+            float lastUpdated = 0f;
+            GameOperatorManager.Instance?.Subscribe<GameUpdateEvent>(ev =>
+            {
+                if (NebulaGameManager.Instance!.CurrentTime - lastUpdated > 0.8f)
+                {
+                    RpcShareFlipX.Invoke((PlayerId, MyLayer.FlipX));
+                    lastUpdated = NebulaGameManager.Instance.CurrentTime;
+                }
+            }, NebulaGameManager.Instance);
+        }
+
+        if (!AmOwner)
+        {
+            var footStep = myPlayer.FootSteps;
+            footStep.volume = 0.7f;
+            footStep.minDistance = 0.5f;
+            footStep.maxDistance = GeneralConfigurations.OthersFootstepRangeOption;
+            footStep.rolloffMode = AudioRolloffMode.Linear;
+            footStep.spatialBlend = 1f;
+        }
+    }
+
+    public string DefaultName => DefaultOutfit.Outfit.outfit.PlayerName;
+    public string ColoredDefaultName => DefaultName.Color(VColor.Lerp(DynamicPalette.PlayerColors[PlayerId], VColor.White, 0.3f));
+    public OutfitCandidate DefaultOutfit { get; private set; }
+    public OutfitCandidate CurrentOutfit => outfits.Count > 0 ? outfits[0] : DefaultOutfit;
+    public OutfitTag[] DefaultOutfitTags => DefaultOutfit.Outfit.OutfitTags;
+
+    internal void UpdateOutfit()
+    {
+        int lastColor = MyLayer.ColorId;
+
+        OutfitCandidate newOutfitCand = DefaultOutfit;
+        if (outfits.Count > 0)
+        {
+            outfits = outfits.OrderBy(o => -o.Priority).ToList();
+            newOutfitCand = outfits[0];
+        }
+
+        NetworkedPlayerInfo.PlayerOutfit newOutfit = newOutfitCand.Outfit.outfit;
+        try
+        {
+            MyControl.RawSetColor(newOutfit.ColorId);
+            //MyControl.RawSetName(newOutfit.PlayerName);
+            MyControl.RawSetHat(newOutfit.HatId, newOutfit.ColorId);
+            MyControl.RawSetSkin(newOutfit.SkinId, newOutfit.ColorId);
+            MyControl.RawSetVisor(newOutfit.VisorId, newOutfit.ColorId);
+            MyControl.RawSetPet(newOutfit.PetId, newOutfit.ColorId);
+            MyControl.RawSetColor(newOutfit.ColorId);
+
+            var mat = MyLayer.currentBodySprite.BodySprite.sharedMaterial;
+            foreach (var r in playerAdditionalRenderers) if (r.AsBoolFast()) r.material = mat;
+            foreach (var r in playerAdditionalMeshRenderers) if (r.renderer.AsBoolFast()) r.renderer.material = mat;
+            /*
+            if (MyControl.MyPhysics.Animations.IsPlayingRunAnimation())
+            {
+                MyControl.MyPhysics.ResetAnimState();
+                MyControl.cosmetics.StopAllAnimations();
+            }
+            else
+            {
+                MyControl.cosmetics.FixVisibility();
+            }
+            */
+
+            GameOperatorManager.Instance?.Run(new PlayerOutfitChangeEvent(this, newOutfitCand));
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("Outfit Error: Error occurred on changing " + DefaultName + " 's outfit");
+            if (!MyControl.AsBoolFast()) Debug.LogError(" - PlayerControl is INVALID.");
+            Debug.LogError(e.ToString());
+        }
+
+        int currentColor = newOutfit.ColorId;
+
+        /*
+        Debug.Log("Last: " + lastColor);
+        Debug.Log("Current: " + currentColor);
+        Debug.Log("LastIsLightGreen: " + ColorHelper.IsLightGreen(Palette.PlayerColors[lastColor]));
+        Debug.Log("CurrnetIsPink: " + ColorHelper.IsPink(Palette.PlayerColors[currentColor]));
+        Debug.Log("Month: " + Helpers.CurrentMonth);
+        */
+
+        if (lastColor != currentColor)
+        {
+            //色が変化したとき
+            if (AmOwner && Helpers.CurrentMonth == 4 && ColorHelper.IsLightGreen(DynamicPalette.PlayerColors[lastColor]) && ColorHelper.IsPink(DynamicPalette.PlayerColors[currentColor]))
+            {
+                Debug.Log("sakura");
+                new StaticAchievementToken("sakura");
+            }
+
+            if(AmOwner && !IsDead && lastColor == NebulaPlayerTab.CamouflageColorId && currentColor != NebulaPlayerTab.CamouflageColorId && MoreCosmic.GetTags(newOutfit).Any(tag => tag == "hat.party" || tag == "visor.party"))
+            {
+                //カモフラージュが解けたら、次の瞬間にパーティーメンバーをチェックする
+                NebulaManager.Instance.ScheduleDelayAction(() => {
+
+                    var localPos = GamePlayer.LocalPlayer.Position;
+                    var count = GamePlayer.AllPlayers.Count(p => !p.AmOwner && !p.IsDead && p.Position.Distance(localPos) < 1f && MoreCosmic.GetTags(p.CurrentOutfit.outfit).Any(tag => tag == "hat.party" || tag == "visor.party"));
+                    if (count >= 2) new StaticAchievementToken("costume.partyCamo");
+                });
+            }
+        }
+    }
+
+    public void AddOutfit(OutfitCandidate outfit)
+    {
+        if (!outfit.SelfAware && MyControl.AmOwner) return;
+        outfits.Insert(0, outfit);
+        UpdateOutfit();
+    }
+
+    public void RemoveOutfit(string tag)
+    {
+        outfits.RemoveAll(o => o.Tag.Equals(tag));
+        UpdateOutfit();
+    }
+
+    void GamePlayer.AddOutfit(OutfitCandidate outfit) => RpcAddOutfit.Invoke((PlayerId, outfit));
+    void GamePlayer.RemoveOutfitByTag(string tag) => RpcRemoveOutfit.Invoke((PlayerId, tag));
+
+    public OutfitCandidate GetOutfit(int maxPriority)
+    {
+        foreach (var outfit in outfits)
+        {
+            if (outfit.Priority <= maxPriority)
+            {
+                return outfit;
+            }
+        }
+        return DefaultOutfit;
+    }
+
+    public void UpdateNameText(TextMeshProHandler nameText, bool onMeeting = false, bool showDefaultName = false)
+    {
+        var currentOutfit = CurrentOutfit;
+        var outfitName = currentOutfit.Outfit.outfit.PlayerName;
+        var text = onMeeting ? DefaultName : outfitName;
+
+        var canSeeAllInfo = NebulaGameManager.Instance?.CanSeeAllInfo ?? false;
+        AssignableAction(r => r.DecorateNameConstantly(ref text, canSeeAllInfo, false));
+        var ev = GameOperatorManager.Instance?.Run(new PlayerDecorateNameEvent(this, text, canSeeAllInfo));
+        text = ev?.Name ?? text;
+        var color = (ev?.Color.HasValue ?? false) ? ev.Color.Value : VColor.White;
+
+        if (!outfitName.Equals(DefaultName) && !onMeeting)
+        {
+            if (showDefaultName)
+            {
+                text += (" (" + DefaultName + ")").Color(VColor.Gray);
+            }else if(currentOutfit.IgnoreMask?.Test(GamePlayer.LocalPlayer) ?? false)
+            {
+                text += (" (" + GetOutfit(currentOutfit.Priority - 1).Outfit.outfit.PlayerName + ")").Color(VColor.Gray);
+            }
+        }
+
+        nameText.RequestChange(text);
+        nameText.RequestChange(color.ToUnityColor());
+    }
+
+    static public readonly VColor FakeTaskColor = new(0x86 / 255f, 0x86 / 255f, 0x86 / 255f);
+    static public readonly VColor CrewTaskColor = new(0xFA / 255f, 0xD9 / 255f, 0x34 / 255f);
+    public void UpdateRoleText(TextMeshProHandler roleText, bool inMeeting) {
+
+        string text = "";
+
+        bool canSeeAllMeta = (NebulaGameManager.Instance?.CanSeeAllInfo ?? false);
+        bool canSeeAll = canSeeAllMeta || AmOwner;
+        bool canSeeRole = canSeeAll;
+        bool canSeeTask = canSeeAll;
+        bool canSeeFakeSabo = (NebulaGameManager.Instance?.CanSeeAllInfo ?? false) || (GamePlayer.LocalPlayer?.Role.CanSeeOthersFakeSabotage ?? false);
+
+        if (!canSeeAll)
+        {
+            var ev = GameOperatorManager.Instance?.Run(new PlayerCheckRoleInfoVisibilityLocalEvent(this));
+            canSeeRole |= ev?.CanSeeRole ?? false;
+            canSeeTask |= ev?.CanSeeTask ?? false;
+        }
+
+
+        var editEv = GameOperatorManager.Instance?.Run(new PlayerSetFakeRoleNameEvent(this, inMeeting));
+        if (canSeeRole)
+        {
+            var assignable = ((RuntimeAssignable?)(IsDead ? myGhostRole : myRole) ?? myRole);
+            var isGhostRole = myGhostRole == assignable;
+            string? roleName = assignable.DisplayColoredName;
+            text += roleName ?? "Undefined";
+            if (isGhostRole) text += $"({myRole.Role.GetRoleIconTagSmall()}{myRole.DisplayColoredShort})";
+
+            AssignableAction(r => { var newName = r.OverrideRoleName(text, false, canSeeAllMeta); if (newName != null) text = newName; });
+        }
+        else
+        {
+            text = editEv.RoleAlternative ?? "";
+        }
+
+        if (canSeeTask) {
+            if (HasTaskProgress && (!(this as GamePlayer).IsDisconnected) && ((this as GamePlayer).Tasks.Quota > 0 || (this as GamePlayer).Tasks.TotalTasks > 0))
+                text += (" (" + (this as GamePlayer).Tasks.Unbox().ToString((NebulaGameManager.Instance?.CanSeeAllInfo ?? false) || !AmongUsUtil.InCommSab) + ")").Color((FeelLikeHaveCrewmateTasks) ? CrewTaskColor : FakeTaskColor);
+        }
+
+        if (canSeeFakeSabo)
+        {
+            var fakeStr = FakeSabotage.MyFakeTasks.Join(type => Language.Translate("sabotage." + type.ToString().HeadLower()), ", ");
+            if (fakeStr.Length > 0) fakeStr = ("(" + fakeStr + ")").Color(VColor.Gray);
+            text += fakeStr;
+        }
+
+        text += editEv?.AdditionalText ?? "";
+
+        roleText.RequestChange(text);
+        roleText.RequestVisibility(true);
+    }
+
+    private void SetRole(DefinedRole role, int[] arguments, RoleAssignType assignType)
+    {
+        GameOperatorManager.Instance?.Run(new PlayerTryToChangeRoleEvent(this, myRole, role));
+        myRole?.Inactivate();
+        GameOperatorManager.Instance?.WrapUpDeadLifespans();
+
+        var isDead = IsDead; 
+
+        if (role.Category == Virial.Assignable.RoleCategory.ImpostorRole)
+            DestroyableSingleton<RoleManager>.Instance.SetRole(MyControl, RoleTypes.Impostor);
+        else
+            DestroyableSingleton<RoleManager>.Instance.SetRole(MyControl, RoleTypes.Crewmate);
+
+        if (isDead)
+        {
+            MyControl.Die(DeathReason.Kill, false);
+            IsDead = true;
+        }
+
+        myRole = role.CreateInstance(this, arguments);        
+        if (NebulaGameManager.Instance?.GameState == NebulaGameStates.Initialized) myRole.ActivateAssignable();
+
+        if (AmOwner) RecentPlayed.Add(role);
+        
+        if(!assignType.HasFlag(RoleAssignType.WithoutRecording)) NebulaGameManager.Instance?.RoleHistory.Add(new(NebulaGameManager.Instance.CurrentTime, PlayerId, myRole, IsDead));
+    }
+
+    private void SetGhostRole(DefinedGhostRole role, int[] arguments, RoleAssignType assignType)
+    {
+        myGhostRole?.Inactivate();
+        GameOperatorManager.Instance?.WrapUpDeadLifespans();
+
+        myGhostRole = role.CreateInstance(this, arguments);
+
+        if (NebulaGameManager.Instance?.GameState == NebulaGameStates.Initialized) myGhostRole?.ActivateAssignable();
+
+        if (AmOwner) RecentPlayed.Add(role);
+
+        if (!assignType.HasFlag(RoleAssignType.WithoutRecording)) NebulaGameManager.Instance?.RoleHistory.Add(new(NebulaGameManager.Instance.CurrentTime, PlayerId, myGhostRole, IsDead));
+    }
+
+    private void SetModifier(DefinedModifier role, int[] arguments, RoleAssignType assignType)
+    {
+        var modifier = role.CreateInstance(this, arguments);
+        myModifiers.Add(modifier);
+
+        if (NebulaGameManager.Instance?.GameState == NebulaGameStates.Initialized) modifier.ActivateAssignable();
+
+        if (AmOwner) RecentPlayed.Add(role);
+
+        if (!assignType.HasFlag(RoleAssignType.WithoutRecording)) NebulaGameManager.Instance?.RoleHistory.Add(new(NebulaGameManager.Instance.CurrentTime, PlayerId, modifier, true, IsDead));
+    }
+
+    public NebulaRPCInvoker RpcInvokerSetRole(DefinedRole role, int[]? arguments, RoleAssignType assignType = RoleAssignType.Standard) => RpcSetAssignable.GetInvoker((PlayerId, role.Id, arguments ?? Array.Empty<int>(), RoleType.Role, assignType));
+    public NebulaRPCInvoker RpcInvokerSetModifier(DefinedModifier modifier, int[]? arguments, RoleAssignType assignType = RoleAssignType.Standard) => RpcSetAssignable.GetInvoker((PlayerId, modifier.Id, arguments ?? Array.Empty<int>(), RoleType.Modifier, assignType));
+    public NebulaRPCInvoker RpcInvokerSetGhostRole(DefinedGhostRole role, int[]? arguments, RoleAssignType assignType = RoleAssignType.Standard) => RpcSetAssignable.GetInvoker((PlayerId, role.Id, arguments ?? Array.Empty<int>(), RoleType.GhostRole, assignType));
+    public NebulaRPCInvoker RpcInvokerUnsetModifier(DefinedModifier modifier) => RpcRemoveModifier.GetInvoker(new(PlayerId, modifier.Id));
+    public void UnsetModifierLocal(Predicate<RuntimeModifier> predicate)
+    {
+        myModifiers.RemoveAll(m =>
+        {
+            if (predicate.Invoke(m))
+            {
+                m.Inactivate();
+                GameOperatorManager.Instance?.WrapUpDeadLifespans();
+
+                GameOperatorManager.Instance?.Run(new PlayerModifierRemoveEvent(this, m));
+
+                NebulaGameManager.Instance?.RoleHistory.Add(new(NebulaGameManager.Instance.CurrentTime, PlayerId, m, false, IsDead));
+                return true;
+            }
+            return false;
+        });
+        if (NebulaGameManager.Instance?.GameState != NebulaGameStates.NotStarted) HudManager.Instance.UpdateHudContent();
+    }
+
+    public bool TryGetProperty(string id, out INebulaProperty? property)
+    {
+        property = null;
+        string prefix = $"players.{PlayerId}.";
+        if (!id.StartsWith(prefix)) return false;
+
+        string subStr = id.Substring(prefix.Length);
+        if (subStr == "roleArgument")
+        {
+            property = new NebulaInstantProperty() { IntegerArrayProperty = Role?.RoleArguments };
+            return true;
+        } else if (subStr == "leftGuess")
+        {
+            property = new NebulaInstantProperty() { IntegerProperty = TryGetModifier<GuesserModifier.Instance>(out var guesser) ? guesser.LeftGuess : -1 };
+            return true;
+        }
+
+        return false;
+    }
+
+    public IEnumerator CoGetRoleArgument(Action<int[]> callback)
+    {
+        yield return PropertyRPC.CoGetProperty<int[]>(PlayerId, $"players.{PlayerId}.roleArgument", callback, () => callback.Invoke(new int[0]), 100f);
+    }
+
+    public IEnumerator CoGetLeftGuess(Action<int> callback)
+    {
+        yield return PropertyRPC.CoGetProperty<int>(PlayerId, $"players.{PlayerId}.leftGuess", callback, () => callback.Invoke(-1), 100f);
+    }
+
+    public readonly static RemoteProcess<(byte playerId, int assignableId, int[] arguments, RoleType roleType, RoleAssignType assignmentType)> RpcSetAssignable = new(
+        "SetAssignable",
+        (message, isCalledByMe) =>
+        {
+            var player = NebulaGameManager.Instance!.RegisterPlayer(PlayerControl.AllPlayerControls.Find((Il2CppSystem.Predicate<PlayerControl>)(p => p.PlayerId == message.playerId))).Unbox();
+
+            if (message.roleType == RoleType.Role)
+                player.SetRole(Roles.Roles.AllRoles[message.assignableId], message.arguments, message.assignmentType);
+            else if (message.roleType == RoleType.GhostRole)
+                player.SetGhostRole(Roles.Roles.AllGhostRoles[message.assignableId], message.arguments, message.assignmentType);
+            else
+                player.SetModifier(Roles.Roles.AllModifiers[message.assignableId], message.arguments, message.assignmentType);
+
+            if (NebulaGameManager.Instance.GameState != NebulaGameStates.NotStarted)
+            {
+                HudManager.Instance.UpdateHudContent();
+                if (player.AmOwner) player.UpdateTaskState();
+            }
+        }
+        );
+
+    private readonly static RemoteProcess<(byte playerId, int modifierId)> RpcRemoveModifier = new(
+        "RemoveModifier", (message, _) => NebulaGameManager.Instance?.GetPlayer(message.playerId)?.Unbox().UnsetModifierLocal((m) => m.Modifier.Id == message.modifierId)
+        );
+
+    public readonly static RemoteProcess<(byte playerId, OutfitCandidate outfit)> RpcAddOutfit = new(
+        "AddOutfit", (message, _) => NebulaGameManager.Instance?.GetPlayer(message.playerId)?.Unbox().AddOutfit(message.outfit)
+        );
+
+    public readonly static RemoteProcess<(byte playerId, string tag)> RpcRemoveOutfit = new(
+       "RemoveOutfit", (message, _) => NebulaGameManager.Instance!.GetPlayer(message.playerId)?.Unbox().RemoveOutfit(message.tag)
+       );
+
+    public readonly static RemoteProcess<(byte playerId, Vector2 position)> RpcSharePreMeetingPoint = new(
+       "SharePreMeetingPoint", (message, _) => NebulaGameManager.Instance!.GetPlayer(message.playerId)!.Unbox().PreMeetingPoint = message.position
+       );
+
+    //////////////////////////////////////////
+    //                                      //
+    //             死体掴み関連             //
+    //                                      //
+    //////////////////////////////////////////
+
+    private void UpdateHoldingDeadBody()
+    {
+        if (!HoldingAnyDeadBody) return;
+
+        //同じ死体を持つプレイヤーがいる
+        if (GamePlayer.AllPlayers.Any(p => p.PlayerId < PlayerId && p.HoldingDeadBody == HoldingDeadBody))
+        {
+            if (AmOwner) ReleaseDeadBody();
+            return;
+        }
+
+        if (!HoldingDeadBody!.IsActive)
+        {
+            if(AmOwner) ReleaseDeadBody();
+            return;
+        }
+
+        //ベント中の死体
+        var deadBody = HoldingDeadBody.VanillaDeadBody;
+        var inVent = MyControl.inVent;
+        deadBody.Reported = inVent;
+        foreach (var r in deadBody.bodyRenderers.GetFastEnumerator()) r.enabled = !inVent;
+
+        var deadBodyModObj = HoldingDeadBody.ModObject;
+
+        var myPos = MyControlObj.Position;
+
+        VVector3 targetPosition = myPos + new VVector3(-0.1f, -0.1f);
+        VVector3 lastPosition = deadBodyModObj.Position;
+        VVector3 deadBodyPos = lastPosition;
+
+        if (myPos.Distance(deadBodyPos) < 1.8f)
+            deadBodyPos += (targetPosition - deadBodyPos) * 0.15f;
+        else
+            deadBodyPos = targetPosition;
+        
+        deadBodyModObj.Position = deadBodyPos;
+
+        {
+            var diffSingle = deadBodyPos.Distance(lastPosition);
+            if (AmOwner && MyControl.CanMove) ModSingleton<AchievementManagerModule>.Instance.CorpseToken.Value += diffSingle;
+        }
+
+        VVector2 playerPos = MyControl.GetTruePosition();
+        VVector2 deadBodyTruePos = deadBody.TruePosition;
+        VVector2 diff = deadBodyPos.AsVector2() - playerPos;
+        float d = diff.Magnitude;
+        if (PhysicsHelpers.AnythingBetween(playerPos, deadBodyTruePos, Constants.ShipAndAllObjectsMask, false))
+        {
+            foreach (var ray in PhysicsHelpers.castHits)
+            {
+                float temp = ((VVector2)ray.point - playerPos).Magnitude;
+                if (d > temp) d = temp;
+            }
+
+            d -= 0.15f;
+            if (d < 0f) d = 0f;
+
+            var newPos = playerPos + diff.Normalized * d;
+            deadBodyModObj.LocalPosition = newPos.AsVector3(newPos.y / 1000f);
+        }
+
+    }
+
+    public void ReleaseDeadBody() {
+        RpcHoldDeadBody.Invoke(new(PlayerId, -1, (HoldingDeadBody?.VanillaDeadBody ?? false) ? HoldingDeadBody.Position : new Vector2(10000, 10000)));
+    }
+
+    public void HoldDeadBody(Virial.Game.DeadBody? deadBody) {
+        if (deadBody == null) ReleaseDeadBody();
+        else RpcHoldDeadBody.Invoke(new(PlayerId, deadBody.Id, deadBody.Position));
+    }
+
+    readonly static RemoteProcess<(byte holderId, int bodyId, Vector2 pos)> RpcHoldDeadBody = new(
+      "HoldDeadBody",
+      (message, _) =>
+      {
+          var info = NebulaGameManager.Instance?.GetPlayer(message.holderId)?.Unbox();
+          if (info == null) return;
+
+          if (message.bodyId == -1)
+          {
+              if(info.HoldingDeadBody?.IsActive ?? false) info.HoldingDeadBody.VanillaDeadBody.transform.localPosition = new Vector3(message.Item3.x, message.Item3.y, message.Item3.y / 1000f);
+              info.HoldingDeadBody = null;
+          }
+          else
+          {
+              info.HoldingDeadBody = ModSingleton<DeadBodyManager>.Instance.TryGetDeadBody(message.bodyId, out var body) ? body : null;              
+              if ((info.HoldingDeadBody?.IsActive ?? false) && message.pos.magnitude < 10000) info.HoldingDeadBody.VanillaDeadBody!.transform.localPosition = new Vector3(message.Item3.x, message.Item3.y, message.Item3.y / 1000f);
+          }
+      }
+      );
+
+
+    //////////////////////////////////////////
+    //                                      //
+    //         マウス位置の情報更新         //
+    //                                      //
+    //////////////////////////////////////////
+#if ANDROID
+    static private VVector2 LastRightVector = VVector2.Zero;
+#endif
+    static public (float angle, float distance) LocalMouseInfo { get
+        {
+#if PC
+            int width = NebulaAPI.AmongUs.ScreenWidth;
+            int height = NebulaAPI.AmongUs.ScreenHeight;
+            VVector2 vec = (VVector2)Input.mousePosition - new VVector2(width / 2, height / 2);
+            var viewer = NebulaGameManager.Instance!.WideCamera.ViewerTransform;
+            var viewerLocalScale = viewer.LocalScale;
+            if (viewerLocalScale.x < 0f) vec.x *= -1;
+            if (viewerLocalScale.y < 0f) vec.y *= -1;
+
+            float currentAngle = Mathn.Atan2(vec.y, vec.x) - (viewer.LocalEulerAngles.z / 180f * Mathn.PI);
+            while (currentAngle < -Mathn.PI) currentAngle += Mathn.PI * 2f;
+            while (currentAngle > Mathn.PI) currentAngle -= Mathn.PI * 2f;
+
+            float ratio = (Camera.main.orthographicSize * 2f) / (float)height;
+            return (currentAngle, vec.Magnitude * ratio);
+#elif ANDROID
+            if (AmongUsLLImpl.HudManagerInstance.joystickR.IsDragged) LastRightVector = AmongUsLLImpl.HudManagerInstance.joystickR.DeltaR;
+            var viewer = NebulaGameManager.Instance!.WideCamera.ViewerTransform;
+            float currentAngle = Mathn.Atan2(LastRightVector.y, LastRightVector.x) - (viewer.LocalEulerAngles.z / 180f * Mathn.PI);
+            return (Mathn.Atan2(LastRightVector.y, LastRightVector.x), LastRightVector.Magnitude * 2.4f);
+#else
+            return (0f, 0f);
+#endif
+
+        }
+    }
+
+    private float lastSentAngle = 0f;
+    private void UpdateMouseAngle()
+    {
+        if (!AmOwner) return;
+
+        float currentAngle = LocalMouseInfo.angle;
+
+        if (requiredUpdateMouseAngle)
+        {
+            if (Mathf.Repeat(currentAngle - lastSentAngle, Mathn.PI * 2f) > 0.02f)
+            {
+                RpcUpdateAngle.Invoke((PlayerId, currentAngle));
+                lastSentAngle = currentAngle;
+            }
+            requiredUpdateMouseAngle = false;
+        }
+        else
+        {
+            MouseAngle = currentAngle;
+        }
+        
+    }
+
+
+    public readonly static RemoteProcess<(byte playerId, float angle)> RpcUpdateAngle = new(
+       "UpdateAngle", (message, _) => NebulaGameManager.Instance!.GetPlayer(message.playerId)!.Unbox().MouseAngle = message.angle, false
+       );
+
+    //////////////////////////////////////////
+    //                                      //
+    //           モジュレータ関連           //
+    //                                      //
+    //////////////////////////////////////////
+
+    private IEnumerable<SpeedModulator> SpeedModulators => timeLimitedModulators.Select(m => m as SpeedModulator).Where(m => m != null)!;
+    private IEnumerable<AttributeModulator> AttributeModulators => timeLimitedModulators.Select(m => m as AttributeModulator).Where(m => m != null)!;
+    private List<TimeLimitedModulator> timeLimitedModulators = new();
+    private VVector2 smoothPlayerSize = VVector2.One;
+    public Transform PlayerScaler;
+    private VVector4 directionalPlayerSpeed = new(1f, 0f, 0f, 1f);
+    //ローカルでのみ値が計算できればよい。
+    public VVector4 DirectionalPlayerSpeed => directionalPlayerSpeed;
+
+    private bool speedAchievementChecked = false;
+    private void UpdateModulators(float deltaTime)
+    {
+        foreach (var m in timeLimitedModulators) m.Update(deltaTime);
+        timeLimitedModulators.RemoveAll(m => m.IsBroken);
+
+        //Speed Modulator
+        directionalPlayerSpeed.x = 1f;
+        directionalPlayerSpeed.y = 0f;
+        directionalPlayerSpeed.z = 0f;
+        directionalPlayerSpeed.w = 1f;
+        MyControl.MyPhysics.Speed = CalcSpeed(ref directionalPlayerSpeed);
+
+        //移動できない称号のチェック
+        if (!speedAchievementChecked && Mathn.Abs(directionalPlayerSpeed.x) + Mathn.Abs(directionalPlayerSpeed.y) + Mathn.Abs(directionalPlayerSpeed.z) + Mathn.Abs(directionalPlayerSpeed.w) == 0f)
+        {
+            new StaticAchievementToken("movable");
+            speedAchievementChecked = true;
+        }
+
+
+        //Size Modulator
+        CalcSize(deltaTime);
+    }
+
+    public IEnumerable<(IPlayerAttribute attribute, float percentage)> GetValidAttributes()
+    {
+        foreach (var a in PlayerAttributeImpl.AllAttributes)
+        {
+            //自認できない属性
+            if (!a.CanCognize(this)) continue;
+
+            float max = 0f, current = 0f;
+            bool isPermanent = false;
+            foreach (var attribute in timeLimitedModulators.Where(attr => attr.HasCategorizedAttribute(a, this)))
+            {
+                if (max < attribute.MaxTime) max = attribute.MaxTime;
+                if (current < attribute.Timer) current = attribute.Timer;
+
+                isPermanent |= attribute.IsPermanent;
+            }
+            if (max > 0f && current > 0f) yield return isPermanent ? (a, 0f) : (a, current / max);
+        }
+
+        //香気の表示
+        if(ModSingleton<Thurifer.ThuribulumManager>.Instance != null)
+        {
+            var percentage = ModSingleton<Thurifer.ThuribulumManager>.Instance.LocalInhalationPercentage;
+            if(percentage > 0f) yield return (PlayerAttributes.Thurifer, percentage);
+        }
+    }
+
+    static private TimelimitedCache<bool> canSeeFootprint = new(() => GameOperatorManager.Instance!.Run(new UpdateFootprintVisibilityEvent(NebulaGameManager.Instance!)).Visible, 0.05f);
+    private Cache<FootprintState> footprintStateCache = new(() => NebulaAPI.CurrentGame?.GetModule<FootprintState>()!);
+    public void OnSetAttribute(IPlayerAttribute attribute)
+    {
+        IEnumerator CoFootprintUpdate(Func<VColor> color, Func<bool>? predicate, float duration, int type)
+        {
+            var footprintState = footprintStateCache.Get();
+            bool isLeft = false;
+
+            while (true)
+            {
+                yield return new WaitForSeconds(0.24f);
+                if (!HasAttribute(attribute)) yield break;
+
+                if (predicate?.Invoke() ?? true)
+                {
+                    var pos = FootprintHelpers.GetFootprintPosition(this, isLeft, out var angle);
+                    if (angle.HasValue) angle = angle.Value + (isLeft ? 9f : -9f);
+                    isLeft = !isLeft;
+                    if (pos.HasValue) AmongUsUtil.GenerateFootprint(pos.Value, color.Invoke(), angle, duration, type, () => canSeeFootprint.Value && GetAttributeWithTag(attribute).All(footprintState.CheckVisibility));
+                }
+            }
+        }
+
+        if (attribute == PlayerAttributes.CurseOfBloody)
+        {
+            NebulaManager.Instance.StartCoroutine(CoFootprintUpdate(() => Roles.Modifier.Bloody.MyRole.Color, null, 5f, 0).WrapToIl2Cpp());
+        }
+        if (attribute == PlayerAttributes.Footprint)
+        {
+            NebulaManager.Instance.StartCoroutine(CoFootprintUpdate(() => DynamicPalette.PlayerColors[CurrentOutfit.Outfit.outfit.ColorId], ()=>!HasAttribute(PlayerAttributes.CurseOfBloody), 3f, 1).WrapToIl2Cpp());
+        }
+    }
+
+    public bool HasAttribute(IPlayerAttribute attribute) => timeLimitedModulators.Any(m => m.HasAttribute(attribute));
+    public bool HasAttributeByTag(string tag) => timeLimitedModulators.Any(m => m.DuplicateTag == tag);
+    private IEnumerable<string> GetAttributeWithTag(IPlayerAttribute attribute) => timeLimitedModulators.Where(m => m.HasAttribute(attribute)).Select(m => m.DuplicateTag);
+    public int CountAttribute(IPlayerAttribute attribute) => timeLimitedModulators.Count(m => m.HasAttribute(attribute));
+
+    public readonly static RemoteProcess<(byte playerId, TimeLimitedModulator modulator, bool allowDuplicate)> RpcAttrModulator = new(
+       "AddAttributeModulator", (message, _) =>
+       {
+           var playerInfo = NebulaGameManager.Instance!.GetPlayer(message.playerId)?.Unbox();
+           if (playerInfo == null) return;
+
+           var modulators = playerInfo!.timeLimitedModulators;
+
+           if (message.modulator is AttributeModulator am)
+           {
+               //新たな属性が付与されたとき
+               if (!playerInfo.AttributeModulators.Any(m => m.HasAttribute(am.Attribute))) playerInfo!.OnSetAttribute(am.Attribute);
+           }
+
+           if (message.modulator is SpeedModulator)
+           {
+               if (playerInfo.AmOwner && modulators.Any(m => m.HasAttribute(PlayerAttributes.Accel)) && modulators.Any(m => m.HasAttribute(PlayerAttributes.Decel))) new StaticAchievementToken("speedAttribute");
+           }
+
+           if (!message.allowDuplicate && message.modulator.DuplicateTag.Length > 0) modulators.RemoveAll(m => m.DuplicateTag == message.modulator.DuplicateTag);
+
+           modulators.Add(message.modulator);
+           modulators.Sort((m1, m2) => m2.Priority - m1.Priority);
+       }
+       );
+
+    public readonly static RemoteProcess<(byte playerId, int attributeId)> RpcRemoveAttr = new(
+       "RemoveAttribute", (message, _) =>
+       {
+           var playerInfo = NebulaGameManager.Instance!.GetPlayer(message.playerId)?.Unbox();
+           if (playerInfo == null) return;
+
+           var modulators = playerInfo!.timeLimitedModulators;
+
+           var attr = PlayerAttributeImpl.GetAttributeById(message.attributeId);
+           if (attr != null)
+           {
+               modulators.RemoveAll(p => p.HasAttribute(attr));
+           }
+       }
+       );
+
+    public readonly static RemoteProcess<(byte playerId, string tag)> RpcRemoveAttrByTag = new(
+       "RemoveAttributeByTag", (message, _) =>
+       {
+           var playerInfo = NebulaGameManager.Instance!.GetPlayer(message.playerId)?.Unbox();
+           if (playerInfo == null) return;
+
+           var modulators = playerInfo!.timeLimitedModulators;
+
+           modulators.RemoveAll(p => p.DuplicateTag == message.tag);
+       }
+       );
+
+    public bool CachedFlipX { get; private set; }
+    public readonly static RemoteProcess<(byte playerId, bool flipX)> RpcShareFlipX = new(
+       "CacheFlipX", (message, _) =>
+       {
+           var playerInfo = NebulaGameManager.Instance!.GetPlayer(message.playerId)?.Unbox();
+           if (playerInfo == null) return;
+
+           playerInfo.CachedFlipX = message.flipX;
+       }, false);
+
+    //////////////////////////////////////////
+    //                                      //
+    //              速度の計算              //
+    //                                      //
+    //////////////////////////////////////////
+
+    public void CalcSpeed(ref VVector4 directionalPlayerSpeed, ref float speed)
+    {
+        foreach (var m in SpeedModulators) m.Calc(ref directionalPlayerSpeed, ref speed);
+    }
+
+    public const float OriginalSpeed = 2.5f;
+    public float CalcSpeed(ref VVector4 directionalPlayerSpeed)
+    {
+        float speed = OriginalSpeed;
+        CalcSpeed(ref directionalPlayerSpeed, ref speed);
+        return speed;
+    }
+
+    //////////////////////////////////////////
+    //                                      //
+    //             サイズの計算             //
+    //                                      //
+    //////////////////////////////////////////
+
+    public void CalcSize(float deltaTime)
+    {
+        VVector2 targetSize = VVector2.One;
+        VVector2 nonSmoothSize = VVector2.One;
+        foreach (var m in timeLimitedModulators.Select(m => m as SizeModulator).Where(m => m != null))
+        {
+            if (m.Smooth)
+                targetSize *= m.Size;
+            else
+                nonSmoothSize *= m.Size;
+        }
+
+        var diff = smoothPlayerSize - targetSize;
+        smoothPlayerSize -= diff * Mathn.Clamp01(deltaTime * 2f);
+
+        PlayerScaler.transform.localScale = (smoothPlayerSize * nonSmoothSize).AsVector3(1f);
+    }
+
+    public float CalcAttributeVal(IPlayerAttribute attribute, bool isMultiplier = true)
+    {
+        float num = isMultiplier ? 1 : 0;
+        foreach (var m in timeLimitedModulators.Select(m => m as FloatModulator).Where(m => m?.HasAttribute(attribute) ?? false)!)
+        {
+            if (isMultiplier)
+                num *= m!.Num;
+            else
+                num += m!.Num;
+        }
+
+        return num;
+    }
+
+
+    //////////////////////////////////////////
+    //                                      //
+    //        プレイヤーの可視性関連        //
+    //                                      //
+    //////////////////////////////////////////
+
+    private int visibilityCache = 0; //穏やかに変わる可視性のキャッシュ
+    private int immediateVisibilityCache = 0; //即座に変わる可視性のキャッシュ
+    public bool IsInvisible => VisibilityLevel == 2;
+    private int VisibilityLevel => Mathn.Max(immediateVisibilityCache, visibilityCache);
+    private float VisibilityAlpha = 1f;
+    private bool IsInShadowCache = false;
+    private void UpdateVisibilityAlpha(int invisibleLevel, float deltaTime)
+    {
+        float min = 0f, max = 1f;
+        if (invisibleLevel == 1) min = 0.25f;
+
+        float goal = invisibleLevel switch
+        {
+            1 => 0.25f,
+            2 => 0f,
+            _ => 1f
+        };
+
+        if (Mathn.Abs(VisibilityAlpha - goal) < 0.01f)
+        {
+            VisibilityAlpha = goal;
+        }
+        else
+        {
+            if (VisibilityAlpha > goal)
+                VisibilityAlpha -= 1.05f * deltaTime;
+            else
+                VisibilityAlpha += 1.05f * deltaTime;
+
+            VisibilityAlpha = Mathn.Clamp(VisibilityAlpha, min, max);
+        }
+    }
+
+    internal static VVector2[] VisibilityCheckVectors = [
+        VVector2.Zero,
+        VVector2.Right,
+        VVector2.Left,
+        VVector2.Up * 1.35f,
+        VVector2.Down * 1.35f,
+        VVector2.Right + VVector2.Up,
+        VVector2.Right + VVector2.Down,
+        VVector2.Left + VVector2.Up,
+        VVector2.Left + VVector2.Down,
+        ];
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="deltaTime">updateがtrueのとき、値が代入されている必要があります。</param>
+    /// <param name="update">可視性を更新する場合、true</param>
+    public void UpdateVisibility(float? deltaTime, bool update, bool ignoreShadow = false, bool showNameText = true)
+    {
+        UpdateVisibilityInner(deltaTime, update, ignoreShadow, showNameText, out var a, out var aIgnoresWall);
+        GameOperatorManager.Instance?.Run(PlayerAlphaUpdateEvent.Get(this, a, aIgnoresWall));
+        
+    }
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="deltaTime">updateがtrueのとき、値が代入されている必要があります。</param>
+    /// <param name="update">可視性を更新する場合、true</param>
+    private void UpdateVisibilityInner(float? deltaTime, bool update, bool ignoreShadow, bool showNameText, out float alpha, out float alphaIgnoresWall) 
+    {
+        alpha = 1f;
+        alphaIgnoresWall = 1f;
+        try
+        {
+            if (update)
+            {
+                //不可視度合を調べる
+                int invisibleLevel = 0;
+                int immediateInvisibleLevel = 0;
+
+                PlayerModInfo localInfo = GamePlayer.LocalPlayer.Unbox();
+
+                //属性効果はより透明にする効果を優先する
+                if (!IsDead)
+                {
+                    if (HasAttribute(PlayerAttributes.InvisibleElseImpostor))
+                    {
+                        if (localInfo.Role.Role.Category == RoleCategory.ImpostorRole)
+                            invisibleLevel = Mathn.Max(invisibleLevel, 1);
+                        else if (!AmOwner)
+                            invisibleLevel = Mathn.Max(invisibleLevel, 2);
+                    }
+
+                    if (HasAttribute(PlayerAttributes.Invisible)) invisibleLevel = 2;
+                    if (HasAttribute(PlayerAttributes.InternalInvisible)) immediateInvisibleLevel = 2;
+                }
+                else
+                {
+                    //視点主が生存していてプレイヤーが死亡しているなら見えない
+                    if (!localInfo.IsDead)
+                    {
+                        invisibleLevel = 2;
+                    }
+                }
+
+                //その他、イベントによる変更
+                var finalVisibility = (int?)GameOperatorManager.Instance?.Run<PlayerUpdateVisibilityEvent>(new(this, (PlayerUpdateVisibilityEvent.VisibilityLevel)invisibleLevel, (PlayerUpdateVisibilityEvent.VisibilityLevel)visibilityCache)).Visibility ?? invisibleLevel;
+
+                //属性による可視性の情報を控えておく
+                visibilityCache = finalVisibility;
+                immediateVisibilityCache = immediateInvisibleLevel;
+            }
+
+            int visualInvisibleLevel = visibilityCache;
+            int mixedVisualInvisibleLevel = Mathn.Max(visibilityCache, immediateVisibilityCache);
+
+            //情報が開示済みの場合、あるいは自分自身を見る場合は半透明までにしかならない
+            if (AmOwner || NebulaGameManager.Instance!.CanBeSpectator)
+            {
+                visualInvisibleLevel = Mathn.Min(1, visualInvisibleLevel);
+                mixedVisualInvisibleLevel = Mathn.Min(1, mixedVisualInvisibleLevel);
+            }
+
+            playerNameParentObj.SetActive(!ModSingleton<ShowUp>.Instance.AnyoneShowedUp && !MyControl.inVent && (mixedVisualInvisibleLevel < 2) && showNameText /*&& MyControl.cosmetics.bodyType != PlayerBodyTypes.Long*/);
+
+            var myCosmetics = MyLayer;
+            if (IsDead)
+            {
+                if (myCosmetics.currentBodySprite.BodySprite != null) myCosmetics.currentBodySprite.BodySprite.color = Color.white;
+
+                if (!MyControl.AmOwner && myCosmetics.currentPet.AsBoolFast(out var currentPet))
+                {
+                    var clearColor = Color.clear;
+                    foreach (var rend in currentPet.renderers.GetFastEnumerator()) rend.color = clearColor;
+                    foreach (var rend in currentPet.shadows.GetFastEnumerator()) rend.color = clearColor;
+                }
+
+                Color c = new(1f, 1f, 1f, 0.5f);
+                myCosmetics.GetComponent<NebulaCosmeticsLayer>().AdditionalRenderers().Do(r => r.color = c);
+                foreach (var r in playerAdditionalRenderers) if (r.AsBoolFast()) r.color = c;
+                foreach (var r in playerAdditionalMeshRenderers)
+                {
+                    if (r.filter.AsBoolFast(out var filter))
+                    {
+                        var mesh = filter.mesh;
+                        Color[] colors = new UnityEngine.Color[mesh.vertices.Count];
+                        for (int i = 0; i < colors.Length; i++) colors[i] = c;
+                        mesh.SetColors(colors);
+                    }
+                }
+                alpha = alphaIgnoresWall = 0.5f;
+
+                return;
+            }
+
+            //対象プレイヤーが生存している場合
+
+            if (update)
+            {
+                UpdateVisibilityAlpha(visualInvisibleLevel, deltaTime!.Value);
+
+                bool CheckIsInWall()
+                {
+                    //死亡していればすべて見える。
+                    if (GamePlayer.LocalPlayer!.IsDead) return false;
+                    //自分自身であれば常に見える。
+                    if (AmOwner) return false;
+                    //ろくろ首はどこからでも見える
+                    if (myCosmetics.bodyType == PlayerBodyTypes.Long) return false;
+
+                    int shadowMask = Constants.ShadowMask;
+                    int objectMask = Constants.ShipAndAllObjectsMask;
+
+                    var light = AmongUsLLImpl.LocalPlayer.lightSource;
+                    VVector2 pos = light.transform.position;
+                    VVector2 myPos = MyControl.transform.position;
+
+                    var isAcrossWalls = VisibilityCheckVectors.All(v =>
+                    {
+                        v = v * 0.22f;
+                        return Helpers.AnyNonTriggersBetween(pos, myPos + v, out _, objectMask);
+                    }
+                    );
+
+                    var mag = isAcrossWalls ? 0.19f : 0.4f;
+
+                    //いずれかの追加ライトの範囲内にいない場合、壁の向こうにいるかもしれない。
+                    if (!LightInfo.AllLightInfo.Any(info => VisibilityCheckVectors.Any(vec => info.CheckPoint(vec))))
+                    {
+                        return VisibilityCheckVectors.All(v =>
+                        {
+                            //観測点がこのプレイヤーと壁を挟む場合、壁を挟んでいるとする。
+                            if (v.Magnitude > 0.01f && Helpers.AnyCustomNonTriggersBetween(myPos, myPos + v * mag,
+                                collider => LightSource.OneWayShadows.TryGetValue(collider.gameObject, out var oneWayShadows) ? !oneWayShadows.IsIgnored(light) : true,
+                                shadowMask)) return true;
+
+                            //観測点と視点主の間に壁を挟む場合、壁を挟んでいるとする。
+                            return Helpers.AnyCustomNonTriggersBetween(pos, myPos + v * mag,
+                            collider => LightSource.OneWayShadows.TryGetValue(collider.gameObject, out var oneWayShadows) ? !oneWayShadows.IsIgnored(light) : true,
+                            shadowMask);
+                        });
+                    }
+
+                    //特に何もなければ、壁の中にいない。
+                    return false;
+                }
+
+                bool isInShadow = CheckIsInWall();
+
+                IsInShadowCache = isInShadow;
+            }
+
+            var shadowHidesPlayer =  !ignoreShadow && IsInShadowCache;
+            if (shadowHidesPlayer) playerNameParentObj.SetActive(false);
+
+            float immadiateAlpha = immediateVisibilityCache switch { 2 => 0f, 1 => 0.25f, _ => 1f };
+            alpha = Mathn.Min(immadiateAlpha, shadowHidesPlayer ? 0f : VisibilityAlpha);
+            alphaIgnoresWall = VisibilityAlpha;
+            var color = new Color(1f, 1f, 1f, alpha);
+
+            if (myCosmetics.currentBodySprite.BodySprite.AsBoolFast(out var bodySprite)) bodySprite.color = color;
+
+            if (myCosmetics.skin.layer.AsBoolFast(out var layer)) layer.color = color;
+
+            if (myCosmetics.hat.AsBoolFast(out var hat))
+            {
+                if (hat.FrontLayer.AsBoolFast(out var front)) front.color = color;
+                if (hat.BackLayer.AsBoolFast(out var back)) back.color = color;
+            }
+
+            if (myCosmetics.currentPet.AsBoolFast(out var pet))
+            {
+                foreach (var rend in pet.renderers.GetFastEnumerator()) rend.color = color;
+                foreach (var rend in pet.shadows.GetFastEnumerator()) rend.color = color;
+            }
+
+            if (myCosmetics.visor.AsBoolFast(out var visor)) visor.Image.color = color;
+
+            MyModLayer.AdditionalRenderers().Do(r => r.color = color);
+            foreach (var r in playerAdditionalRenderers) if (r.AsBoolFast()) r.color = color;
+            foreach (var r in playerAdditionalMeshRenderers)
+            {
+                if (r.filter.AsBoolFast(out var filter))
+                {
+                    var mesh = filter.mesh;
+                    Color[] colors = new UnityEngine.Color[mesh.vertices.Count];
+                    for (int i = 0; i < colors.Length; i++) colors[i] = color;
+                    mesh.SetColors(colors);
+                }
+            }
+        }
+        catch (Exception e){ }
+    }
+
+
+
+    //////////////////////////////////////////
+    //                                      //
+    //              情報の更新              //
+    //                                      //
+    //////////////////////////////////////////
+    private void UpdateFlipX()
+    {
+        if (AmOwner) return;
+        if (MyPhysics.Velocity.sqrMagnitude > 0) return;
+        if (MyPhysics.FlipX != CachedFlipX)
+        {
+            MyPhysics.FlipX = CachedFlipX;
+            if (MyAnimations.Animations.IsPlayingRunAnimation()) MyAnimations.Animations.PlayRunAnimation();
+            else if (MyAnimations.Animator.GetCurrentAnimation() == MyAnimations.Group.IdleAnim) MyAnimations.Animations.PlayIdleAnimation();
+        }
+    }
+
+    static internal void UpdateNameTextTransform(Transform nameParent)
+    {
+        VVector3 viewerScale = NebulaGameManager.Instance!.WideCamera.ViewerTransform.LocalScale;
+        VVector3 textScale = new(viewerScale.x < 0f ? -1f : 1f, viewerScale.y < 0f ? -1f : 1f, 1f);
+        VVector3 textAngle = -(VVector3)NebulaGameManager.Instance!.WideCamera.ViewerTransform.LocalEulerAngles * (textScale.x * textScale.y);
+        nameParent.localEulerAngles = textAngle;
+        nameParent.localScale = textScale;
+    }
+
+    public void Update(float deltaTime)
+    {
+        if (IsDead && ModSingleton<ShowUp>.Instance.ShowedUp(this)) MyControl.Visible = true;
+
+        var nameText = playerNameText?.MyTextComponent;
+        if (playerNameText?.IsActive ?? false)
+        {
+            UpdateNameText(playerNameText, false, NebulaGameManager.Instance?.CanSeeAllInfo ?? false);
+            playerNameText.Reflect();
+        }
+        if (playerRoleText?.IsActive ?? false)
+        {
+            UpdateRoleText(playerRoleText, false);
+            playerRoleText.Reflect();
+        }
+
+        if (playerNameParent.AsBoolFast())
+        {
+            UpdateNameTextTransform(playerNameParent);
+            if (AmOwner) playerNameParent.SetWorldZ(-15f);
+        }
+
+        UpdateMouseAngle();
+        UpdateModulators(deltaTime);
+
+        LightInfo.UpdateLightInfo();
+        UpdateVisibility(deltaTime, true, !NebulaGameManager.Instance.WideCamera.DrawShadow);
+        UpdateFlipX();
+    }
+
+    public void HudUpdate()
+    {
+        UpdateHoldingDeadBody();
+    }
+
+    public void UpdateTaskState()
+    {
+        if (!HasAnyTasks)
+            (this as GamePlayer).Tasks.Unbox().WaiveAllTasksAsOutsider();
+        else if (!HasCrewmateTasks)
+            (this as GamePlayer).Tasks.Unbox().BecomeToOutsider();
+    }
+
+    public void OnGameStart()
+    {
+        if (AmOwner) UpdateTaskState();
+
+        UpdateOutfit();
+    }
+
+    public void OnMeetingStart()
+    {
+        foreach (var m in SpeedModulators) m.OnMeetingStart();
+
+        FakeSabotage.OnMeetingStart();
+
+        DeathPosition = null;
+    }
+
+    //////////////////////////////////////////
+    //                                      //
+    //              Virial API              //
+    //                                      //
+    //////////////////////////////////////////
+
+
+    // Virial::AssignableAPI
+    IEnumerable<RuntimeAssignable> GamePlayer.AllAssigned() => AllAssigned();
+    bool GamePlayer.TryGetModifier<Modifier>([MaybeNullWhen(false)] out Modifier modifier) where Modifier : class => TryGetModifier<Modifier>(out modifier);
+    bool GamePlayer.AttemptedGhostAssignment { get; set; } = false;
+
+    // Virial::MurderAPI
+
+    void GamePlayer.MurderPlayer(IPlayerlike player, CommunicableTextTag playerState, CommunicableTextTag? eventDetail, KillParameter killParams, KillCondition killCondition, Action<KillResult>? callBack) => NebulaGameManager.Instance?.KillRequestHandler.RequestKill(this, player, playerState, eventDetail, killParams, killCondition, callBack);
+    void GamePlayer.Suicide(CommunicableTextTag playerState, CommunicableTextTag? eventDetail, KillParameter killParams, Action<KillResult>? callBack) => NebulaGameManager.Instance?.KillRequestHandler.RequestKill(this, this, playerState, eventDetail, killParams, KillCondition.BothAlive, callBack);
+    void GamePlayer.Revive(GamePlayer? healer, Virial.Compat.Vector2 position, bool eraseDeadBody, bool recordEvent) => MyControl.ModRevive(healer?.VanillaPlayer, new(position.x, position.y), eraseDeadBody, recordEvent);
+    GamePlayer? GamePlayer.MyKiller => MyKiller;
+
+    // Virial::ReportAPI
+    void GamePlayer.ReportDeadBody(GamePlayer deadBody, bool canInvokeInSabo, bool consumeEmergencyButton) => MeetingHudExtension.ModCmdReportDeadBody(this, deadBody, MeetingHudExtension.ReportType.ReportDeadBody, canInvokeInSabo, consumeEmergencyButton);
+    void GamePlayer.RequestEmergencyMeeting(bool canInvokeInSabo, bool consumeEmergencyButton) => MeetingHudExtension.ModCmdReportDeadBody(this, null, MeetingHudExtension.ReportType.EmergencyMeeting, canInvokeInSabo, consumeEmergencyButton);
+
+    // Virial::HoldingAPI
+    GamePlayer? GamePlayer.HoldingPlayer => null;
+    bool GamePlayer.HoldingAnyPlayer => false;
+    void GamePlayer.HoldPlayer(Virial.Game.Player? player) { }
+    void GamePlayer.ReleaseHoldingPlayer() { }
+
+
+    //Virial::PlayerAPI
+
+    string IPlayerlike.Name => DefaultName;
+    string IPlayerlike.ColoredName => ColoredDefaultName;
+    
+    Virial.Compat.Vector2 IGameObject.Position => IsDisconnected ? VVector2.Zero : MyControlObj.Position;
+    Virial.Compat.Vector2 IPlayerlike.TruePosition => IsDisconnected ? VVector2.Zero : new(MyControl.GetTruePosition());
+    UnityEngine.Vector2 IPlayerlike.UnityTruePosition => IsDisconnected ? UnityEngine.Vector2.zero : MyControl.GetTruePosition();
+    bool GamePlayer.CanMove => MyControl.CanMove;
+    bool GamePlayer.IsDisconnected => IsDisconnected;
+    float? GamePlayer.DeathTime => DeathTimeStamp;
+    CommunicableTextTag GamePlayer.PlayerState => MyState ?? PlayerState.Alive;
+
+    // Virial::AttributeAPI
+
+    void GamePlayer.GainAttribute(IPlayerAttribute attribute, float duration, bool canPassMeeting, int priority, string? duplicateTag)
+    {
+        if (attribute == PlayerAttributes.Accel || attribute == PlayerAttributes.Decel) return;
+        RpcAttrModulator.Invoke(new(PlayerId, new AttributeModulator(attribute, duration, canPassMeeting, priority, duplicateTag), false));
+    }
+    void GamePlayer.GainAttribute(IPlayerAttribute attribute, float duration, float ratio, bool canPassMeeting, int priority, string? duplicateTag)
+    {
+        if (attribute == PlayerAttributes.Accel || attribute == PlayerAttributes.Decel) return;
+        RpcAttrModulator.Invoke(new(PlayerId, new FloatModulator(attribute, ratio, duration, canPassMeeting, priority, duplicateTag), false));
+    }
+    void GamePlayer.GainSizeAttribute(Virial.Compat.Vector2 size, float duration, bool canPassMeeting, int priority, string? duplicateTag)
+    {
+        RpcAttrModulator.Invoke(new(PlayerId, new SizeModulator(size, duration, canPassMeeting, priority, duplicateTag), false));
+    }
+    void GamePlayer.GainSpeedAttribute(float speedRate, float duration, bool canPassMeeting, int priority, string? duplicateTag) => RpcAttrModulator.Invoke(new(PlayerId, new SpeedModulator(speedRate, VVector2.One, true, duration, canPassMeeting, priority, duplicateTag ?? ""), false));
+
+    void GamePlayer.RemoveAttributeByTag(string duplicateTag) => RpcRemoveAttrByTag.Invoke((PlayerId, duplicateTag));
+    void GamePlayer.RemoveAttribute(IPlayerAttribute attribute)
+    {
+        if (attribute != null) RpcRemoveAttr.Invoke((PlayerId, attribute.Id));
+    }
+    IEnumerable<(IPlayerAttribute attribute, float percentage)> GamePlayer.GetAttributes() => GetValidAttributes();
+
+    // Virial::OutfitAPI
+
+    Virial.Game.OutfitDefinition GamePlayer.GetOutfit(int maxPriority) => GetOutfit(maxPriority).Outfit;
+    Virial.Game.OutfitDefinition? GamePlayer.GetOutfit(int? maxPriority, int minPriority)
+    {
+        OutfitCandidate maxOutfit;
+        if (maxPriority != null)
+            maxOutfit = GetOutfit(maxPriority.Value);
+        else
+            maxOutfit = CurrentOutfit;
+        if (maxOutfit.Priority >= minPriority) return maxOutfit.Outfit;
+        return null;
+    }
+
+    IEnumerable<Modifier> GamePlayer.GetModifiers<Modifier>()
+    {
+        foreach (var m in myModifiers) if (m is Modifier m2) yield return m2;
+    }
+
+    void GamePlayer.SetRole(DefinedRole role, int[]? arguments, RoleAssignType assignType)
+    {
+        var fallback = role.CheckFallback(this, arguments ?? []);
+        if (fallback != null)
+        {
+            (this as GamePlayer).SetRole(fallback.Role, fallback.Arguments ?? [], assignType);
+        }
+        else
+        {
+            RpcInvokerSetRole(role, arguments, assignType).InvokeSingle();
+        }
+    }
+    void GamePlayer.SetGhostRole(DefinedGhostRole role, int[]? arguments, RoleAssignType assignType) => RpcInvokerSetGhostRole(role, arguments, assignType).InvokeSingle();
+
+    void GamePlayer.AddModifier(DefinedModifier modifier, int[]? arguments, RoleAssignType assignType) => RpcInvokerSetModifier(modifier, arguments, assignType).InvokeSingle();
+    void GamePlayer.RemoveModifier(DefinedModifier modifier) => RpcInvokerUnsetModifier(modifier).InvokeSingle();
+    void GamePlayer.RemoveModifierLocal(RuntimeModifier modifier) => UnsetModifierLocal(m => m == modifier);
+
+    bool GamePlayer.CanKill(GamePlayer target) => GameOperatorManager.Instance!.Run(new PlayerCheckCanKillLocalEvent(this, target)).CanKill;
+
+    Virial.Game.OutfitDefinition IPlayerlike.CurrentOutfit => CurrentOutfit.Outfit;
+    Virial.Game.OutfitDefinition GamePlayer.DefaultOutfit => DefaultOutfit.Outfit;
+
+    // Virial::Internal
+
+    PlayerControl GamePlayer.VanillaPlayer => MyControl;
+
+    // Virial::PlayerlikeAPI
+
+    GamePlayer IPlayerlike.RealPlayer => this;
+
+    int IPlayerlike.PlayerlikeId => PlayerId;
+
+    KillCharacteristics IPlayerlike.KillCharacteristics => KillCharacteristics.KillOne;
+
+    bool IPlayerlike.CanBeTarget => true;
+
+    CosmeticsLayer IPlayerlike.VanillaCosmetics => MyLayer;
+    PlayerAnimations IPlayerlike.VanillaAnimations => MyAnimations.Animations;
+    PlayerPhysics GamePlayer.VanillaPhysics => MyPhysics;
+
+    private VanillaPlayerLogics playerLogic;
+    IPlayerLogics IPlayerlike.Logic => playerLogic;
+
+    internal string GetStateText(string preEx = "<color=#FF6666><size=75%>", string postEx = "</size></color>")
+    {
+        string stateText = (this as GamePlayer).PlayerState.Text;
+        string? stateExText = null;
+        if ((this as GamePlayer).PlayerStateExtraInfo != null && (this as GamePlayer).PlayerStateExtraInfo?.State == (this as GamePlayer).PlayerState) stateExText = (this as GamePlayer).PlayerStateExtraInfo?.ToStateText();
+        else if ((this as GamePlayer).IsDead && (this as GamePlayer).MyKiller != null) stateExText = "by " + ((this as GamePlayer).MyKiller?.Name ?? "ERROR");
+        if ((stateExText?.Length ?? 0) > 0) stateText += preEx + " " + stateExText + postEx;
+        return stateText;
+    }
+    public GUIWidget? ProgressWidget
+    {
+        get
+        {
+            var contents = AllAssigned()
+                .Select(assignable => (assignable, assignable.ProgressWidget))
+                .Where(tuple => tuple.ProgressWidget != null)
+                .Select(tuple => GUI.API.VerticalHolder(Virial.Media.GUIAlignment.Left,
+                    GUI.API.RawText(Virial.Media.GUIAlignment.Left, AttributeAsset.OverlayTitle, tuple.assignable.DisplayColoredName),
+                    tuple.ProgressWidget!.Move(new(0.14f, 0f))
+                )).Prepend(NebulaAPI.GUI.RawText(Virial.Media.GUIAlignment.Left, NebulaAPI.GUI.GetAttribute(Virial.Text.AttributeAsset.DocumentBold), (this as GamePlayer).PlayerName + ": " + GetStateText("", ""))).ToArray();
+            if(contents.Length == 0) return null;
+            return GUI.API.VerticalHolder(Virial.Media.GUIAlignment.Left, contents);
+        }
+    }
+
+    public readonly static RemoteProcess<(GamePlayer player, string permission, bool inverse, bool add)> RpcEditPermission = new(
+   "EditPermission", (message, _) =>
+   {
+       var player = message.player.Unbox();
+       if (player == null) return;
+
+       if (Permissions.TryGetPermission(message.permission, out var perm))
+       {
+           if (message.add)
+           {
+               player.PermissionHolder.AddPermission(perm, message.inverse);
+           }
+           else
+           {
+               player.PermissionHolder.RemovePermission(perm, message.inverse);
+           }
+       }
+   }, false);
+
+    // PrivateAPI
+
+    internal void UpdateModDead(bool isDead) => this.IsDead = isDead;
+}
