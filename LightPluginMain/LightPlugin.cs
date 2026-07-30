@@ -2,6 +2,7 @@ global using HarmonyLib;
 global using System.Collections;
 global using UnityEngine;
 using BepInEx;
+using BepInEx.Logging;
 using BepInEx.Unity.IL2CPP;
 using Reactor;
 
@@ -20,8 +21,12 @@ public partial class LightPlugin : BasePlugin
 
     public Harmony Harmony { get; } = new(Id);
 
+    // 静态日志引用，供 Patch 类使用
+    internal static ManualLogSource StaticLog { get; private set; } = null!;
+
     public override void Load()
     {
+        StaticLog = Log;
         Harmony.PatchAll();
         Log.LogInfo($"模组 {Name} v{Version} 已加载！");
     }

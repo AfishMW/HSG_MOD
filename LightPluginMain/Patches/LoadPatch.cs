@@ -43,9 +43,22 @@ public static class LoadPatch
     private static int currentQuoteIndex;
     private static float quoteTimer;
     private static float loadStageTimer;
+    private static float loadDotTimer;
 
     private static bool loaded;
     private static bool cachedDoneLoadingRefData;
+
+    // 粒子系统
+    private class Particle
+    {
+        public SpriteRenderer? renderer;
+        public Vector2 velocity;
+        public float life;
+        public float maxLife;
+        public float startScale;
+    }
+    private static List<Particle>? particles;
+    private static Sprite? particleSprite;
 
     public static string LoadingText
     {
@@ -74,10 +87,10 @@ public static class LoadPatch
 
     private static IEnumerator CoLoadLight(SplashManager instance)
     {
-        // 创建 Logo
+        // ======= 创建 Logo =======
         logo = UnityHelper.CreateObject<SpriteRenderer>("LightLogo", null, new Vector3(0, 0.5f, -5f));
 
-        // 创建 Logo 发光层（叠加在 Logo 下方，略大一圈）
+        // 创建 Logo 发光层
         logoGlow = UnityHelper.CreateObject<SpriteRenderer>("LightLogoGlow", null, new Vector3(0, 0.5f, -4.8f));
 
         // 加载 Logo 纹理
@@ -89,14 +102,46 @@ public static class LoadPatch
             logoGlow.sprite = logoSprite;
         }
 
-        // Logo + 发光缩放淡入动画
+        // ======= 创建粒子纹理（小圆点） =======
+        var particleTex = new Texture2D(8, 8);
+        for (int x = 0; x < 8; x++)
+            for (int y = 0; y < 8; y++)
+            {
+                float dx = (x - 3.5f) / 3.5f;
+                float dy = (y - 3.5f) / 3.5f;
+                float dist = Mathf.Sqrt(dx * dx + dy * dy);
+                particleTex.SetPixel(x, y, dist < 1f ? new Color(1, 1, 1, 1f - dist) : Color.clear);
+            }
+        particleTex.Apply();
+        particleSprite = Sprite.Create(particleTex, new Rect(0, 0, 8, 8), new Vector2(0.5f, 0.5f), 100f);
+
+        // ======= 创建粒子 =======
+        particles = new List<Particle>();
+        for (int i = 0; i < 12; i++)
+        {
+            var sr = UnityHelper.CreateObject<SpriteRenderer>($"Particle{i}", null,
+                new Vector3(UnityEngine.Random.Range(-3f, 3f), UnityEngine.Random.Range(-1.5f, 2.5f), -4.5f));
+            sr.sprite = particleSprite;
+            sr.color = new Color(1, 1, 1, UnityEngine.Random.Range(0.1f, 0.35f));
+            float s = UnityEngine.Random.Range(0.3f, 0.7f);
+            sr.transform.localScale = Vector3.one * s;
+            particles.Add(new Particle
+            {
+                renderer = sr,
+                velocity = new Vector2(UnityEngine.Random.Range(-0.08f, 0.08f), UnityEngine.Random.Range(-0.06f, 0.06f)),
+                life = UnityEngine.Random.Range(0f, 3f),
+                maxLife = UnityEngine.Random.Range(3f, 5f),
+                startScale = s
+            });
+        }
+
+        // ======= Logo 缩放淡入动画 =======
         float p = 1f;
         while (p > 0f)
         {
             p -= Time.deltaTime * 2.8f;
             float alpha = 1f - p;
             logo.color = new Color(1f, 1f, 1f, alpha);
-            // 发光层：比 Logo 稍大，透明度先快速提升再缓慢降低
             float glowAlpha = Mathf.Min(1f, alpha * (p * 2f + 0.3f));
             logoGlow.color = new Color(1f, 1f, 1f, glowAlpha * 0.5f);
             logo.transform.localScale = Vector3.one * (p * p * 0.012f + 1f);
@@ -105,26 +150,25 @@ public static class LoadPatch
         }
         logo.color = Color.white;
         logo.transform.localScale = Vector3.one;
-        // 发光层继续淡入维持
         logoGlow.color = new Color(1f, 1f, 1f, 0.45f);
         logoGlow.transform.localScale = Vector3.one * 1.04f;
 
-        // 创建加载进度文字
+        // ======= 创建加载进度文字 =======
         loadText = UnityEngine.Object.Instantiate(instance.errorPopup.InfoText, null);
         loadText.transform.localPosition = new Vector3(0f, -0.8f, -10f);
         loadText.fontStyle = FontStyles.Bold;
         loadText.text = "正在加载资源...";
         loadText.color = new Color(1f, 1f, 1f, 0.3f);
 
-        // 创建底部名人名言文字（灰色斜体）
+        // ======= 创建引用文字（放到底部） =======
         quoteText = UnityEngine.Object.Instantiate(instance.errorPopup.InfoText, null);
-        quoteText.transform.localPosition = new Vector3(0f, -2.8f, -10f);
+        quoteText.transform.localPosition = new Vector3(0f, -3.8f, -10f);
         quoteText.fontStyle = FontStyles.Italic;
-        quoteText.color = new Color(0.6f, 0.6f, 0.6f, 0.8f);
+        quoteText.color = new Color(0.6f, 0.6f, 0.6f, 0f); // 从透明开始淡入
         quoteText.fontSize *= 0.7f;
         quoteText.text = Quotes[0];
 
-        // 创建右下角版本号
+        // ======= 创建版本号（右下角） =======
         versionText = UnityEngine.Object.Instantiate(instance.errorPopup.InfoText, null);
         versionText.transform.localPosition = new Vector3(4.5f, -3.2f, -10f);
         versionText.fontStyle = FontStyles.Italic;
@@ -133,38 +177,118 @@ public static class LoadPatch
         versionText.alignment = TextAlignmentOptions.BottomRight;
         versionText.text = $"{LightPlugin.VisualVersion}";
 
-        // 真实加载流程：等待参考数据加载完成 + 最低展示时间
+        // ======= 引用淡入 =======
+        p = 0f;
+        while (p < 1f)
+        {
+            p += Time.deltaTime * 1.5f;
+            quoteText.color = new Color(0.6f, 0.6f, 0.6f, 0.8f * p);
+            yield return null;
+        }
+        quoteText.color = new Color(0.6f, 0.6f, 0.6f, 0.8f);
+
+        // ======= 加载主循环 =======
         loadStageTimer = 0f;
         currentQuoteIndex = 0;
         quoteTimer = 0f;
+        loadDotTimer = 0f;
+        float quoteFadeTimer = 0f;
+        bool quoteFading = false;
+        string? nextQuote = null;
+        float totalLoadTime = 0f;
 
         while (!cachedDoneLoadingRefData || loadStageTimer < MinLoadTime)
         {
-            // 如果参考数据已加载完成，推进计时
             if (cachedDoneLoadingRefData)
-                loadStageTimer += Time.deltaTime;
-
-            quoteTimer += Time.deltaTime;
-
-            // 轮播名言
-            if (quoteTimer >= QuoteInterval)
             {
-                quoteTimer = 0f;
-                currentQuoteIndex = (currentQuoteIndex + 1) % Quotes.Length;
-                quoteText.text = Quotes[currentQuoteIndex];
+                loadStageTimer += Time.deltaTime;
+                totalLoadTime += Time.deltaTime;
             }
 
-            // 更新加载阶段文字
-            loadText.text = GetNextLoadStage(loadStageTimer);
+            quoteTimer += Time.deltaTime;
+            loadDotTimer += Time.deltaTime;
 
-            // 发光层脉冲呼吸效果
+            // 轮播名言（带淡入淡出过渡）
+            if (quoteTimer >= QuoteInterval && !quoteFading)
+            {
+                quoteFading = true;
+                quoteFadeTimer = 0f;
+                nextQuote = Quotes[(currentQuoteIndex + 1) % Quotes.Length];
+            }
+
+            if (quoteFading)
+            {
+                quoteFadeTimer += Time.deltaTime;
+                float fadeP = Mathf.Clamp01(quoteFadeTimer / 0.5f);
+                if (fadeP < 0.5f)
+                {
+                    // 淡出旧名言
+                    float outA = 0.8f * (1f - fadeP * 2f);
+                    quoteText.color = new Color(0.6f, 0.6f, 0.6f, outA);
+                }
+                else
+                {
+                    // 切换并淡入新名言
+                    if (nextQuote != null && fadeP < 0.55f)
+                    {
+                        quoteText.text = nextQuote;
+                        currentQuoteIndex = (currentQuoteIndex + 1) % Quotes.Length;
+                    }
+                    float inA = 0.8f * ((fadeP - 0.5f) * 2f);
+                    quoteText.color = new Color(0.6f, 0.6f, 0.6f, inA);
+                    if (fadeP >= 1f)
+                    {
+                        quoteFading = false;
+                        quoteTimer = 0f;
+                        quoteText.color = new Color(0.6f, 0.6f, 0.6f, 0.8f);
+                    }
+                }
+            }
+
+            // 加载阶段文字 + 动态点
+            string stage = GetNextLoadStage(loadStageTimer);
+            int dotCount = ((int)(loadDotTimer * 4f) % 4);
+            loadText.text = stage + new string('.', dotCount) + new string(' ', 3 - dotCount);
+
+            // 发光层脉冲呼吸
             float breathe = Mathf.Sin(Time.time * 1.5f) * 0.12f + 0.35f;
             logoGlow.color = new Color(1f, 1f, 1f, breathe);
+
+            // Logo 微微旋转摆动
+            float rotZ = Mathf.Sin(Time.time * 0.3f) * 1.5f;
+            logo.transform.localEulerAngles = new Vector3(0f, 0f, rotZ);
+            logoGlow.transform.localEulerAngles = new Vector3(0f, 0f, rotZ);
+
+            // 粒子更新
+            if (particles != null)
+            {
+                for (int i = particles.Count - 1; i >= 0; i--)
+                {
+                    var pt = particles[i];
+                    pt.life += Time.deltaTime;
+
+                    // 粒子飘动
+                    var pos = pt.renderer.transform.localPosition;
+                    pos.x += pt.velocity.x * Time.deltaTime;
+                    pos.y += pt.velocity.y * Time.deltaTime + Mathf.Sin(Time.time + i) * 0.003f;
+                    pt.renderer.transform.localPosition = pos;
+
+                    // 粒子透明度呼吸
+                    float alpha = Mathf.Sin(pt.life * 1.2f + i) * 0.15f + 0.2f;
+                    pt.renderer.color = new Color(1, 1, 1, alpha);
+
+                    // 循环边界
+                    if (pos.x > 3.5f) pos.x = -3.5f;
+                    if (pos.x < -3.5f) pos.x = 3.5f;
+                    if (pos.y > 2.8f) pos.y = -1.8f;
+                    if (pos.y < -1.8f) pos.y = 2.8f;
+                }
+            }
 
             yield return null;
         }
 
-        // 加载完成闪烁提示
+        // 加载完成闪烁
         loadText.text = "加载完成";
         for (int i = 0; i < 3; i++)
         {
@@ -174,11 +298,28 @@ public static class LoadPatch
             yield return new WaitForSeconds(0.03f);
         }
 
+        // 粒子淡出
+        if (particles != null)
+        {
+            p = 1f;
+            while (p > 0f)
+            {
+                p -= Time.deltaTime * 2f;
+                foreach (var pt in particles)
+                    pt.renderer.color = new Color(1, 1, 1, pt.renderer.color.a * 0.9f);
+                yield return null;
+            }
+            foreach (var pt in particles)
+                UnityEngine.Object.Destroy(pt.renderer.gameObject);
+            particles.Clear();
+        }
+
+        // 销毁 UI 元素
         UnityEngine.Object.Destroy(loadText.gameObject);
         UnityEngine.Object.Destroy(quoteText.gameObject);
         UnityEngine.Object.Destroy(versionText.gameObject);
 
-        // 发光层先淡出
+        // 发光层淡出
         p = 0f;
         while (p < 1f)
         {
