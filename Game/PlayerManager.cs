@@ -11,7 +11,7 @@ namespace LightInDark.Game
         {
             Control = control;
         }
-        public bool isDead => Control.Data.IsDead;
+        public bool IsDead => Control.Data.IsDead;
 
 
         public string Name => Control.Data.PlayerName;
@@ -32,7 +32,7 @@ namespace LightInDark.Game
     public class MyPlayer : IPlayer
     {
         private PlayerControl pc = PlayerControl.LocalPlayer;
-        public bool isDead => pc.Data.IsDead;
+        public bool IsDead => pc.Data.IsDead;
 
         public string Name => pc.Data.PlayerName;
 

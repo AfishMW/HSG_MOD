@@ -18,4 +18,9 @@ namespace LightInDark.Events
     }
     public class ShowChatEvent : IEvent { }
     public class HideChatEvent : IEvent { }
+    public class GameStartEvent : IEvent 
+    {
+        public int PlayerCount { get; set; }
+    }
+
 }

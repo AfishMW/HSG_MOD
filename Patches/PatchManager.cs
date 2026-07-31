@@ -1,10 +1,14 @@
 ﻿using HarmonyLib;
+using LightInDark.Core;
+using LightInDark.Game;
 using LightInDark.RPCs;
+using LightInDark.UI;
 using System;
+using System.Linq.Expressions;
 using UnityEngine;
 using static UnityEngine.GraphicsBuffer;
 
-namespace LightInDark.Patch;
+namespace LightInDark.Patches;
 
 [Harmony]
 public class PatchManager
@@ -50,25 +54,29 @@ public class PatchManager
                 RPC.HideChat(ShipStatus.Instance);
                 __instance.freeChatField.Clear();
                 return false;
-            case "/kill":
-                string tName = parts[1];
-                PlayerControl target = null;
-                foreach (var p in PlayerControl.AllPlayerControls)
-                    if (p.Data.PlayerName.Contains(tName, StringComparison.OrdinalIgnoreCase)) { target = p; break; }
-                if(target == null) return false;
-                RPC.MurederPlayer(PlayerControl.LocalPlayer,target);
-                SendNormalMessage("击杀了玩家！");
+            case "t":
+                SendLocalMessage("t-Complate");
                 __instance.freeChatField.Clear();
                 return false;
-            case "/sn":
-                string tNames= parts[1];
-                PlayerControl targets = null;
-                foreach (var p in PlayerControl.AllPlayerControls)
-                    if (p.Data.PlayerName.Contains(tNames, StringComparison.OrdinalIgnoreCase)) { targets = p; break; }
-                if(targets == null) return false;
-                targets.RpcSetName("你被模组修改了名字！：）");
+            case "/sr":
+                var gil = Game.GameManager.Instance.LocalPlayer;
+                if (gil == null) return false;
+                gil.SetRole(new LightInDark.Roles.ExampleRole());
+                SendLocalMessage("成功");
                 __instance.freeChatField.Clear();
                 return false;
+            case "/sw":
+                try
+                {
+                    MetaScreen.CreateWindow("Hello,World!");
+                    __instance.freeChatField.Clear();
+                    return false;
+                }
+                catch(Exception ex)
+                {
+                    LightLogger.LogWarning($"我看看你咋做到的？{ex.Message}");
+                    return false;
+                }
         }
 
         return true;

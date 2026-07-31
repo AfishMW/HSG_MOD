@@ -1,6 +1,8 @@
 using BepInEx.Unity.IL2CPP.Utils.Collections;
 using HarmonyLib;
 using Light.Utilities;
+using LightInDark;
+using System.Collections;
 using TMPro;
 using UnityEngine;
 
@@ -95,18 +97,18 @@ public static class LoadPatch
         {
             p -= Time.deltaTime * 2.8f;
             float alpha = 1f - p;
-            logo.color = new Color(1f, 1f, 1f, alpha);
+            logo.color = new Color(1f, 1f, 1f, alpha).ToUnityColor();
             // 发光层：比 Logo 稍大，透明度先快速提升再缓慢降低
             float glowAlpha = Mathf.Min(1f, alpha * (p * 2f + 0.3f));
-            logoGlow.color = new Color(1f, 1f, 1f, glowAlpha * 0.5f);
+            logoGlow.color = new Color(1f, 1f, 1f, glowAlpha * 0.5f).ToUnityColor();
             logo.transform.localScale = Vector3.one * (p * p * 0.012f + 1f);
             logoGlow.transform.localScale = Vector3.one * (p * p * 0.015f + 1.04f);
             yield return null;
         }
-        logo.color = Color.white;
+        logo.color = UnityEngine.Color.white;
         logo.transform.localScale = Vector3.one;
         // 发光层继续淡入维持
-        logoGlow.color = new Color(1f, 1f, 1f, 0.45f);
+        logoGlow.color = new Color(1f, 1f, 1f, 0.45f).ToUnityColor();
         logoGlow.transform.localScale = Vector3.one * 1.04f;
 
         // 创建加载进度文字
@@ -114,13 +116,13 @@ public static class LoadPatch
         loadText.transform.localPosition = new Vector3(0f, -0.8f, -10f);
         loadText.fontStyle = FontStyles.Bold;
         loadText.text = "正在加载资源...";
-        loadText.color = new Color(1f, 1f, 1f, 0.3f);
+        loadText.color = new Color(1f, 1f, 1f, 0.3f).ToUnityColor();
 
         // 创建底部名人名言文字（灰色斜体）
         quoteText = UnityEngine.Object.Instantiate(instance.errorPopup.InfoText, null);
         quoteText.transform.localPosition = new Vector3(0f, -2.8f, -10f);
         quoteText.fontStyle = FontStyles.Italic;
-        quoteText.color = new Color(0.6f, 0.6f, 0.6f, 0.8f);
+        quoteText.color = new Color(0.6f, 0.6f, 0.6f, 0.8f).ToUnityColor();
         quoteText.fontSize *= 0.7f;
         quoteText.text = Quotes[0];
 
@@ -128,19 +130,17 @@ public static class LoadPatch
         versionText = UnityEngine.Object.Instantiate(instance.errorPopup.InfoText, null);
         versionText.transform.localPosition = new Vector3(4.5f, -3.2f, -10f);
         versionText.fontStyle = FontStyles.Italic;
-        versionText.color = new Color(0.5f, 0.5f, 0.5f, 0.6f);
+        versionText.color = new Color(0.5f, 0.5f, 0.5f, 0.6f).ToUnityColor();
         versionText.fontSize *= 0.55f;
         versionText.alignment = TextAlignmentOptions.BottomRight;
-        versionText.text = $"{LightPlugin.VisualVersion}";
+        versionText.text = $"{LIDPlugin.VisualVersion}";
 
-        // 真实加载流程：等待参考数据加载完成 + 最低展示时间
         loadStageTimer = 0f;
         currentQuoteIndex = 0;
         quoteTimer = 0f;
 
         while (!cachedDoneLoadingRefData || loadStageTimer < MinLoadTime)
         {
-            // 如果参考数据已加载完成，推进计时
             if (cachedDoneLoadingRefData)
                 loadStageTimer += Time.deltaTime;
 
@@ -159,7 +159,7 @@ public static class LoadPatch
 
             // 发光层脉冲呼吸效果
             float breathe = Mathf.Sin(Time.time * 1.5f) * 0.12f + 0.35f;
-            logoGlow.color = new Color(1f, 1f, 1f, breathe);
+            logoGlow.color = new Color(1f, 1f, 1f, breathe).ToUnityColor();
 
             yield return null;
         }
@@ -183,7 +183,7 @@ public static class LoadPatch
         while (p < 1f)
         {
             p += Time.deltaTime * 2f;
-            logoGlow.color = new Color(1f, 1f, 1f, 0.45f * (1f - p));
+            logoGlow.color = new Color(1f, 1f, 1f, 0.45f * (1f - p)).ToUnityColor();
             yield return null;
         }
         UnityEngine.Object.Destroy(logoGlow.gameObject);
@@ -193,10 +193,10 @@ public static class LoadPatch
         while (p > 0f)
         {
             p -= Time.deltaTime * 1.2f;
-            logo.color = new Color(1f, 1f, 1f, p);
+            logo.color = new UnityEngine.Color(1f, 1f, 1f, p);
             yield return null;
         }
-        logo.color = Color.clear;
+        logo.color = UnityEngine.Color.clear;
 
         instance.sceneChanger.AllowFinishLoadingScene();
         instance.startedSceneLoad = true;

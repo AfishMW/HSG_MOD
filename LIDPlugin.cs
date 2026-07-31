@@ -1,15 +1,19 @@
 ﻿global using Color = LightInDark.Color;
+global using UColor = UnityEngine.Color;
 using BepInEx;
 using BepInEx.Unity.IL2CPP;
 using HarmonyLib;
+using Il2CppInterop.Runtime.Injection;
 using LightInDark.Core;
-using LightInDark.Patch;
 using LightInDark.Events;
+using LightInDark.Patches;
+using LightInDark.UI;
 using Reactor;
 using Reactor.Networking;
 using Reactor.Networking.Attributes;
 using System.Collections;
 using UnityEngine;
+
 
 namespace LightInDark;
 
@@ -20,12 +24,15 @@ namespace LightInDark;
 public partial class LIDPlugin : BasePlugin
 {
     public Harmony Harmony { get; } = new("LightAPI.harmony");
+    public const string VisualVersion = "Dev 1.0.0";
     public override void Load()
     {
-        LoadCommand();
         Harmony.PatchAll();
+        LoadCommand();
+        ClassInjector.RegisterTypeInIl2Cpp<MetaScreen>();
         EventSystem.ScanAndRegisterAll();
         Language.Language.Load();
+        
         LightLogger.Log("Mod加载成功");
     }
     
@@ -56,24 +63,17 @@ public static class ShowChatPatch
     public static void Postfix()
     {
         if (HudManager.Instance?.Chat == null) return;
-        if (!NeedShowFreeChat) return;
+        //if (!NeedShowFreeChat) return;
         HudManager.Instance.Chat.gameObject.SetActive(true);
     }
 }
-[HarmonyPatch(typeof(GameObject), "SetActive")]
-public class Patch_GameObject_SetActive
+[HarmonyPatch(typeof(GameManager), nameof(GameManager.StartGame))]
+public static class GameManager_StartGame_Patch
 {
-    public static void Postfix(GameObject __instance, bool value)
+    public static void Postfix()
     {
-        string logMessage = $"[{Time.time}] GameObject '{__instance.name}' 被设置为 {(value ? "显示" : "隐藏")}";
-        LightLogger.Log(logMessage);
-    }
-}
-[HarmonyPatch(typeof(UnityEngine.Events.UnityEvent), "Invoke")]
-public class Patch_UnityEvent_Invoke
-{
-    public static void Prefix(UnityEngine.Events.UnityEvent __instance)
-    {
-        LightLogger.Log($"一个UnityEvent被触发了: {__instance}");
+        LightLogger.Log("[游戏] 游戏开始，初始化 GameManager");
+        Game.GameManager.Instance.Initialize();
+        EventSystem.RunEvent(new GameStartEvent() { PlayerCount = PlayerControl.AllPlayerControls.Count });
     }
 }
