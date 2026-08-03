@@ -12,6 +12,9 @@ namespace LightInDark.RPCs
         ShowChat = 69,
         HideChat = 70,
         SyncRole = 71,
+        KickPlayer = 72,
+        SetKickReason = 73,
+        KickPlayerWithReason = 74
     }
     public partial class RPC
     {

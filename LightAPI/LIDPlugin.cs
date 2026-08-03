@@ -13,6 +13,7 @@ using Reactor.Networking;
 using Reactor.Networking.Attributes;
 using System.Collections;
 using UnityEngine;
+using Reactor.Utilities;
 
 
 namespace LightInDark;
@@ -25,6 +26,8 @@ public partial class LIDPlugin : BasePlugin
 {
     public Harmony Harmony { get; } = new("LightAPI.harmony");
     public const string VisualVersion = "Dev 1.0.0";
+    public const string RichVersion = "<color=#4FD1C5>ver</color> <color=#38B2AC>1.0.0</color>";
+    public static string AUVersion;
     public override void Load()
     {
         Harmony.PatchAll();
@@ -35,7 +38,6 @@ public partial class LIDPlugin : BasePlugin
         
         LightLogger.Log("Mod加载成功");
     }
-    
     static void LoadCommand()
     {
         var harmony = new Harmony("Light.cmd.harmony");
@@ -77,3 +79,4 @@ public static class GameManager_StartGame_Patch
         EventSystem.RunEvent(new GameStartEvent() { PlayerCount = PlayerControl.AllPlayerControls.Count });
     }
 }
+
