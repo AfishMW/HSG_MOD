@@ -23,10 +23,9 @@ public static class VersionPatch
             "<color=#6B46C1>r</color><color=#553C9A>k</color>";
         string richVersion = LIDPlugin.RichVersion;
 
-        //__instance.text.text = $"{lightText} {inText} {darkText} - {richVersion} | AU {auVer}";
-        __instance.text.text = $"玩AmongUs {auVer} 的是猪。";
+        __instance.text.text = $"{lightText} {inText} {darkText} - {richVersion} | AU {auVer}";
         // #D3C678 #E6F6EB #050B2E
-        ModManager.Instance.ShowModStamp();
+        //ModManager.Instance.ShowModStamp();
     }
 }
 

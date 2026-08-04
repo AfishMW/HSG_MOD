@@ -135,6 +135,10 @@ public static class AmongUsEdited
             kickReasonConsumeUntil = 0f;
         }
     }
+    /// <summary>
+    /// 将PlayerControl转换为LightInDark.Game.Player。
+    /// </summary>
+    /// <returns></returns>
     public static Player ToLIDPlayer(this PlayerControl pc)
     {
         if (pc == null) return null;
@@ -142,7 +146,10 @@ public static class AmongUsEdited
     }
 
 
-
+    /// <summary>
+    /// 展示一个类似于断开连接的弹窗，显示自定义文本。
+    /// </summary>
+    /// <param name="text">要显示的文本</param>
     public static void ShowCustomDisconnectWindow(string text)
     {
         var popup = DestroyableSingleton<DisconnectPopup>.Instance;
@@ -154,5 +161,15 @@ public static class AmongUsEdited
         }
     }
 
+    /// <summary>
+    /// 检查当前是否为自定义服务器。
+    /// </summary>
+    /// <returns>如果是自定义服务器，返回true；否则，返回false</returns>
+    public static bool IsCustomServer() => ServerManager.Instance?.CurrentRegion.TranslateName is StringNames.NoTranslation or null;
+    /// <summary>
+    /// 检查当前是否在大厅中。
+    /// </summary>
+    /// <returns>在大厅中时，返回true；否则，返回false</returns>
+    public static bool IsInLobby() => LobbyBehaviour.Instance != null;
 
 }

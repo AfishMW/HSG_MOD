@@ -38,7 +38,6 @@ public class PatchManager
         string[] parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 0) return true;
         string cmd = parts[0].ToLower();
-        bool isClearBody = false;
         switch (cmd)
         {
             case "/test":
