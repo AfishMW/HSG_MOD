@@ -1,26 +1,29 @@
 ﻿using LightInDark.Game;
+using LightInDark.Roles;
 
 namespace LightInDark.Abilities
 {
+    /// <summary>
+    /// 能力基类。
+    /// </summary>
     public abstract class AbstractPlayerAbility : DependentLifespan, IPlayerAbility
     {
         public Player MyPlayer { get; }
+        public RuntimeRole Role { get; }
         public bool AmOwner => MyPlayer.AmOwner;
-        public virtual bool HideKillButton => false;
+        public bool IsActive { get; private set; }
 
-        protected AbstractPlayerAbility(Player player)
+        protected AbstractPlayerAbility(RuntimeRole role)
         {
-            MyPlayer = player;
-            // 绑定到自身的寿命（当能力被释放时，会清理）
-            // 注意：这里不自动注册到游戏，由调用者（角色）调用 Register
-            // 但我们将 Register 延迟到 AddAbility 中
-            // 或者这里可以调用 RegisterSelf，但需要确保寿命已绑定
-            // 更安全：由外部调用 Register
+            Role = role;
+            MyPlayer = role.MyPlayer;
         }
 
-        public virtual void Release()
-        {
-            // 清理资源
-        }
+        public virtual void OnActivate() { IsActive = true; }
+        public virtual void OnDeactivate() { IsActive = false; }
+        public virtual void OnUpdate() { }
+
+        public virtual void Release() { }
+        void IGameOperator.OnReleased() { }
     }
 }

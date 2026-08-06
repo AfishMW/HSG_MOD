@@ -120,7 +120,7 @@ public static class AmongUsEdited
         string realReason = reason ?? "无";
         string kickerDisplay = string.IsNullOrEmpty(kickerName) ? "" : $"<b>{kickerName}</b>";
         string prefix = $"你被{kickerDisplay}踢出了 {code} 。\n原因：{realReason}";
-        RPC.KickPlayerWithReason(p.Control, prefix);
+        RpcDefinitions.KickPlayerWithReason(p.Control.PlayerId, prefix);
     }
     public static class KickManager
     {

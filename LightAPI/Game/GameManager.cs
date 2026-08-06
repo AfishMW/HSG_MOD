@@ -52,11 +52,8 @@ namespace LightInDark.Game
         public void Update()
         {
             _entities.RemoveAll(e => e.IsDeadObject);
-            foreach (var entity in _entities)
-            {
-                if (entity is ModAbilityButton button)
-                    button.Update();
-            }
+            // 按钮更新由 PlayerControl.FixedUpdate 补丁驱动（参考 MiraAPI）
+            // 能力更新也由补丁驱动
         }
 
         public new void Release()

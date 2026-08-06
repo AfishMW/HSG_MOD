@@ -1,41 +1,68 @@
-﻿
-
+﻿using LightInDark.Configuration;
 using LightInDark.Core;
 using LightInDark.Events;
 using LightInDark.Roles;
 using LightInDark.RPCs;
 using UnityEngine;
+using System.Linq;
 
 namespace LightInDark.Game
 {
     public interface IPlayer
     {
         bool IsDead { get; }
+        bool IsLocal { get; }
         string Name { get; }
-        UnityEngine.Vector2 Position { get; }
+        Vector2 Position { get; }
+        RuntimeRole Role { get; }
     }
+
     public interface IBindPlayer
     {
         Player MyPlayer { get; }
         bool AmOwner { get; }
     }
 
+    /// <summary>
+    /// 健全的 Player 系统，封装 PlayerControl 并联合 Role。
+    /// </summary>
     public class Player : IPlayer, IBindPlayer, IGameOperator, ILifespan
     {
         public PlayerControl Control { get; private set; }
 
+        // ---- IPlayer ----
         public bool IsDead => Control?.Data?.IsDead ?? true;
+        public bool IsLocal => Control == PlayerControl.LocalPlayer;
         public string Name => Control?.Data?.PlayerName ?? "Unknown";
         public Vector2 Position => Control?.transform?.position ?? Vector2.zero;
-
-        // IBindPlayer
-        public Player MyPlayer => this;
-        public bool AmOwner => Control == PlayerControl.LocalPlayer;
-
-        public bool IsDeadObject => Control == null || Control.Data == null || Control.Data.Disconnected || Control.Data.IsDead;
-
-        // 角色引用（稍后添加）
         public RuntimeRole Role { get; internal set; }
+
+        public Player MyPlayer => this;
+        public bool AmOwner => IsLocal;
+
+        public bool IsDeadObject => Control == null || Control.Data == null
+            || Control.Data.Disconnected || Control.Data.IsDead;
+
+        public Color PlayerColor
+        {
+            get
+            {
+                try
+                {
+                    if (Control?.Data != null)
+                    {
+                        var colorId = Control.Data.DefaultOutfit.ColorId;
+                        if (colorId >= 0 && colorId < Palette.PlayerColors.Length)
+                            return ((UnityEngine.Color)Palette.PlayerColors[colorId]).ToLIDColor();
+                    }
+                }
+                catch { }
+                return Color.White;
+            }
+        }
+
+        // ---- 角色 ----
+        public RoleCategory? RoleCategory => Role?.Definition?.Category;
 
         public Player(PlayerControl control)
         {
@@ -43,31 +70,18 @@ namespace LightInDark.Game
             EventSystem.RegisterInstance(this);
         }
 
-        public void Suicide() => RPC.Suicide(Control);
-        public void MurderPlayer(PlayerControl victim) => RPC.MurederPlayer(Control, victim);
-        public void Release()
-        {
-            EventSystem.UnregisterInstance(this);
-        }
         /// <summary>
         /// 切换角色（本地立即切换，并发送RPC同步）
         /// </summary>
         public void SetRole(DefinedRole newRole)
         {
-            // 1. 释放旧角色
-            if (Role != null)
-            {
-                Role.Release();
-                Role = null;
-            }
+            if (newRole == null) return;
 
-            // 2. 创建新角色
+            Role?.Release();
             Role = newRole.CreateInstance(this);
+            RpcDefinitions.SyncRole(Control, newRole.Name);
 
-            // 3. 同步到其他客户端
-            RPC.SyncRole(this.Control, newRole);
-
-            LightLogger.Log($"[角色] {Name} 切换为 {newRole.Name}");
+            Core.LightLogger.Log($"[Player] {Name} → {newRole.Name}");
         }
 
         /// <summary>
@@ -75,15 +89,31 @@ namespace LightInDark.Game
         /// </summary>
         internal void SetRoleLocal(DefinedRole newRole)
         {
-            if (Role != null)
-            {
-                Role.Release();
-                Role = null;
-            }
+            if (newRole == null) return;
 
+            Role?.Release();
             Role = newRole.CreateInstance(this);
-            LightLogger.Log($"[角色] {Name} (本地) 切换为 {newRole.Name}");
-        }
-    }
 
+            Core.LightLogger.Log($"[Player] {Name} (本地) → {newRole.Name}");
+        }
+
+        // ---- 操作 ----
+        public void Suicide() => RpcDefinitions.Suicide(Control);
+        public void MurderPlayer(PlayerControl victim) => RpcDefinitions.MurderPlayer(Control, victim);
+
+        // ---- 判断 ----
+        public bool IsRole(string roleName) => Role?.Definition?.Name == roleName;
+        public bool Is<T>() where T : RuntimeRole => Role is T;
+        public bool HasRole => Role != null;
+
+        // ---- 清理 ----
+        public void Release()
+        {
+            EventSystem.UnregisterInstance(this);
+            Role?.Release();
+            Role = null;
+        }
+
+        void IGameOperator.OnReleased() { }
+    }
 }

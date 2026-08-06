@@ -1,10 +1,16 @@
 ﻿using HarmonyLib;
+using Il2CppSystem.Linq.Expressions.Interpreter;
 using InnerNet;
 using LightInDark.Core;
 using LightInDark.Game;
+using LightInDark.Roles;
+using LightInDark.Roles.Crewmates;
 using LightInDark.RPCs;
 using LightInDark.UI;
+using LightInDark.UI.HudUI;
+using LightInDark.UI.Window;
 using LightInDark.Utilities;
+using Steamworks;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
@@ -46,15 +52,15 @@ public class PatchManager
                 __instance.freeChatField.Clear();
                 return false;
             case "/suicide":
-                RPC.Suicide(PlayerControl.LocalPlayer);
+                RpcDefinitions.Suicide(PlayerControl.LocalPlayer);
                 __instance.freeChatField.Clear();
                 return false;
             case "/showchat":
-                RPC.ShowChat(ShipStatus.Instance);
+                RpcDefinitions.ShowChat();
                 __instance.freeChatField.Clear();
                 return false;
             case "/hidechat":
-                RPC.HideChat(ShipStatus.Instance);
+                RpcDefinitions.HideChat();
                 __instance.freeChatField.Clear();
                 return false;
             case "t":
@@ -62,22 +68,35 @@ public class PatchManager
                 __instance.freeChatField.Clear();
                 return false;
             case "/sr":
-                var gil = Game.GameManager.Instance.LocalPlayer;
-                if (gil == null) return false;
-                gil.SetRole(new LightInDark.Roles.ExampleRole());
-                SendLocalMessage("成功");
-                __instance.freeChatField.Clear();
-                return false;
-            case "/sw":
                 try
                 {
-                    MetaScreen.CreateWindow("Hello,World!");
+                    var gil = Game.GameManager.Instance.LocalPlayer;
+                    LightLogger.Log(gil.ToString());
+                    if (gil == null) return false;
+                    gil.SetRole(RoleRegistry.Get<Caller>());
                     __instance.freeChatField.Clear();
                     return false;
                 }
                 catch(Exception ex)
                 {
-                    LightLogger.LogWarning($"我看看你咋做到的？{ex.Message}");
+                    LightLogger.LogError($"设置角色失败:{ex.Message}");
+                    __instance.freeChatField.Clear();
+                    return false;
+                }
+            case "/sw":
+                try
+                {
+                    HudUI.OpenButtonWindow("测试窗口"
+                        ,new HudUI.ButtonOption("按钮1", () => SendLocalMessage("按钮1被点击"))
+                        , new HudUI.ButtonOption("按钮2", () => SendLocalMessage("按钮2被点击"))
+                        );
+                    __instance.freeChatField.Clear();
+                    return false;
+                }
+                catch(Exception ex)
+                {
+                    LightLogger.LogWarning($"window异常：{ex.Message}");
+                    __instance.freeChatField.Clear();
                     return false;
                 }
             case "/code":
@@ -117,7 +136,6 @@ public class PatchManager
                     __instance.freeChatField.Clear();
                     return false;
                 }
-                
         }
 
         return true;
