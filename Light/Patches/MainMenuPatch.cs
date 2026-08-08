@@ -1,5 +1,6 @@
 using HarmonyLib;
 using Light.Utilities;
+using LightInDark.Utilities;
 using TMPro;
 using UnityEngine;
 using static Light.LightPlugin;
@@ -7,7 +8,7 @@ using static Light.LightPlugin;
 namespace Light.Patches;
 
 /// <summary>
-/// 主菜单 UI 完全对齐 NebulaPluginNova + nos 参考
+/// 主菜单 UI
 /// 实现方式：仅使用 GameObject.Find / Transform.FindChild / GetComponentsInChildren
 /// 零私有字段访问（兼容 IL2CPP）
 /// </summary>
@@ -21,6 +22,8 @@ public static class MainMenuPatch
     private static float _bgMoveDelay;
     private static bool _bgMoved;
     private static GameObject? _lightScreen;
+
+    // ── 工具：从场景查找按钮 ──
     private static Dictionary<string, PassiveButton> FindButtons()
     {
         var dict = new Dictionary<string, PassiveButton>();
@@ -46,14 +49,33 @@ public static class MainMenuPatch
         {
             StaticLog.LogWarning("[Light.UI] === 开始布局 ===");
 
+            // 0. 预加载 UI 资源（TwitchManager 此时已就绪）
+            Light.UI.Window.VanillaAsset.Preload();
+
+            // 1. 替换模组图标 + 隐藏干扰文字 + 禁用 Ambience 下的 PlayerParticles
+            var modStamp = FindGO("ModStamp");
+            if (modStamp != null)
+            {
+                modStamp.SetActive(true);
+                modStamp.transform.localScale = Vector3.one * 0.06f;
+                var sr = modStamp.GetComponent<SpriteRenderer>();
+                if (sr != null)
+                    sr.sprite = ResourceHelper.LoadSpriteFromResource("Light.Resources.ModStamp.png");
+            }
             FindGO("ReactorVersion")?.SetActive(false);
             var ambience = FindGO("Ambience");
             if (ambience != null)
                 ambience.transform.FindChild("PlayerParticles")?.gameObject.SetActive(false);
+            UnityEngine.Object.FindObjectOfType<VersionShower>()?.gameObject.SetActive(false);
 
+            // 2. 背景激活
             var bg = FindGO("BackgroundTexture");
             if (bg != null) { _bgMoved = false; bg.SetActive(true); }
+
+            // 3. 查按钮
             var btns = FindButtons();
+
+            // 4. AU Logo 缩放+位移
             var leftPanel = FindGO("LeftPanel");
             if (leftPanel != null)
             {
@@ -69,18 +91,26 @@ public static class MainMenuPatch
                     }
                 }
             }
-            float height = 0.7f;
+
+            // 5. 计算按钮间距 + 上移
+            float height = 0.7f; // 默认值
             if (btns.TryGetValue("NewsButton", out var news) && btns.TryGetValue("AcountButton", out var acct))
                 height = news.transform.localPosition.y - acct.transform.localPosition.y;
+
+            // 遍历所有按钮上移（从 btns 字典，确保非空）
             foreach (var kvp in btns)
             {
                 var btn = kvp.Value;
                 if (btn != null && Mathf.Abs(btn.transform.localPosition.x) < 0.1f)
                     btn.transform.localPosition += new Vector3(0f, height, 0f);
             }
+
+            // Divider 上移
             var divider = leftPanel?.transform.FindChild("Main Buttons")?.FindChild("Divider");
             if (divider != null)
                 divider.localPosition += new Vector3(0f, height, 0f);
+
+            // 6. ReworkedLeftPanel
             if (leftPanel != null)
             {
                 var reworked = UnityHelper.CreateObject<SpriteRenderer>(
@@ -95,13 +125,18 @@ public static class MainMenuPatch
                     oldSr.enabled = false;
                 }
             }
+
+            // 7. OnlineButtons 布局
+            // onlineButtonsContainer 路径：mainMenuUI/AspectScaler/Online Buttons
             var onlineRoot = __instance.mainMenuUI.transform
                 .FindChild("AspectScaler")?.FindChild("Online Buttons");
             if (onlineRoot != null)
             {
+                // 使用 GetChild(1) 作为 scaler
                 for (int i = 0; i < onlineRoot.childCount; i++)
                 {
                     var child = onlineRoot.GetChild(i);
+                    // 查找 scaler 下的按钮
                     var scaler = child.Find("Scaler") ?? child;
                     if (scaler == null) continue;
 
@@ -121,11 +156,16 @@ public static class MainMenuPatch
                 }
             }
 
+            // 8. 创建 LightButton
             CreateLightButton(__instance, btns, height);
+
+            // 9. 按钮图标调整
             AdjustIcons();
 
+            // 10. 按钮配色（在解构 LeftPanel 之前执行，否则找不到子按钮）
             ColorAllButtons();
 
+            // 11. LeftPanel 解构（子释放 + 隐藏）
             if (leftPanel != null)
             {
                 leftPanel.transform.localScale = new Vector3(0.9f, 0.9f, 0.9f);
@@ -137,23 +177,23 @@ public static class MainMenuPatch
             // 12. Divider 隐藏
             FindGO("Divider")?.SetActive(false);
 
-            // 13. nos: RightPanel
-            SetupRightPanel(btns);
+            // 13. RightPanel
+            SetupRightPanel(__instance);
 
             // 14. 创建 LightScreen（点击 LightButton 后展开的子菜单）
             SetupLightScreen(__instance);
 
-            // 14. nos: ScreenTint
+            // 14. ScreenTint
             MoveScreenTint(__instance);
 
-            // 15. nos: BottomButtonBounds
+            // 15. BottomButtonBounds
             var bounds = FindGO("BottomButtonBounds");
             if (bounds != null)
                 bounds.transform.localPosition -= new Vector3(0f, 0.1f, 0f);
 
             // 16. 美化：添加底部装饰渐变条
             var decoTex = new Texture2D(1, 1);
-            decoTex.SetPixel(0, 0, UColor.white);
+            decoTex.SetPixel(0, 0, Color.white);
             decoTex.Apply();
             var decoSpr = Sprite.Create(decoTex, new Rect(0, 0, 1, 1),
                 new Vector2(0.5f, 0.5f), 100f);
@@ -162,7 +202,7 @@ public static class MainMenuPatch
             deco.sprite = decoSpr;
             deco.drawMode = SpriteDrawMode.Sliced;
             deco.size = new Vector2(8f, 0.02f);
-            deco.color = new UColor(1f, 1f, 1f, 0.12f);
+            deco.color = new Color(1f, 1f, 1f, 0.12f);
 
             // 17. 删除多余按钮
             foreach (var obj in UnityEngine.Resources.FindObjectsOfTypeAll<GameObject>())
@@ -188,8 +228,8 @@ public static class MainMenuPatch
         clone.name = "LightButton";
         clone.transform.localPosition += new Vector3(0f, -height, 0f);
 
-        // 图标替换（对齐 NebulaPluginNova）
-        var tex = GraphicsHelper.LoadTextureFromResources("Light.Resources.Logo.LightInDark.png");
+        // 图标替换
+        var tex = GraphicsHelper.LoadTextureFromResources("Light.Resources.Lobby.LightInDark.png");
         if (tex != null)
         {
             var spr = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
@@ -254,7 +294,7 @@ public static class MainMenuPatch
             var icon = btn.activeSprites.transform.FindChild("Icon");
             if (icon == null) continue;
             if (shouldRotate) icon.localEulerAngles -= new Vector3(0f, 0f, 10f);
-            icon.localScale += new Vector3(0.12f, 0.12f, 0f);
+            if (name != "LightButton") icon.localScale += new Vector3(0.12f, 0.12f, 0f);
             if (shouldMove)
             {
                 var asp = icon.GetComponent<AspectPosition>();
@@ -273,21 +313,21 @@ public static class MainMenuPatch
         if (leftPanel == null) return;
         var pink = new Color32(255, 192, 203, 255);
         var purple = new Color32(148, 112, 219, 255);
-        var clear = new UColor(0f, 0f, 0f, 0f);
+        var clear = new Color(0f, 0f, 0f, 0f);
 
         foreach (var btn in leftPanel.GetComponentsInChildren<PassiveButton>(true))
         {
             if (btn == null) continue;
             var n = btn.name;
             if (n is "NewsButton" or "AcountButton" or "SettingsButton" or "LightButton")
-                FormatBtn(btn, pink, clear, UColor.white, UColor.white);
+                FormatBtn(btn, pink, clear, Color.white, Color.white);
             else if (n is "CreditsButton" or "ExitGameButton")
-                FormatBtn(btn, purple, clear, UColor.white, UColor.white);
+                FormatBtn(btn, purple, clear, Color.white, Color.white);
         }
     }
 
-    private static void FormatBtn(PassiveButton btn, UColor inactive, UColor active,
-        UColor inactText, UColor actText)
+    private static void FormatBtn(PassiveButton btn, Color inactive, Color active,
+        Color inactText, Color actText)
     {
         HideShine(btn.activeSprites);
         HideShine(btn.inactiveSprites);
@@ -295,7 +335,7 @@ public static class MainMenuPatch
         {
             var sr = btn.activeSprites.GetComponent<SpriteRenderer>();
             if (sr != null) sr.color = active.a == 0f
-                    ? new UColor(inactive.r, inactive.g, inactive.b, 1f) : active;
+                    ? new Color(inactive.r, inactive.g, inactive.b, 1f) : active;
         }
         if (btn.inactiveSprites != null)
         {
@@ -311,7 +351,11 @@ public static class MainMenuPatch
         if (parent == null) return;
         parent.transform.FindChild("Shine")?.gameObject.SetActive(false);
     }
-    private static void SetupRightPanel(Dictionary<string, PassiveButton> btns)
+
+    // ════════════════════════════════════════════
+    //  RightPanel
+    // ════════════════════════════════════════════
+    private static void SetupRightPanel(MainMenuManager __instance)
     {
         _rightPanel = FindGO("RightPanel");
         if (_rightPanel == null) return;
@@ -325,29 +369,29 @@ public static class MainMenuPatch
         var sr = _rightPanel.GetComponent<SpriteRenderer>();
         if (sr != null) sr.color = new Color32(173, 214, 255, 255);
 
-        // LOGO — 挂到 playButton 下（nos 做法）
-        if (!btns.TryGetValue("PlayButton", out var playBtn)) return;
+        // LOGO — 挂到 playButton 下
+        if (__instance.playButton == null) return;
 
-        var tex = GraphicsHelper.LoadTextureFromResources("Light.Resources.Logo.LightInDark.png");
+        var tex = GraphicsHelper.LoadTextureFromResources("Light.Resources.Lobby.LightInDark.png");
         if (tex == null) return;
         var spr = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
             new Vector2(0.5f, 0.5f), 100f);
 
         var logo = UnityHelper.CreateObject<SpriteRenderer>("LightLogo",
-            playBtn.transform, new Vector3(0.1f, 1f, 1f));
-        logo.transform.localScale = new Vector3(0.3f, 0.3f, 1f);
+            __instance.playButton.transform, new Vector3(0.1f, 1f, 1f));
+        logo.transform.localScale = new Vector3(0.12f, 0.12f, 1f);
         logo.sprite = spr;
 
         var glow = UnityHelper.CreateObject<SpriteRenderer>("LightLogoGlow",
-            playBtn.transform, new Vector3(0.1f, 1f, 1f));
-        glow.transform.localScale = new Vector3(0.3f, 0.3f, 1f);
+            __instance.playButton.transform, new Vector3(0.1f, 1f, 1f));
+        glow.transform.localScale = new Vector3(0.12f, 0.12f, 1f);
         glow.sprite = spr;
-        glow.color = UColor.white;
+        glow.color = Color.white;
 
         // 版本号
         var binder = UnityHelper.CreateObject("VersionText", logo.transform,
             new Vector3(0.7f, -0.45f, 0f));
-        var btnText = playBtn.buttonText;
+        var btnText = __instance.playButton.buttonText;
         if (btnText != null)
         {
             var ver = UnityEngine.Object.Instantiate(btnText, binder.transform);
@@ -355,7 +399,7 @@ public static class MainMenuPatch
             var tr = ver.GetComponent<TextTranslatorTMP>();
             if (tr != null) tr.enabled = false;
             ver.alignment = TextAlignmentOptions.Center;
-            ver.color = UColor.white;
+            ver.color = Color.white;
             ver.text = VisualVersion;
         }
     }
@@ -378,7 +422,7 @@ public static class MainMenuPatch
             .GetComponent<TextTranslatorTMP>();
         if (titleTrans != null) titleTrans.enabled = false;
 
-        // 删除第4个孩子（对齐 NebulaPluginNova）
+        // 删除第4个孩子
         var child4 = _lightScreen.transform.GetChild(4);
         if (child4 != null) GameObject.Destroy(child4.gameObject);
 
@@ -410,7 +454,7 @@ public static class MainMenuPatch
 
         // 添加子按钮（占位，后续可扩展具体功能）
         SetUpBtn("模组设置", () => StaticLog.LogWarning("[Light] 模组设置 - 待实现"));
-        SetUpBtn("关于模组", () => StaticLog.LogWarning("[Light] 关于 - 待实现"));
+        SetUpBtn("关于模组", () => Light.UI.Help.HelpScreen.TryOpenHelpScreen());
         SetUpBtn("成就", () => StaticLog.LogWarning("[Light] 成就 - 待实现"));
         SetUpBtn("Discord", () => Application.OpenURL("https://discord.gg/"));
 
@@ -428,13 +472,15 @@ public static class MainMenuPatch
     // ════════════════════════════════════════════
     private static void MoveScreenTint(MainMenuManager __instance)
     {
-        // 场景中查找 — mainUI 下 or 根级
-        SpriteRenderer? tint = null;
-        var go = FindGO("ScreenTint") ?? __instance.transform.FindChild("ScreenTint")?.gameObject;
-        // 也查 mainMenuUI 下的 Tint
-        if (go == null)
-            go = __instance.mainMenuUI.transform.FindChild("Tint")?.gameObject;
-        if (go != null) tint = go.GetComponent<SpriteRenderer>();
+        // 直接用实例的 screenTint 字段
+        SpriteRenderer? tint = __instance.screenTint;
+        if (tint == null)
+        {
+            var go = FindGO("ScreenTint") ?? __instance.transform.FindChild("ScreenTint")?.gameObject;
+            if (go == null)
+                go = __instance.mainMenuUI.transform.FindChild("Tint")?.gameObject;
+            if (go != null) tint = go.GetComponent<SpriteRenderer>();
+        }
 
         if (tint != null && _rightPanel != null)
         {

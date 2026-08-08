@@ -8,7 +8,7 @@ using UnityEngine;
 namespace LightInDark.Roles
 {
     /// <summary>
-    /// 玩家追踪器。参考 Nebula 的 ObjectTracker。
+    /// 玩家追踪器。
     /// 每帧检测最近的合法目标，支持高亮显示。
     /// </summary>
     public class PlayerTracker
@@ -133,7 +133,7 @@ namespace LightInDark.Roles
     }
 
     /// <summary>
-    /// 标准追踪谓词工厂，参考 Nebula 的 ObjectTrackers。
+    /// 标准追踪谓词工厂。
     /// </summary>
     public static class TrackerPredicates
     {

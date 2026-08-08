@@ -1,11 +1,11 @@
-﻿using UnityEngine;
+using LightInDark.Roles;
+using UnityEngine;
 
 namespace LightInDark.Events
 {
     // =====================================================================
-    // 事件基础类型 — 参考 Nebula Virial.Events
+    // 事件基础类型
     //
-    // Nebula 模式：
     // - Event: 标记接口（已有 IEvent）
     // - AbstractPlayerEvent: 持有 PlayerControl，支持 [OnlyMyPlayer] 等过滤
     // - 可取消事件: public bool IsCanceled { get; set; }（合作式取消，非抢占式）
@@ -13,7 +13,7 @@ namespace LightInDark.Events
     // =====================================================================
 
     /// <summary>
-    /// 玩家事件基类。参考 Nebula AbstractPlayerEvent。
+    /// 玩家事件基类。
     /// 持有 PlayerControl，支持 [OnlyMyPlayer] / [OnlyLocalPlayer] 等过滤。
     /// </summary>
     public abstract class BasePlayerEvent : IEvent
@@ -24,7 +24,7 @@ namespace LightInDark.Events
     }
 
     /// <summary>
-    /// 可取消事件基类。参考 Nebula 可取消事件模式。
+    /// 可取消事件基类。
     /// IsCanceled 为合作式：监听者设置后，后续监听者可读取。
     /// 调度器不会自动中断，由调用方检查 IsCanceled。
     /// </summary>
@@ -69,16 +69,35 @@ namespace LightInDark.Events
         public string Reason { get; set; } = "";
     }
 
-    /// <summary>角色被分配给玩家</summary>
+    /// <summary>自定义职业被设置到玩家</summary>
     public class RoleAssignedEvent : BasePlayerEvent
     {
-        public string RoleName { get; init; } = "";
-        public RoleAssignedEvent(PlayerControl player, string roleName) : base(player) { RoleName = roleName; }
+        public DefinedRole Role { get; init; }
+        public int[] Arguments { get; init; } = System.Array.Empty<int>();
+        public RoleAssignedEvent() { }
+        public RoleAssignedEvent(PlayerControl player, DefinedRole role, int[] arguments = null) : base(player) { Role = role; Arguments = arguments ?? System.Array.Empty<int>(); }
+    }
+
+    /// <summary>换职前（可阻止）</summary>
+    public class PlayerTryToChangeRoleEvent : BaseCancelablePlayerEvent
+    {
+        public RuntimeRole OldRole { get; init; }
+        public DefinedRole NewRole { get; init; }
+        public PlayerTryToChangeRoleEvent() { }
+        public PlayerTryToChangeRoleEvent(PlayerControl player, RuntimeRole oldRole, DefinedRole newRole) : base(player) { OldRole = oldRole; NewRole = newRole; }
+    }
+
+    /// <summary>分配确定前（供分配机修正分配表）</summary>
+    public class PreFixAssignmentEvent : IEvent
+    {
+        public IRoleTable Table { get; }
+        public PreFixAssignmentEvent(IRoleTable table) { Table = table; }
     }
 
     /// <summary>玩家断开连接</summary>
     public class PlayerDisconnectEvent : BasePlayerEvent
     {
+        public PlayerDisconnectEvent() { }
         public PlayerDisconnectEvent(PlayerControl player) : base(player) { }
     }
 
@@ -91,6 +110,7 @@ namespace LightInDark.Events
     {
         public string Reason { get; init; } = "suicide";
         public bool NeedLog { get; init; } = true;
+        public PlayerSuicideEvent() { }
         public PlayerSuicideEvent(PlayerControl player, string reason = "suicide") : base(player) { Reason = reason; }
     }
 
@@ -99,10 +119,11 @@ namespace LightInDark.Events
     {
         public PlayerControl Killer => Player;
         public PlayerControl Victim { get; init; }
+        public PlayerMurderEvent() { }
         public PlayerMurderEvent(PlayerControl killer, PlayerControl victim) : base(killer) { Victim = victim; }
     }
 
-    /// <summary>尝试击杀（可阻止）— 参考 Nebula BeforeMurderEvent</summary>
+    /// <summary>尝试击杀（可阻止）</summary>
     public class PlayerTryMurderEvent : BaseCancelablePlayerEvent
     {
         public PlayerControl Killer => Player;
@@ -115,12 +136,14 @@ namespace LightInDark.Events
     {
         public PlayerControl Killer { get; init; }
         public DeathReason Reason { get; init; }
+        public PlayerDeathEvent() { }
         public PlayerDeathEvent(PlayerControl player, DeathReason reason, PlayerControl killer = null) : base(player) { Reason = reason; Killer = killer; }
     }
 
     /// <summary>玩家复活</summary>
     public class PlayerReviveEvent : BasePlayerEvent
     {
+        public PlayerReviveEvent() { }
         public PlayerReviveEvent(PlayerControl player) : base(player) { }
     }
 
@@ -133,6 +156,7 @@ namespace LightInDark.Events
     {
         public int CompletedTasks { get; init; }
         public int TotalTasks { get; init; }
+        public PlayerTaskCompleteEvent() { }
         public PlayerTaskCompleteEvent(PlayerControl player, int completed, int total) : base(player) { CompletedTasks = completed; TotalTasks = total; }
     }
 
@@ -143,7 +167,7 @@ namespace LightInDark.Events
     }
 
     // =====================================================================
-    // 会议事件 — 参考 Nebula MeetingPatch 的事件流
+    // 会议事件
     // =====================================================================
 
     /// <summary>尝试召开会议（可阻止）</summary>
@@ -168,15 +192,16 @@ namespace LightInDark.Events
     /// <summary>投票阶段开始</summary>
     public class MeetingVotingStartEvent : IEvent { }
 
-    /// <summary>玩家投票（可修改投票权重）— 参考 Nebula PlayerVoteCastLocalEvent</summary>
+    /// <summary>玩家投票（可修改投票权重）</summary>
     public class PlayerVoteEvent : BasePlayerEvent
     {
         public byte VotedForPlayerId { get; set; }
         public int VoteWeight { get; set; } = 1;
+        public PlayerVoteEvent() { }
         public PlayerVoteEvent(PlayerControl player, byte votedFor) : base(player) { VotedForPlayerId = votedFor; }
     }
 
-    /// <summary>尝试结束投票（可修改谁被放逐）— 参考 Nebula PlayerFixVoteHostEvent</summary>
+    /// <summary>尝试结束投票（可修改谁被放逐）</summary>
     public class MeetingTryEndVotingEvent : BaseCancelableEvent
     {
         public byte ExiledPlayerId { get; set; }
@@ -208,6 +233,7 @@ namespace LightInDark.Events
     public class PlayerExileEvent : IEvent
     {
         public PlayerControl Exiled { get; init; }
+        public PlayerExileEvent() { }
         public PlayerExileEvent(PlayerControl exiled) { Exiled = exiled; }
     }
 
@@ -257,6 +283,7 @@ namespace LightInDark.Events
     public class ChatMessageEvent : BasePlayerEvent
     {
         public string Message { get; init; } = "";
+        public ChatMessageEvent() { }
         public ChatMessageEvent(PlayerControl player, string message) : base(player) { Message = message; }
     }
 

@@ -10,20 +10,20 @@ using UnityEngine;
 namespace LightInDark.RPCs
 {
     // =====================================================================
-    // 自定义 RPC 系统 — 参考 Reactor 的 CustomRpcManager 模式
+    // 自定义 RPC 系统
     //
-    // Reactor 使用 callId = byte.MaxValue (255)
+    // 使用 callId = byte.MaxValue (255)
     // 通过 Harmony patch 在 InnerNetObject.HandleRpc 层面拦截
-    // 发送时同时执行本地逻辑（参考 Reactor 的 LocalHandling.Before）
+    // 发送时同时执行本地逻辑
     // =====================================================================
 
     /// <summary>
-    /// 自定义 RPC 管理器。参考 Reactor CustomRpcManager。
-    /// callId = 255 (byte.MaxValue)，与 Reactor 一致。
+    /// 自定义 RPC 管理器。
+    /// callId = 255 (byte.MaxValue)。
     /// </summary>
     public static class CustomRPC
     {
-        /// <summary>自定义 RPC 的 callId（参考 Reactor 使用 255）</summary>
+        /// <summary>自定义 RPC 的 callId（使用 255）</summary>
         public const byte RpcCallId = byte.MaxValue;
 
         private static readonly Dictionary<int, Action<MessageReader>> _handlers = new();
@@ -36,7 +36,6 @@ namespace LightInDark.RPCs
 
         /// <summary>
         /// 发送 RPC 到所有客户端，并在本地立即执行。
-        /// 参考 Reactor：发送 + 本地处理（Before 模式）。
         /// </summary>
         public static void Send(string hash, Action<MessageWriter> writer, bool reliable = true)
         {
@@ -68,7 +67,7 @@ namespace LightInDark.RPCs
                 }
             }
 
-            // 本地执行（参考 Reactor LocalHandling.Before）
+            // 本地执行
             // 在发送端也执行方法体
             // 不需要序列化/反序列化——直接用一个单独的 Action 调用
             // handler 接收 MessageReader，但我们无法轻松地本地构造它
@@ -140,7 +139,7 @@ namespace LightInDark.RPCs
 
         /// <summary>
         /// 处理收到的自定义 RPC。
-        /// 参考 Reactor：从 reader 读取 hash，查找 handler，执行。
+        /// 从 reader 读取 hash，查找 handler，执行。
         /// </summary>
         internal static void HandleRpc(MessageReader reader)
         {
@@ -164,12 +163,11 @@ namespace LightInDark.RPCs
     }
 
     // =====================================================================
-    // Harmony Patch — 参考 Reactor：在 InnerNetObject 层面拦截 HandleRpc
+    // Harmony Patch — 在 InnerNetObject 层面拦截 HandleRpc
     // =====================================================================
 
     /// <summary>
     /// 拦截所有 InnerNetObject 的 HandleRpc。
-    /// 参考 Reactor CustomRpcManager 的 patch 方式。
     /// </summary>
     [HarmonyPatch(typeof(InnerNetObject), nameof(InnerNetObject.HandleRpc))]
     public static class CustomRpcHandlePatch

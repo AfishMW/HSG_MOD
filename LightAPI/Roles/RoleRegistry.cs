@@ -12,6 +12,8 @@ namespace LightInDark.Roles
     {
         private static readonly Dictionary<string, DefinedRole> _roles = new();
         private static readonly Dictionary<Type, DefinedRole> _rolesByType = new();
+        private static readonly Dictionary<int, DefinedRole> _rolesById = new();
+        private static int _nextId;
 
         /// <summary>已注册的所有角色定义</summary>
         public static IReadOnlyCollection<DefinedRole> AllRoles => _roles.Values;
@@ -20,12 +22,7 @@ namespace LightInDark.Roles
         /// 注册角色。在 LIDPlugin.Load() 中调用。
         /// </summary>
         public static T Register<T>() where T : DefinedRole, new()
-        {
-            var role = new T();
-            _roles[role.Name] = role;
-            _rolesByType[typeof(T)] = role;
-            return role;
-        }
+            => Register(new T());
 
         /// <summary>
         /// 注册角色实例。
@@ -33,8 +30,10 @@ namespace LightInDark.Roles
         public static T Register<T>(T role) where T : DefinedRole
         {
             if (role == null) throw new ArgumentNullException(nameof(role));
+            role.Id = _nextId++;
             _roles[role.Name] = role;
             _rolesByType[typeof(T)] = role;
+            _rolesById[role.Id] = role;
             return role;
         }
 
@@ -46,6 +45,10 @@ namespace LightInDark.Roles
         public static T Get<T>() where T : DefinedRole
             => _rolesByType.TryGetValue(typeof(T), out var role) ? role as T : null;
 
+        /// <summary>按注册序号获取角色定义</summary>
+        public static DefinedRole GetById(int id)
+            => _rolesById.TryGetValue(id, out var role) ? role : null;
+
         /// <summary>角色是否已注册</summary>
         public static bool IsRegistered(string name) => _roles.ContainsKey(name);
 
@@ -54,6 +57,8 @@ namespace LightInDark.Roles
         {
             _roles.Clear();
             _rolesByType.Clear();
+            _rolesById.Clear();
+            _nextId = 0;
         }
     }
 

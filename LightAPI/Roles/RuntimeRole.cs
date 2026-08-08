@@ -1,5 +1,5 @@
-﻿using System.Collections.Generic;
-using LightInDark.Abilities;
+using System.Collections.Generic;
+using LightInDark.Ability;
 using LightInDark.Core;
 using LightInDark.Events;
 using LightInDark.Game;
@@ -11,7 +11,7 @@ namespace LightInDark.Roles
 {
     /// <summary>
     /// 角色运行时实例，绑定到 Player。
-    /// 参考 Nebula：角色名+任务数显示在玩家名字上方的 Info 子对象中。
+    /// 角色名+任务数显示在玩家名字上方的 Info 子对象中。
     /// </summary>
     public abstract class RuntimeRole : IBindPlayer, IGameOperator, ILifespan
     {
@@ -25,10 +25,11 @@ namespace LightInDark.Roles
 
         private TextMeshPro? _infoText;
 
-        protected RuntimeRole(DefinedRole definition, Player player)
+        protected RuntimeRole(DefinedRole definition, Player player, int[] arguments)
         {
             Definition = definition;
             MyPlayer = player;
+            Arguments = arguments ?? System.Array.Empty<int>();
             this.Register(player);
             EventSystem.RegisterInstance(this);
 
@@ -39,7 +40,21 @@ namespace LightInDark.Roles
             catch (System.Exception ex) { LightLogger.LogWarning($"[RuntimeRole] UpdateNameDisplay 失败: {ex.Message}"); }
         }
 
+        /// <summary>实例化参数（来自分配机或默认参数）</summary>
+        public int[] Arguments { get; }
+
         protected virtual void OnActivated() { }
+
+        /// <summary>换职时清理逻辑入口（子类覆写）</summary>
+        protected virtual void OnInactivated() { }
+
+        /// <summary>使角色失活（换职/移除时调用）</summary>
+        public void Inactivate()
+        {
+            try { OnInactivated(); }
+            catch (System.Exception ex) { LightLogger.LogWarning($"[RuntimeRole] OnInactivated 失败: {ex.Message}"); }
+            Release();
+        }
 
         protected void AddAbility(IPlayerAbility ability)
         {

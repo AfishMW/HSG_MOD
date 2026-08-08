@@ -1,7 +1,8 @@
-﻿using LightInDark.Game;
+using LightInDark.Core;
+using LightInDark.Game;
 using LightInDark.Roles;
 
-namespace LightInDark.Abilities
+namespace LightInDark.Ability
 {
     /// <summary>
     /// 能力基类。

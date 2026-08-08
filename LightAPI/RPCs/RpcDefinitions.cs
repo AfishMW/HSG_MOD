@@ -1,5 +1,6 @@
 using LightInDark.Core;
 using LightInDark.Roles;
+using System;
 using UnityEngine;
 
 namespace LightInDark.RPCs
@@ -12,45 +13,43 @@ namespace LightInDark.RPCs
         // ============ 角色同步 ============
 
         [LidRPC]
-        internal static void SyncRole(PlayerControl player, string roleName)
+        public static void SetRole(byte playerId, int roleId, int[] arguments)
         {
-            var gamePlayer = Game.GameManager.Instance.GetPlayer(player.PlayerId);
+            var definedRole = RoleRegistry.GetById(roleId);
+            if (definedRole == null) { LightLogger.LogWarning($"[RPC] 未知角色Id: {roleId}"); return; }
+            var gamePlayer = Game.GameManager.Instance.GetPlayer(playerId);
             if (gamePlayer == null) return;
-
-            var definedRole = RoleRegistry.GetByName(roleName);
-            if (definedRole == null) { LightLogger.LogWarning($"[RPC] 未知角色: {roleName}"); return; }
-
-            gamePlayer.SetRoleLocal(definedRole);
+            gamePlayer.SetRoleLocal(definedRole, arguments);
         }
 
         // ============ 玩家操作 ============
 
         [LidRPC]
-        internal static void Suicide(PlayerControl player, bool needLog = true, string state = "suicide")
+        public static void Suicide(PlayerControl player, bool needLog = true, string state = "suicide")
         {
             if (player == null || player.Data.IsDead) return;
             player.RpcMurderPlayer(player, true);
-            Events.EventSystem.RunEvent(new Events.PlayerSuicideEvent(player, state) { NeedLog = needLog });
+            Events.EventSystem.RunEvent(new Events.PlayerSuicideEvent { Player = player, Reason = state, NeedLog = needLog });
             if (needLog) LightLogger.Log($"[RPC] {player.name} suicide. state:{state}");
         }
 
         [LidRPC]
-        internal static void MurderPlayer(PlayerControl killer, PlayerControl victim)
+        public static void MurderPlayer(PlayerControl killer, PlayerControl victim)
         {
             if (killer == null || victim == null) return;
             killer.RpcMurderPlayer(victim, true);
-            Events.EventSystem.RunEvent(new Events.PlayerMurderEvent(killer, victim));
+            Events.EventSystem.RunEvent(new Events.PlayerMurderEvent { Player = killer, Victim = victim });
         }
 
         /// <summary>恢复玩家（取消死亡状态）</summary>
         [LidRPC(OnlyHost = true)]
-        internal static void RevivePlayer(byte playerId)
+        public static void RevivePlayer(byte playerId)
         {
             foreach (var pc in PlayerControl.AllPlayerControls)
                 if (pc.PlayerId == playerId && pc.Data.IsDead)
                 {
                     pc.Revive();
-                    Events.EventSystem.RunEvent(new Events.PlayerReviveEvent(pc));
+                    Events.EventSystem.RunEvent(new Events.PlayerReviveEvent { Player = pc });
                     LightLogger.Log($"[RPC] {pc.name} 已复活");
                     break;
                 }
@@ -58,7 +57,7 @@ namespace LightInDark.RPCs
 
         /// <summary>设置玩家可见性</summary>
         [LidRPC]
-        internal static void SetPlayerInvisible(byte playerId, bool invisible)
+        public static void SetPlayerInvisible(byte playerId, bool invisible)
         {
             foreach (var pc in PlayerControl.AllPlayerControls)
                 if (pc.PlayerId == playerId)
@@ -70,7 +69,7 @@ namespace LightInDark.RPCs
 
         /// <summary>传送玩家到指定位置</summary>
         [LidRPC(OnlyHost = true)]
-        internal static void TeleportPlayer(byte playerId, Vector2 position)
+        public static void TeleportPlayer(byte playerId, Vector2 position)
         {
             foreach (var pc in PlayerControl.AllPlayerControls)
                 if (pc.PlayerId == playerId)
@@ -85,7 +84,7 @@ namespace LightInDark.RPCs
         // ============ 会议 ============
 
         [LidRPC]
-        internal static void StartMeeting(byte reporterId, byte reportedId)
+        public static void StartMeeting(byte reporterId, byte reportedId)
         {
             if (MeetingHud.Instance != null) return;
             PlayerControl reporter = null;
@@ -100,13 +99,13 @@ namespace LightInDark.RPCs
         }
 
         [LidRPC]
-        internal static void RpcStartMeeting()
+        public static void RpcStartMeeting()
         {
             PlayerControl.LocalPlayer?.RpcStartMeeting(null);
         }
 
         [LidRPC(OnlyHost = true)]
-        internal static void ForceEndMeeting()
+        public static void ForceEndMeeting()
         {
             if (MeetingHud.Instance == null) return;
             // 简单关闭会议
@@ -115,7 +114,7 @@ namespace LightInDark.RPCs
         }
 
         [LidRPC(OnlyHost = true)]
-        internal static void BreakEmergencyButton()
+        public static void BreakEmergencyButton()
         {
             if (ShipStatus.Instance != null)
             {
@@ -126,26 +125,29 @@ namespace LightInDark.RPCs
 
         // ============ 聊天 ============
 
+        /// <summary>免费聊天显示状态变更（由主插件订阅实现）</summary>
+        public static event Action<bool> OnFreeChatStateChanged;
+
         [LidRPC]
-        internal static void ShowChat()
+        public static void ShowChat()
         {
-            ShowChatPatch.NeedShowFreeChat = true;
+            OnFreeChatStateChanged?.Invoke(true);
         }
 
         [LidRPC]
-        internal static void HideChat()
+        public static void HideChat()
         {
-            ShowChatPatch.NeedShowFreeChat = false;
+            OnFreeChatStateChanged?.Invoke(false);
         }
 
         [LidRPC]
-        internal static void SendChatMessage(byte playerId, string message)
+        public static void SendChatMessage(byte playerId, string message)
         {
             foreach (var pc in PlayerControl.AllPlayerControls)
                 if (pc.PlayerId == playerId)
                 {
                     HudManager.Instance?.Chat?.AddChat(pc, message, false);
-                    Events.EventSystem.RunEvent(new Events.ChatMessageEvent(pc, message));
+                    Events.EventSystem.RunEvent(new Events.ChatMessageEvent { Player = pc, Message = message });
                     break;
                 }
         }
@@ -153,7 +155,7 @@ namespace LightInDark.RPCs
         // ============ 踢出 ============
 
         [LidRPC(OnlyHost = true)]
-        internal static void KickPlayer(byte playerId)
+        public static void KickPlayer(byte playerId)
         {
             foreach (var pc in PlayerControl.AllPlayerControls)
                 if (pc.PlayerId == playerId)
@@ -165,7 +167,7 @@ namespace LightInDark.RPCs
         }
 
         [LidRPC]
-        internal static void SetKickReason(byte targetPlayerId, string reason)
+        public static void SetKickReason(byte targetPlayerId, string reason)
         {
             if (PlayerControl.LocalPlayer?.PlayerId == targetPlayerId)
             {
@@ -176,7 +178,7 @@ namespace LightInDark.RPCs
         }
 
         [LidRPC(OnlyHost = true)]
-        internal static void KickPlayerWithReason(byte playerId, string reason)
+        public static void KickPlayerWithReason(byte playerId, string reason)
         {
             foreach (var pc in PlayerControl.AllPlayerControls)
                 if (pc.PlayerId == playerId)
@@ -204,7 +206,7 @@ namespace LightInDark.RPCs
     {
         /// <summary>分配角色给玩家（同步）</summary>
         public static void AssignRole(Game.Player player, DefinedRole role)
-            => player.SetRole(role);
+            => player.SetRole(role, role.DefaultArguments);
 
         /// <summary>让玩家自杀</summary>
         public static void KillSelf(PlayerControl player, string reason = "suicide")

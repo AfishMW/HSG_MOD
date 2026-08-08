@@ -7,16 +7,16 @@
 		<VersionSuffix>dev</VersionSuffix>
 		<Description>Add more roles for Among Us</Description>
 		<Authors>hvtXsvc and MaoMao</Authors>
-		<AmongUsBase>..\..\..\..\Steam\steamapps\common\Among Us Modded\LID\Sanctuary\BepInEx</AmongUsBase>
+		<!-- 游戏目录：优先使用环境变量 LIGHT_AMONGUS，否则用默认路径 -->
+		<AmongUs Condition="'$(LIGHT_AMONGUS)' != ''">$(LIGHT_AMONGUS)</AmongUs>
+		<AmongUs Condition="'$(LIGHT_AMONGUS)' == ''">F:\AU\暗中辉0.0.0.1</AmongUs>
+		<AmongUsBase>$(AmongUs)\BepInEx</AmongUsBase>
 		<CoreDir>$(AmongUsBase)\core</CoreDir>
 		<InteropDir>$(AmongUsBase)\interop</InteropDir>
-		<GameExe>$(AmongUsBase)\..\Among Us.exe</GameExe>
+		<GameExe>$(AmongUs)\Among Us.exe</GameExe>
 		<Nullable>disable</Nullable>
 		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
 	</PropertyGroup>
-	<ItemGroup>
-		<EmbeddedResource Include="Resources\**\*.*" />
-	</ItemGroup>
 	<ItemGroup>
 	  <Compile Remove="mem-log\**" />
 	  <EmbeddedResource Remove="mem-log\**" />
@@ -181,15 +181,4 @@
 		<Reference Include="..\Libs\WasmDisassembler.dll" />
 		<Reference Include="..\Libs\__Generated.dll" />
 	</ItemGroup>
-	<ItemGroup>
-	  <Folder Include="Resources\Lobby\" />
-	</ItemGroup>
-	<!--
-	<Target Name="DeployAndLaunch" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug'">
-		<Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AmongUsBase)\plugins\" />
-		<Message Text="已复制 $(TargetFileName) 到 $(AmongUsBase)\plugins\" Importance="high" />
-		<Exec Command="start &quot;&quot; &quot;$(GameExe)&quot;" Condition="Exists('$(GameExe)')" />
-		<Message Text="正在启动 $(GameExe)" Importance="high" Condition="Exists('$(GameExe)')" />
-		<Warning Text="游戏可执行文件不存在：$(GameExe)" Condition="!Exists('$(GameExe)')" />
-	</Target>-->
 </Project>

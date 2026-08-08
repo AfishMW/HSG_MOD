@@ -1,4 +1,6 @@
-﻿namespace LightInDark.Game
+using LightInDark.Core;
+
+namespace LightInDark.Game
 {
     public static class GameEntityExtension
     {

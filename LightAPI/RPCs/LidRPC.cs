@@ -14,15 +14,15 @@ namespace LightInDark.RPCs
     {
         public bool OnlyHost { get; set; } = false;
         public bool Reliable { get; set; } = true;
-        /// <summary>是否在发送端本地执行（默认 true，参考 Reactor Before）</summary>
+        /// <summary>是否在发送端本地执行（默认 true）</summary>
         public bool LocalExecute { get; set; } = true;
     }
 
     /// <summary>
     /// RPC 自动注册器。
-    /// 参考 Reactor CustomRpcManager：扫描 [LidRPC] 方法，
+    /// 扫描 [LidRPC] 方法，
     /// Harmony Prefix 拦截调用，序列化参数发送，
-    /// 同时在本地执行（LocalHandling.Before 模式）。
+    /// 同时在本地执行（Before 模式）。
     /// </summary>
     public static class LidRpcRegistry
     {
@@ -95,7 +95,7 @@ namespace LightInDark.RPCs
 
         /// <summary>
         /// Harmony Prefix — 拦截 [LidRPC] 方法调用。
-        /// 参考 Reactor：发送 RPC + 本地执行。
+        /// 发送 RPC + 本地执行。
         /// </summary>
         internal static bool RpcPrefix(MethodBase __originalMethod, object[] __args)
         {
@@ -124,7 +124,7 @@ namespace LightInDark.RPCs
                 writer.Write(payloadBytes, 0, payloadBytes.Length);
             }, entry.Reliable);
 
-            // 本地执行（参考 Reactor LocalHandling.Before）
+            // 本地执行
             if (entry.LocalExecute)
             {
                 try
