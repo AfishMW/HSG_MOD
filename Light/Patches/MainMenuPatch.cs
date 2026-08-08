@@ -1,8 +1,12 @@
+using BepInEx.Unity.IL2CPP.Utils.Collections;
 using HarmonyLib;
 using Light.Utilities;
 using TMPro;
 using UnityEngine;
+using LightInDark.Utilities;
 using static Light.LightPlugin;
+using LightInDark.Core;
+using System.Collections;
 
 namespace Light.Patches;
 
@@ -34,6 +38,8 @@ public static class MainMenuPatch
     }
 
     private static GameObject? FindGO(string name) => GameObject.Find(name);
+
+    private static bool _updaterChecked;
 
     // ════════════════════════════════════════════
     //  主入口：MainMenuManager.Start Postfix
@@ -170,6 +176,13 @@ public static class MainMenuPatch
                     UnityEngine.Object.Destroy(obj);
 
             StaticLog.LogWarning("[Light.UI] === 布局完成 ===");
+
+            // 延迟检测更新器是否存在（等待 DisconnectPopup 初始化）
+            if (!_updaterChecked)
+            {
+                _updaterChecked = true;
+                __instance.StartCoroutine(CoCheckUpdater().WrapToIl2Cpp());
+            }
         }
         catch (System.Exception ex)
         {
@@ -177,9 +190,24 @@ public static class MainMenuPatch
         }
     }
 
-    // ════════════════════════════════════════════
-    //  创建 LightButton
-    // ════════════════════════════════════════════
+    private static IEnumerator CoCheckUpdater()
+    {
+        yield return null;
+        yield return null;
+        yield return null;
+
+        try
+        {
+            string updaterPath = Path.Combine(BepInEx.Paths.GameRootPath, VersionMaker.UpdaterExeName);
+            if (!File.Exists(updaterPath))
+            {
+                LightLogger.LogWarning($"未找到更新脚本：{VersionMaker.UpdaterExeName}");
+                AmongUsEdited.ShowCustomDisconnectWindow($"未找到更新脚本 {VersionMaker.UpdaterExeName}！\n请将其放置在游戏根目录下，否则无法正常检查更新。");
+            }
+        }
+        catch { }
+    }
+
     private static void CreateLightButton(MainMenuManager __instance, Dictionary<string, PassiveButton> btns, float height)
     {
         if (!btns.TryGetValue("SettingsButton", out var settings)) return;
@@ -413,6 +441,39 @@ public static class MainMenuPatch
         SetUpBtn("关于模组", () => StaticLog.LogWarning("[Light] 关于 - 待实现"));
         SetUpBtn("成就", () => StaticLog.LogWarning("[Light] 成就 - 待实现"));
         SetUpBtn("Discord", () => Application.OpenURL("https://discord.gg/"));
+        SetUpBtn("检查更新", () => 
+        {
+            string fanHuiZhi = VersionMaker.CheckForUpdate();
+            switch (fanHuiZhi)
+            {
+                case "need update":
+                    VersionMaker.StartUpdateProcess();
+                    break;
+                case "no need":
+                    AmongUsEdited.ShowCustomDisconnectWindow("当前已是最新版本。");
+                    break;
+                case "not installed":
+                    AmongUsEdited.ShowCustomDisconnectWindow("模组未安装。你咋点的检查更新并且看到这个窗口？\n也有可能是你把文件改名了，请改回去。");
+                    break;
+                case "check error":
+                    AmongUsEdited.ShowCustomDisconnectWindow("更新检查失败。\n请将游戏目录下的Light.log发送给开发者或者QQ群中。\n不要直接将此界面截图/拍照给其他人。");
+                    break;
+                case "path error":
+                    AmongUsEdited.ShowCustomDisconnectWindow($"未找到更新检查器！请检查你的目录下有无 {VersionMaker.UpdaterExeName} 。");
+                    break;
+                case "github error":
+                    AmongUsEdited.ShowCustomDisconnectWindow("无法访问GitHub来检查版本！请检查您的网络状况。\n当然，最坏的结果是我们删仓跑路了。");
+                    break;
+                default:
+                    AmongUsEdited.ShowCustomDisconnectWindow("未知返回值。\n请将游戏目录下的Light.log发送给开发者或者QQ群中。\n不要直接将此界面截图/拍照给其他人。");
+                    
+                    break;
+                    
+            }
+            
+            LightLogger.Log($"Update返回值检测完毕：{fanHuiZhi}");
+        }
+        );
 
         // 注册到 scalerList
         var scalerList = GameObject.FindObjectOfType<SlicedAspectScaler>();

@@ -160,6 +160,14 @@ public static class AmongUsEdited
             popup.gameObject.SetActive(true);
         }
     }
+    /// <summary>
+    /// 关闭ShowCustomDisconnectWindow(string text)的窗口。
+    /// </summary>
+    public static void CloseCustomDisconnectWindow()
+    {
+        var popup = DestroyableSingleton<DisconnectPopup>.Instance;
+        popup?.gameObject.SetActive(false);
+    }
 
     /// <summary>
     /// 检查当前是否为自定义服务器。

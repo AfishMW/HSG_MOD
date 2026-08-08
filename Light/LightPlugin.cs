@@ -30,6 +30,10 @@ public partial class LightPlugin : BasePlugin
     {
         StaticLog = Log;
         Harmony.PatchAll();
+        bool vM =VersionMaker.MakeVersion();
+        if (!vM)
+            Log.LogError($"json 加载失败。具体异常请查看Light.log。");
+
         Log.LogInfo($"模组 {Name} v{Version} 已加载！");
     }
 }
