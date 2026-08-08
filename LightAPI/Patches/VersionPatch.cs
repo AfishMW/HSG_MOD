@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using Il2CppSystem.Net.NetworkInformation;
 namespace LightInDark.Patches;
 
 [HarmonyPatch(typeof(VersionShower), nameof(VersionShower.Start))]
@@ -24,6 +25,7 @@ public static class VersionPatch
         string richVersion = LIDPlugin.RichVersion;
 
         __instance.text.text = $"{lightText} {inText} {darkText} - {richVersion} | AU {auVer}";
+        __instance.text.transform.position = new UnityEngine.Vector2(__instance.text.transform.position.x,-5);
         // #D3C678 #E6F6EB #050B2E
         //ModManager.Instance.ShowModStamp();
     }

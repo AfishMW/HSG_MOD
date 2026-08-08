@@ -328,7 +328,7 @@ public static class MainMenuPatch
         // LOGO — 挂到 playButton 下（nos 做法）
         if (!btns.TryGetValue("PlayButton", out var playBtn)) return;
 
-        var tex = GraphicsHelper.LoadTextureFromResources("Light.Resources.Logo.HalfSugarGift.png");
+        var tex = GraphicsHelper.LoadTextureFromResources("Light.Resources.Logo.LightInDark.png");
         if (tex == null) return;
         var spr = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
             new Vector2(0.5f, 0.5f), 100f);

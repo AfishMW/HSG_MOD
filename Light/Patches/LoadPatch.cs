@@ -96,7 +96,7 @@ public static class LoadPatch
         logoGlow = UnityHelper.CreateObject<SpriteRenderer>("LightLogoGlow", null, new Vector3(0, 0.5f, -4.8f));
 
         // 加载 Logo 纹理
-        var texture = GraphicsHelper.LoadTextureFromResources("Light.Resources.Logo.HalfSugarGift.png");
+        var texture = GraphicsHelper.LoadTextureFromResources("Light.Resources.Logo.LightInDark.png");
         if (texture != null)
         {
             logoSprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f), 100f);
