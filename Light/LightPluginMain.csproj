@@ -59,7 +59,9 @@
             </Reference>
         </ItemGroup>
     </Target>
-
+<ItemGroup>
+	<Reference Include="LightAPI\Libs\*.*"/>
+</ItemGroup>
     <!-- 编译完成后自动复制到游戏插件目录 -->
     <Target Name="Copy" AfterTargets="Build" Condition="'$(AmongUs)' != ''">
         <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AmongUs)/BepInEx/plugins/" />

@@ -16,7 +16,7 @@ public static class AddLobbyDecorations
     {
         var sprite = ResourceHelper.LoadSpriteFromResource("LightInDark.Resources.Lobby.LightInDark.png");
 
-        GameObject decor = new GameObject("MyLobbyDecor");
+        GameObject decor = new GameObject("LobbyDecor");
         decor.transform.SetParent(__instance.transform);
         decor.transform.localPosition = new Vector3(0f, 3.5f, 0f);
         decor.transform.localScale = new Vector3(0.4f, 0.4f, 0.5f);

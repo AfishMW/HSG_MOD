@@ -28,7 +28,7 @@ public class PatchManager
         var pc = PlayerControl.LocalPlayer;
         string orig = pc.name;
         if(!withOutSetName)
-        pc.SetName("System");
+            pc.SetName("System");
         HudManager.Instance.Chat.AddChat(pc, msg);
         pc.SetName(orig);
     }

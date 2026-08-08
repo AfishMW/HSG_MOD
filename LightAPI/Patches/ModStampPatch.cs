@@ -26,7 +26,6 @@ public static class ModStampPatch
             }
             modStamp.transform.localScale = Vector3.one * 0.06f;
             modStamp.GetComponent<SpriteRenderer>().sprite = ResourceHelper.LoadSpriteFromResource("LightInDark.Resources.ModStamp.png");
-
         });
 
     }

@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="./Light/LightPluginMain.csproj" />
+  <Project Path="./LightAPI/LightInDark.csproj" />
+</Solution>

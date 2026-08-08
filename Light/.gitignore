@@ -368,7 +368,3 @@ FodyWeavers.xsd
 .trae/
 LightBuilder/
 AU/
-
-# agent
-**/.codely-cli/*.*
-**/mem-log/*.*
