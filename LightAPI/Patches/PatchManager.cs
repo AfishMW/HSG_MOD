@@ -23,10 +23,11 @@ namespace LightInDark.Patches;
 public class PatchManager
 {
     public static bool IsHost(PlayerControl player) => AmongUsClient.Instance.AmHost;
-    public static void SendLocalMessage(string msg)
+    public static void SendLocalMessage(string msg,bool withOutSetName = false)
     {
         var pc = PlayerControl.LocalPlayer;
         string orig = pc.name;
+        if(!withOutSetName)
         pc.SetName("System");
         HudManager.Instance.Chat.AddChat(pc, msg);
         pc.SetName(orig);

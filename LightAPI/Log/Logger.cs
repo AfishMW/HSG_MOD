@@ -38,19 +38,13 @@ public static class LightLogger
     }
     public static void Log(string message = "undefined")
     {
-        if (message == null)
-        {
-            message = "日志值为null";
-        }
+        message ??= "日志值为null";
         string logLine = $"[{DateTime.Now:yyyy/M/d HH:mm:ss}]: \"{message}\"";
         AppendLog(logLine);
     }
     public static void LogError(string message = "undefined", string reason = "undefined")
     {
-        if (message == null)
-        {
-            message = "日志值为null";
-        }
+        message ??= "日志值为null";
         string logLine = $"[Error-{DateTime.Now:yyyy/M/d HH:mm:ss}]: \"{message}\"";
         AppendLog(logLine);
         throw new Exception($"Error. msg:{message},reason:{reason}");

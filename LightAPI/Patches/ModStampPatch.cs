@@ -22,6 +22,7 @@ public static class ModStampPatch
             if(modStamp == null)
             {
                 LightLogger.LogWarning("[ModStampPatch] ModStamp not found!");
+                return;
             }
             modStamp.transform.localScale = Vector3.one * 0.06f;
             modStamp.GetComponent<SpriteRenderer>().sprite = ResourceHelper.LoadSpriteFromResource("LightInDark.Resources.ModStamp.png");
