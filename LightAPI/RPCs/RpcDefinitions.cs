@@ -30,7 +30,7 @@ namespace LightInDark.RPCs
         {
             if (player == null || player.Data.IsDead) return;
             player.RpcMurderPlayer(player, true);
-            Events.EventSystem.RunEvent(new Events.PlayerSuicideEvent { Player = player, Reason = state, NeedLog = needLog });
+            Events.EventSystem.RunEvent(new Events.PlayerSuicideEvent(player, state) { NeedLog = needLog });
             if (needLog) LightLogger.Log($"[RPC] {player.name} suicide. state:{state}");
         }
 
@@ -39,7 +39,7 @@ namespace LightInDark.RPCs
         {
             if (killer == null || victim == null) return;
             killer.RpcMurderPlayer(victim, true);
-            Events.EventSystem.RunEvent(new Events.PlayerMurderEvent { Player = killer, Victim = victim });
+            Events.EventSystem.RunEvent(new Events.PlayerMurderEvent(killer, victim));
         }
 
         /// <summary>恢复玩家（取消死亡状态）</summary>
@@ -50,7 +50,7 @@ namespace LightInDark.RPCs
                 if (pc.PlayerId == playerId && pc.Data.IsDead)
                 {
                     pc.Revive();
-                    Events.EventSystem.RunEvent(new Events.PlayerReviveEvent { Player = pc });
+                    Events.EventSystem.RunEvent(new Events.PlayerReviveEvent(pc));
                     LightLogger.Log($"[RPC] {pc.name} 已复活");
                     break;
                 }
@@ -145,7 +145,7 @@ namespace LightInDark.RPCs
                 if (pc.PlayerId == playerId)
                 {
                     HudManager.Instance?.Chat?.AddChat(pc, message, false);
-                    Events.EventSystem.RunEvent(new Events.ChatMessageEvent { Player = pc, Message = message });
+                    Events.EventSystem.RunEvent(new Events.ChatMessageEvent(pc, message));
                     break;
                 }
         }

@@ -7,11 +7,9 @@
         <DebugType>embedded</DebugType>
         <AssemblyName>Light</AssemblyName>
         <RootNamespace>Light</RootNamespace>
-
         <VersionPrefix>1.0.0</VersionPrefix>
         <VersionSuffix>dev</VersionSuffix>
         <Description>Light In The Dark - Among Us Mod</Description>
-
         <AmongUs>F:\AU\暗中辉0.0.0.1</AmongUs>
         <GameInteropDir>$(AmongUs)\BepInEx\interop</GameInteropDir>
     </PropertyGroup>
@@ -19,51 +17,170 @@
     <ItemGroup>
         <EmbeddedResource Include="Resources\**\*.*" />
     </ItemGroup>
-
-    <!-- 从游戏目录引用必要的程序集 -->
-    <Target Name="AddGameReferences" BeforeTargets="ResolveAssemblyReferences">
-        <ItemGroup>
-            <!-- 游戏 interop 程序集 -->
-            <_InteropDlls Include="$(GameInteropDir)\*.dll" Exclude="$(GameInteropDir)\netstandard.dll" />
-            <Reference Include="@(_InteropDlls->'%(FileName)')">
-                <HintPath>%(FullPath)</HintPath>
-                <Private>false</Private>
-            </Reference>
-
-            <!-- Reactor 2.5.1 -->
-            <Reference Include="Reactor">
-                <HintPath>$(AmongUs)\BepInEx\plugins\Reactor.dll</HintPath>
-                <Private>false</Private>
-            </Reference>
-
-            <!-- BepInEx 核心运行时（仅托管程序集） -->
-            <Reference Include="BepInEx.Core">
-                <HintPath>$(AmongUs)\BepInEx\core\BepInEx.Core.dll</HintPath>
-                <Private>false</Private>
-            </Reference>
-            <Reference Include="BepInEx.Unity.IL2CPP">
-                <HintPath>$(AmongUs)\BepInEx\core\BepInEx.Unity.IL2CPP.dll</HintPath>
-                <Private>false</Private>
-            </Reference>
-            <Reference Include="0Harmony">
-                <HintPath>$(AmongUs)\BepInEx\core\0Harmony.dll</HintPath>
-                <Private>false</Private>
-            </Reference>
-            <Reference Include="Il2CppInterop.Runtime">
-                <HintPath>$(AmongUs)\BepInEx\core\Il2CppInterop.Runtime.dll</HintPath>
-                <Private>false</Private>
-            </Reference>
-            <Reference Include="Il2CppInterop.HarmonySupport">
-                <HintPath>$(AmongUs)\BepInEx\core\Il2CppInterop.HarmonySupport.dll</HintPath>
-                <Private>false</Private>
-            </Reference>
-        </ItemGroup>
-    </Target>
+	<ItemGroup>
+		<Reference Include="..\Libs\0Harmony.dll" />
+		<Reference Include="..\Libs\AddressablesPlayAssetDelivery.dll" />
+		<Reference Include="..\Libs\AmongUsCaching.dll" />
+		<Reference Include="..\Libs\AsmResolver.dll" />
+		<Reference Include="..\Libs\AsmResolver.DotNet.dll" />
+		<Reference Include="..\Libs\AsmResolver.PE.dll" />
+		<Reference Include="..\Libs\AsmResolver.PE.File.dll" />
+		<Reference Include="..\Libs\Assembly-CSharp-firstpass.dll" />
+		<Reference Include="..\Libs\Assembly-CSharp.dll" />
+		<Reference Include="..\Libs\AssetRipper.CIL.dll" />
+		<Reference Include="..\Libs\AssetRipper.Primitives.dll" />
+		<Reference Include="..\Libs\BepInEx.Core.dll" />
+		<Reference Include="..\Libs\BepInEx.Preloader.Core.dll" />
+		<Reference Include="..\Libs\BepInEx.Unity.Common.dll" />
+		<Reference Include="..\Libs\BepInEx.Unity.IL2CPP.dll" />
+		<Reference Include="..\Libs\Cpp2IL.Core.dll" />
+		<Reference Include="..\Libs\CsvHelper.dll" />
+		<Reference Include="..\Libs\Disarm.dll" />
+		<Reference Include="..\Libs\Gee.External.Capstone.dll" />
+		<Reference Include="..\Libs\Hazel.dll" />
+		<Reference Include="..\Libs\Iced.dll" />
+		<Reference Include="..\Libs\Il2CppInterop.Common.dll" />
+		<Reference Include="..\Libs\Il2CppInterop.Generator.dll" />
+		<Reference Include="..\Libs\Il2CppInterop.HarmonySupport.dll" />
+		<Reference Include="..\Libs\Il2CppInterop.Runtime.dll" />
+		<Reference Include="..\Libs\Il2CppMono.Security.dll" />
+		<Reference Include="..\Libs\Il2Cppmscorlib.dll" />
+		<Reference Include="..\Libs\Il2CppSystem.Configuration.dll" />
+		<Reference Include="..\Libs\Il2CppSystem.Core.dll" />
+		<Reference Include="..\Libs\Il2CppSystem.Data.dll" />
+		<Reference Include="..\Libs\Il2CppSystem.dll" />
+		<Reference Include="..\Libs\Il2CppSystem.Drawing.dll" />
+		<Reference Include="..\Libs\Il2CppSystem.Net.Http.dll" />
+		<Reference Include="..\Libs\Il2CppSystem.Numerics.dll" />
+		<Reference Include="..\Libs\Il2CppSystem.Runtime.Serialization.dll" />
+		<Reference Include="..\Libs\Il2CppSystem.Xml.dll" />
+		<Reference Include="..\Libs\Il2CppSystem.Xml.Linq.dll" />
+		<Reference Include="..\Libs\io.sentry.unity.runtime.dll" />
+		<Reference Include="..\Libs\LibCpp2IL.dll" />
+		<Reference Include="..\Libs\Mono.Cecil.dll" />
+		<Reference Include="..\Libs\Mono.Cecil.Mdb.dll" />
+		<Reference Include="..\Libs\Mono.Cecil.Pdb.dll" />
+		<Reference Include="..\Libs\Mono.Cecil.Rocks.dll" />
+		<Reference Include="..\Libs\MonoMod.Backports.dll" />
+		<Reference Include="..\Libs\MonoMod.ILHelpers.dll" />
+		<Reference Include="..\Libs\MonoMod.RuntimeDetour.dll" />
+		<Reference Include="..\Libs\MonoMod.Utils.dll" />
+		<Reference Include="..\Libs\Newtonsoft.Json.dll" />
+		<Reference Include="..\Libs\QRCoder.dll" />
+		<Reference Include="..\Libs\Reactor.dll" />
+		<Reference Include="..\Libs\Rewired_Core.dll" />
+		<Reference Include="..\Libs\Rewired_Windows.dll" />
+		<Reference Include="..\Libs\Rewired_Windows_Functions.dll" />
+		<Reference Include="..\Libs\SemanticVersioning.dll" />
+		<Reference Include="..\Libs\Sentry.dll" />
+		<Reference Include="..\Libs\Sentry.Microsoft.Bcl.AsyncInterfaces.dll" />
+		<Reference Include="..\Libs\Sentry.System.Buffers.dll" />
+		<Reference Include="..\Libs\Sentry.System.Collections.Immutable.dll" />
+		<Reference Include="..\Libs\Sentry.System.Memory.dll" />
+		<Reference Include="..\Libs\Sentry.System.Numerics.Vectors.dll" />
+		<Reference Include="..\Libs\Sentry.System.Reflection.Metadata.dll" />
+		<Reference Include="..\Libs\Sentry.System.Runtime.CompilerServices.Unsafe.dll" />
+		<Reference Include="..\Libs\Sentry.System.Text.Encodings.Web.dll" />
+		<Reference Include="..\Libs\Sentry.System.Text.Json.dll" />
+		<Reference Include="..\Libs\Sentry.System.Threading.Tasks.Extensions.dll" />
+		<Reference Include="..\Libs\Sentry.Unity.dll" />
+		<Reference Include="..\Libs\StableNameDotNet.dll" />
+		<Reference Include="..\Libs\Unity.Addressables.dll" />
+		<Reference Include="..\Libs\Unity.Analytics.DataPrivacy.dll" />
+		<Reference Include="..\Libs\Unity.LevelPlay.dll" />
+		<Reference Include="..\Libs\Unity.ProBuilder.dll" />
+		<Reference Include="..\Libs\Unity.ResourceManager.dll" />
+		<Reference Include="..\Libs\Unity.Services.Analytics.dll" />
+		<Reference Include="..\Libs\Unity.Services.Core.Configuration.dll" />
+		<Reference Include="..\Libs\Unity.Services.Core.Device.dll" />
+		<Reference Include="..\Libs\Unity.Services.Core.dll" />
+		<Reference Include="..\Libs\Unity.Services.Core.Environments.Internal.dll" />
+		<Reference Include="..\Libs\Unity.Services.Core.Internal.dll" />
+		<Reference Include="..\Libs\Unity.Services.Core.Registration.dll" />
+		<Reference Include="..\Libs\Unity.Services.Core.Scheduler.dll" />
+		<Reference Include="..\Libs\Unity.Services.Core.Telemetry.dll" />
+		<Reference Include="..\Libs\Unity.Services.Core.Threading.dll" />
+		<Reference Include="..\Libs\Unity.TextMeshPro.dll" />
+		<Reference Include="..\Libs\UnityEngine.AccessibilityModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.AIModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.AndroidJNIModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.AnimationModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.AssetBundleModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.AudioModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.ClothModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.ClusterInputModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.ClusterRendererModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.ContentLoadModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.CoreModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.CrashReportingModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.DirectorModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.dll" />
+		<Reference Include="..\Libs\UnityEngine.DSPGraphModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.GameCenterModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.GIModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.GridModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.HotReloadModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.ImageConversionModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.IMGUIModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.InputLegacyModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.InputModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.JSONSerializeModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.LocalizationModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.ParticleSystemModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.PerformanceReportingModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.Physics2DModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.PhysicsModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.ProfilerModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.PropertiesModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.Purchasing.dll" />
+		<Reference Include="..\Libs\UnityEngine.Purchasing.SecurityCore.dll" />
+		<Reference Include="..\Libs\UnityEngine.RuntimeInitializeOnLoadManagerInitializerModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.ScreenCaptureModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.SharedInternalsModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.SpriteMaskModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.SpriteShapeModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.StreamingModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.SubstanceModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.SubsystemsModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.TerrainModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.TerrainPhysicsModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.TextCoreFontEngineModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.TextCoreTextEngineModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.TextRenderingModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.TilemapModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.TLSModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.UI.dll" />
+		<Reference Include="..\Libs\UnityEngine.UIElementsModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.UIModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.UmbraModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.UnityAnalyticsCommonModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.UnityAnalyticsModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.UnityConnectModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.UnityCurlModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.UnityTestProtocolModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.UnityWebRequestAssetBundleModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.UnityWebRequestAudioModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.UnityWebRequestModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.UnityWebRequestTextureModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.UnityWebRequestWWWModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.VehiclesModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.VFXModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.VideoModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.VirtualTexturingModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.VRModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.WindModule.dll" />
+		<Reference Include="..\Libs\UnityEngine.XRModule.dll" />
+		<Reference Include="..\Libs\WasmDisassembler.dll" />
+		<Reference Include="..\Libs\__Generated.dll" />
+		
+	</ItemGroup>
+	<ItemGroup>
+		<Reference Include=".\API\LightInDark.dll" />
+	</ItemGroup>
 <ItemGroup>
-	<Reference Include="LightAPI\Libs\*.*"/>
+	<Reference Include="LightAPI\Libs\*.*" />
 </ItemGroup>
-    <!-- 编译完成后自动复制到游戏插件目录 -->
-    <Target Name="Copy" AfterTargets="Build" Condition="'$(AmongUs)' != ''">
+	<!-- <Target Name="Copy" AfterTargets="Build" Condition="'$(AmongUs)' != ''">
         <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AmongUs)/BepInEx/plugins/" />
-    </Target>
+    </Target>-->
 </Project>

@@ -112,7 +112,14 @@ public static class LoadPatch
                 float dx = (x - 3.5f) / 3.5f;
                 float dy = (y - 3.5f) / 3.5f;
                 float dist = Mathf.Sqrt(dx * dx + dy * dy);
-                particleTex.SetPixel(x, y, dist < 1f ? new Color(1, 1, 1, 1f - dist) : Color.clear);
+                if (dist < 1f)
+                {
+                    particleTex.SetPixel(x, y, new Color(1, 1, 1, 1f - dist).ToUnityColor());
+                }
+                else
+                {
+                    particleTex.SetPixel(x, y, UColor.clear);
+                }
             }
         particleTex.Apply();
         particleSprite = Sprite.Create(particleTex, new Rect(0, 0, 8, 8), new Vector2(0.5f, 0.5f), 100f);
@@ -124,7 +131,7 @@ public static class LoadPatch
             var sr = UnityHelper.CreateObject<SpriteRenderer>($"Particle{i}", null,
                 new Vector3(UnityEngine.Random.Range(-3f, 3f), UnityEngine.Random.Range(-1.5f, 2.5f), -4.5f));
             sr.sprite = particleSprite;
-            sr.color = new Color(1, 1, 1, UnityEngine.Random.Range(0.1f, 0.35f));
+            sr.color = new UColor(1, 1, 1, UnityEngine.Random.Range(0.1f, 0.35f));
             float s = UnityEngine.Random.Range(0.3f, 0.7f);
             sr.transform.localScale = Vector3.one * s;
             particles.Add(new Particle
@@ -143,12 +150,9 @@ public static class LoadPatch
         {
             p -= Time.deltaTime * 2.8f;
             float alpha = 1f - p;
-<<<<<<< HEAD:Patches/LoadPatch.cs
             logo.color = new Color(1f, 1f, 1f, alpha).ToUnityColor();
             // 发光层：比 Logo 稍大，透明度先快速提升再缓慢降低
-=======
-            logo.color = new Color(1f, 1f, 1f, alpha);
->>>>>>> 9d36ec92062f4afa0710e58d7f13d53fd63d0f26:LightPluginMain/Patches/LoadPatch.cs
+            logo.color = new UColor(1f, 1f, 1f, alpha);
             float glowAlpha = Mathf.Min(1f, alpha * (p * 2f + 0.3f));
             logoGlow.color = new Color(1f, 1f, 1f, glowAlpha * 0.5f).ToUnityColor();
             logo.transform.localScale = Vector3.one * (p * p * 0.012f + 1f);
@@ -157,12 +161,9 @@ public static class LoadPatch
         }
         logo.color = UnityEngine.Color.white;
         logo.transform.localScale = Vector3.one;
-<<<<<<< HEAD:Patches/LoadPatch.cs
         // 发光层继续淡入维持
         logoGlow.color = new Color(1f, 1f, 1f, 0.45f).ToUnityColor();
-=======
-        logoGlow.color = new Color(1f, 1f, 1f, 0.45f);
->>>>>>> 9d36ec92062f4afa0710e58d7f13d53fd63d0f26:LightPluginMain/Patches/LoadPatch.cs
+        logoGlow.color = new UColor(1f, 1f, 1f, 0.45f);
         logoGlow.transform.localScale = Vector3.one * 1.04f;
 
         // ======= 创建加载进度文字 =======
@@ -176,11 +177,8 @@ public static class LoadPatch
         quoteText = UnityEngine.Object.Instantiate(instance.errorPopup.InfoText, null);
         quoteText.transform.localPosition = new Vector3(0f, -3.8f, -10f);
         quoteText.fontStyle = FontStyles.Italic;
-<<<<<<< HEAD:Patches/LoadPatch.cs
         quoteText.color = new Color(0.6f, 0.6f, 0.6f, 0.8f).ToUnityColor();
-=======
-        quoteText.color = new Color(0.6f, 0.6f, 0.6f, 0f); // 从透明开始淡入
->>>>>>> 9d36ec92062f4afa0710e58d7f13d53fd63d0f26:LightPluginMain/Patches/LoadPatch.cs
+        quoteText.color = new UColor(0.6f, 0.6f, 0.6f, 0f); // 从透明开始淡入
         quoteText.fontSize *= 0.7f;
         quoteText.text = Quotes[0];
 
@@ -193,20 +191,17 @@ public static class LoadPatch
         versionText.alignment = TextAlignmentOptions.BottomRight;
         versionText.text = $"{LIDPlugin.VisualVersion}";
 
-<<<<<<< HEAD:Patches/LoadPatch.cs
-=======
         // ======= 引用淡入 =======
         p = 0f;
         while (p < 1f)
         {
             p += Time.deltaTime * 1.5f;
-            quoteText.color = new Color(0.6f, 0.6f, 0.6f, 0.8f * p);
+            quoteText.color = new UColor(0.6f, 0.6f, 0.6f, 0.8f * p);
             yield return null;
         }
-        quoteText.color = new Color(0.6f, 0.6f, 0.6f, 0.8f);
+        quoteText.color = new UColor(0.6f, 0.6f, 0.6f, 0.8f);
 
         // ======= 加载主循环 =======
->>>>>>> 9d36ec92062f4afa0710e58d7f13d53fd63d0f26:LightPluginMain/Patches/LoadPatch.cs
         loadStageTimer = 0f;
         currentQuoteIndex = 0;
         quoteTimer = 0f;
@@ -243,7 +238,7 @@ public static class LoadPatch
                 {
                     // 淡出旧名言
                     float outA = 0.8f * (1f - fadeP * 2f);
-                    quoteText.color = new Color(0.6f, 0.6f, 0.6f, outA);
+                    quoteText.color = new UColor(0.6f, 0.6f, 0.6f, outA);
                 }
                 else
                 {
@@ -254,12 +249,12 @@ public static class LoadPatch
                         currentQuoteIndex = (currentQuoteIndex + 1) % Quotes.Length;
                     }
                     float inA = 0.8f * ((fadeP - 0.5f) * 2f);
-                    quoteText.color = new Color(0.6f, 0.6f, 0.6f, inA);
+                    quoteText.color = new UColor(0.6f, 0.6f, 0.6f, inA);
                     if (fadeP >= 1f)
                     {
                         quoteFading = false;
                         quoteTimer = 0f;
-                        quoteText.color = new Color(0.6f, 0.6f, 0.6f, 0.8f);
+                        quoteText.color = new UColor(0.6f, 0.6f, 0.6f, 0.8f);
                     }
                 }
             }
@@ -294,7 +289,7 @@ public static class LoadPatch
 
                     // 粒子透明度呼吸
                     float alpha = Mathf.Sin(pt.life * 1.2f + i) * 0.15f + 0.2f;
-                    pt.renderer.color = new Color(1, 1, 1, alpha);
+                    pt.renderer.color = new UColor(1, 1, 1, alpha);
 
                     // 循环边界
                     if (pos.x > 3.5f) pos.x = -3.5f;
@@ -325,7 +320,7 @@ public static class LoadPatch
             {
                 p -= Time.deltaTime * 2f;
                 foreach (var pt in particles)
-                    pt.renderer.color = new Color(1, 1, 1, pt.renderer.color.a * 0.9f);
+                    pt.renderer.color = new UColor(1, 1, 1, pt.renderer.color.a * 0.9f);
                 yield return null;
             }
             foreach (var pt in particles)

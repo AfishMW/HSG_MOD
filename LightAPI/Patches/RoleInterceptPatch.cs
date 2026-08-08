@@ -85,11 +85,7 @@ namespace LightInDark.Patches
             foreach (var pc in PlayerControl.AllPlayerControls)
             {
                 if (pc?.Data?.Role != null)
-                    EventSystem.RunEvent(new RoleAssignedEvent
-                    {
-                        Player = pc,
-                        RoleName = pc.Data.Role.ToString()
-                    });
+                    EventSystem.RunEvent(new RoleAssignedEvent(pc, pc.Data.Role.ToString()));
             }
         }
     }
@@ -135,11 +131,7 @@ namespace LightInDark.Patches
     {
         public static void Postfix(PlayerControl __instance, DeathReason reason)
         {
-            EventSystem.RunEvent(new PlayerDeathEvent
-            {
-                Player = __instance,
-                Reason = reason
-            });
+            EventSystem.RunEvent(new PlayerDeathEvent(__instance, reason));
         }
     }
 
@@ -163,12 +155,7 @@ namespace LightInDark.Patches
                 foreach (var task in __instance.Data.Tasks)
                     if (task != null && task.Complete) completed++;
             }
-            EventSystem.RunEvent(new PlayerTaskCompleteEvent
-            {
-                Player = __instance,
-                CompletedTasks = completed,
-                TotalTasks = total
-            });
+            EventSystem.RunEvent(new PlayerTaskCompleteEvent(__instance, completed, total));
         }
     }
 
@@ -197,11 +184,7 @@ namespace LightInDark.Patches
     {
         public static void Postfix(MeetingHud __instance, byte suspectStateIdx)
         {
-            EventSystem.RunEvent(new PlayerVoteEvent
-            {
-                Player = PlayerControl.LocalPlayer,
-                VotedForPlayerId = suspectStateIdx
-            });
+            EventSystem.RunEvent(new PlayerVoteEvent(PlayerControl.LocalPlayer, suspectStateIdx));
         }
     }
 
@@ -216,10 +199,7 @@ namespace LightInDark.Patches
         {
             if (data?.Character != null)
             {
-                EventSystem.RunEvent(new PlayerDisconnectEvent
-                {
-                    Player = data.Character
-                });
+                EventSystem.RunEvent(new PlayerDisconnectEvent(data.Character));
             }
         }
     }
@@ -236,7 +216,7 @@ namespace LightInDark.Patches
             // ExileController 的 exiled 属性可能在 Il2Cpp 中需要不同访问方式
             // 暂时只记录日志
             LightLogger.Log("[Patch] 放逐动画开始");
-            EventSystem.RunEvent(new PlayerExileEvent { });
+            EventSystem.RunEvent(new PlayerExileEvent(null));
         }
     }
 

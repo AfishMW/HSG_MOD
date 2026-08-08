@@ -1,6 +1,8 @@
 global using HarmonyLib;
 global using System.Collections;
 global using UnityEngine;
+global using Color = LightInDark.Color;
+global using UColor = UnityEngine.Color;
 using BepInEx;
 using BepInEx.Logging;
 using BepInEx.Unity.IL2CPP;
