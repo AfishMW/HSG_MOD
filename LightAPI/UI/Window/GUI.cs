@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -39,7 +39,7 @@ public struct Size
         Height = height;
     }
 
-    internal Size(Vector2 v) : this(v.x, v.y) { }
+    public Size(Vector2 v) : this(v.x, v.y) { }
 
     public Vector2 ToUnityVector() => new(Width, Height);
     public static Size Zero => new(0f, 0f);
@@ -132,12 +132,12 @@ public delegate void GUIClickAction(GUIClickable clickable);
 /// </summary>
 public class GUIClickable
 {
-    internal PassiveButton? Button { get; init; }
-    internal GUIClickable(PassiveButton? button = null) => Button = button;
+    public PassiveButton? Button { get; init; }
+    public GUIClickable(PassiveButton? button = null) => Button = button;
 }
 
 /// <summary>
-/// GUI 工厂接口，与 Nebula 的 Virial.Media.GUI 一致
+/// GUI 工厂接口
 /// </summary>
 public interface IGUI
 {
@@ -193,12 +193,4 @@ public interface IGUI
     TextComponent RawTextComponent(string rawText);
     TextComponent TranslateTextComponent(string translationKey);
     TextComponent ColorTextComponent(Color color, TextComponent component);
-}
-
-/// <summary>
-/// GUI 工厂快捷访问
-/// </summary>
-public static class GUI
-{
-    public static IGUI API => LIDGUI.Instance;
 }

@@ -1,4 +1,5 @@
-﻿using LightInDark.Configuration;
+using System;
+using LightInDark.Configuration;
 using LightInDark.Game;
 
 namespace LightInDark.Roles
@@ -13,6 +14,18 @@ namespace LightInDark.Roles
         public RoleCategory Category { get; }
         public string Description { get; }
 
+        /// <summary>注册序号（RPC 用）</summary>
+        public int Id { get; internal set; }
+
+        /// <summary>分配参数（默认不参与分配）</summary>
+        public virtual AllocationParameters Allocation => default;
+
+        /// <summary>默认参数（实例化时使用）</summary>
+        public virtual int[] DefaultArguments => Array.Empty<int>();
+
+        /// <summary>该角色是否可在本局生成（分配机调用）</summary>
+        public virtual bool CanSpawnIn() => true;
+
         protected DefinedRole(string name, Color color, RoleCategory category, string description = "")
         {
             Name = name;
@@ -21,6 +34,6 @@ namespace LightInDark.Roles
             Description = description;
         }
 
-        public abstract RuntimeRole CreateInstance(Player player);
+        public abstract RuntimeRole CreateInstance(Player player, int[] arguments);
     }
 }

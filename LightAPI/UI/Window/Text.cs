@@ -151,7 +151,7 @@ public enum AttributeParams
 }
 
 [Flags]
-internal enum AttributeTemplateFlag
+public enum AttributeTemplateFlag
 {
     None = 0,
     AlignmentLeft = AttributeParams.AlignmentLeft,

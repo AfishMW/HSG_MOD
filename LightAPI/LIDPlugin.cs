@@ -1,13 +1,11 @@
 ﻿global using Color = LightInDark.Color;
 global using UColor = UnityEngine.Color;
-global using AbilityButton = LightInDark.UI.AbilityButton;
 using BepInEx;
 using BepInEx.Unity.IL2CPP;
 using HarmonyLib;
 using Il2CppInterop.Runtime.Injection;
 using LightInDark.Core;
 using LightInDark.Events;
-using LightInDark.Patches;
 using LightInDark.UI;
 using LightInDark.UI.Window;
 using LightInDark.Roles;
@@ -18,7 +16,6 @@ using Reactor.Networking.Attributes;
 using System.Collections;
 using UnityEngine;
 using Reactor.Utilities;
-using LightInDark.Roles.Crewmates;
 
 
 namespace LightInDark;
@@ -37,40 +34,10 @@ public partial class LIDPlugin : BasePlugin
     public override void Load()
     {
         Harmony.PatchAll();
-        LoadCommand();
         LidRpcRegistry.ScanAndPatch(Harmony);
-        LoadRoles();
-        ClassInjector.RegisterTypeInIl2Cpp<MetaScreen>();
         EventSystem.ScanAndRegisterAll();
         Language.Language.Load();
-        RegisterRole();
-        LightLogger.Log("Mod加载成功");
-    }
-    static void LoadRoles()
-    {
-        RoleRegistry.Register<Caller>();
-    }
-    static void LoadCommand()
-    {
-        var harmony = new Harmony("Light.cmd.harmony");
-        var orig = AccessTools.Method(typeof(ChatController), "SendChat");
-        if (orig == null)
-        {
-            return;
-        }
-
-        var prefixMethod = AccessTools.Method(typeof(PatchManager), nameof(PatchManager.OnSendChat));
-        if (prefixMethod == null)
-        {
-            return;
-        }
-
-        var prefix = new HarmonyMethod(prefixMethod);
-        harmony.Patch(orig, prefix);
-    }
-    public static void RegisterRole()
-    {
-        RoleRegistry.Register<Caller>();
+        LightLogger.Log("API加载成功");
     }
 
 }

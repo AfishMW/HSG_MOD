@@ -1,7 +1,6 @@
 using BepInEx.Unity.IL2CPP.Utils.Collections;
 using HarmonyLib;
 using Light.Utilities;
-using LightInDark;
 using System.Collections;
 using TMPro;
 using UnityEngine;
@@ -91,12 +90,14 @@ public static class LoadPatch
     {
         // ======= 创建 Logo =======
         logo = UnityHelper.CreateObject<SpriteRenderer>("LightLogo", null, new Vector3(0, 0.5f, -5f));
+        logo.transform.localScale = Vector3.one * 0.35f;
 
         // 创建 Logo 发光层
         logoGlow = UnityHelper.CreateObject<SpriteRenderer>("LightLogoGlow", null, new Vector3(0, 0.5f, -4.8f));
+        logoGlow.transform.localScale = Vector3.one * 0.35f;
 
         // 加载 Logo 纹理
-        var texture = GraphicsHelper.LoadTextureFromResources("Light.Resources.Logo.LightInDark.png");
+        var texture = GraphicsHelper.LoadTextureFromResources("Light.Resources.Lobby.LightInDark.png");
         if (texture != null)
         {
             logoSprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f), 100f);
@@ -112,14 +113,7 @@ public static class LoadPatch
                 float dx = (x - 3.5f) / 3.5f;
                 float dy = (y - 3.5f) / 3.5f;
                 float dist = Mathf.Sqrt(dx * dx + dy * dy);
-                if (dist < 1f)
-                {
-                    particleTex.SetPixel(x, y, new Color(1, 1, 1, 1f - dist).ToUnityColor());
-                }
-                else
-                {
-                    particleTex.SetPixel(x, y, UColor.clear);
-                }
+                particleTex.SetPixel(x, y, dist < 1f ? new Color(1, 1, 1, 1f - dist) : Color.clear);
             }
         particleTex.Apply();
         particleSprite = Sprite.Create(particleTex, new Rect(0, 0, 8, 8), new Vector2(0.5f, 0.5f), 100f);
@@ -131,7 +125,7 @@ public static class LoadPatch
             var sr = UnityHelper.CreateObject<SpriteRenderer>($"Particle{i}", null,
                 new Vector3(UnityEngine.Random.Range(-3f, 3f), UnityEngine.Random.Range(-1.5f, 2.5f), -4.5f));
             sr.sprite = particleSprite;
-            sr.color = new UColor(1, 1, 1, UnityEngine.Random.Range(0.1f, 0.35f));
+            sr.color = new Color(1, 1, 1, UnityEngine.Random.Range(0.1f, 0.35f));
             float s = UnityEngine.Random.Range(0.3f, 0.7f);
             sr.transform.localScale = Vector3.one * s;
             particles.Add(new Particle
@@ -150,35 +144,32 @@ public static class LoadPatch
         {
             p -= Time.deltaTime * 2.8f;
             float alpha = 1f - p;
-            logo.color = new Color(1f, 1f, 1f, alpha).ToUnityColor();
+            logo.color = new Color(1f, 1f, 1f, alpha);
             // 发光层：比 Logo 稍大，透明度先快速提升再缓慢降低
-            logo.color = new UColor(1f, 1f, 1f, alpha);
             float glowAlpha = Mathf.Min(1f, alpha * (p * 2f + 0.3f));
-            logoGlow.color = new Color(1f, 1f, 1f, glowAlpha * 0.5f).ToUnityColor();
-            logo.transform.localScale = Vector3.one * (p * p * 0.012f + 1f);
-            logoGlow.transform.localScale = Vector3.one * (p * p * 0.015f + 1.04f);
+            logoGlow.color = new Color(1f, 1f, 1f, glowAlpha * 0.5f);
+            logo.transform.localScale = Vector3.one * (p * p * 0.012f + 1f) * 0.35f;
+            logoGlow.transform.localScale = Vector3.one * (p * p * 0.015f + 1.04f) * 0.35f;
             yield return null;
         }
         logo.color = UnityEngine.Color.white;
-        logo.transform.localScale = Vector3.one;
+        logo.transform.localScale = Vector3.one * 0.35f;
         // 发光层继续淡入维持
-        logoGlow.color = new Color(1f, 1f, 1f, 0.45f).ToUnityColor();
-        logoGlow.color = new UColor(1f, 1f, 1f, 0.45f);
-        logoGlow.transform.localScale = Vector3.one * 1.04f;
+        logoGlow.color = new Color(1f, 1f, 1f, 0.45f);
+        logoGlow.transform.localScale = Vector3.one * 1.04f * 0.35f;
 
         // ======= 创建加载进度文字 =======
         loadText = UnityEngine.Object.Instantiate(instance.errorPopup.InfoText, null);
         loadText.transform.localPosition = new Vector3(0f, -0.8f, -10f);
         loadText.fontStyle = FontStyles.Bold;
         loadText.text = "正在加载资源...";
-        loadText.color = new Color(1f, 1f, 1f, 0.3f).ToUnityColor();
+        loadText.color = new Color(1f, 1f, 1f, 0.3f);
 
         // ======= 创建引用文字（放到底部） =======
         quoteText = UnityEngine.Object.Instantiate(instance.errorPopup.InfoText, null);
         quoteText.transform.localPosition = new Vector3(0f, -3.8f, -10f);
         quoteText.fontStyle = FontStyles.Italic;
-        quoteText.color = new Color(0.6f, 0.6f, 0.6f, 0.8f).ToUnityColor();
-        quoteText.color = new UColor(0.6f, 0.6f, 0.6f, 0f); // 从透明开始淡入
+        quoteText.color = new Color(0.6f, 0.6f, 0.6f, 0.8f);
         quoteText.fontSize *= 0.7f;
         quoteText.text = Quotes[0];
 
@@ -186,20 +177,10 @@ public static class LoadPatch
         versionText = UnityEngine.Object.Instantiate(instance.errorPopup.InfoText, null);
         versionText.transform.localPosition = new Vector3(4.5f, -3.2f, -10f);
         versionText.fontStyle = FontStyles.Italic;
-        versionText.color = new Color(0.5f, 0.5f, 0.5f, 0.6f).ToUnityColor();
+        versionText.color = new Color(0.5f, 0.5f, 0.5f, 0.6f);
         versionText.fontSize *= 0.55f;
         versionText.alignment = TextAlignmentOptions.BottomRight;
-        versionText.text = $"{LIDPlugin.VisualVersion}";
-
-        // ======= 引用淡入 =======
-        p = 0f;
-        while (p < 1f)
-        {
-            p += Time.deltaTime * 1.5f;
-            quoteText.color = new UColor(0.6f, 0.6f, 0.6f, 0.8f * p);
-            yield return null;
-        }
-        quoteText.color = new UColor(0.6f, 0.6f, 0.6f, 0.8f);
+        versionText.text = $"{LightPlugin.VisualVersion}";
 
         // ======= 加载主循环 =======
         loadStageTimer = 0f;
@@ -238,7 +219,7 @@ public static class LoadPatch
                 {
                     // 淡出旧名言
                     float outA = 0.8f * (1f - fadeP * 2f);
-                    quoteText.color = new UColor(0.6f, 0.6f, 0.6f, outA);
+                    quoteText.color = new Color(0.6f, 0.6f, 0.6f, outA);
                 }
                 else
                 {
@@ -249,12 +230,12 @@ public static class LoadPatch
                         currentQuoteIndex = (currentQuoteIndex + 1) % Quotes.Length;
                     }
                     float inA = 0.8f * ((fadeP - 0.5f) * 2f);
-                    quoteText.color = new UColor(0.6f, 0.6f, 0.6f, inA);
+                    quoteText.color = new Color(0.6f, 0.6f, 0.6f, inA);
                     if (fadeP >= 1f)
                     {
                         quoteFading = false;
                         quoteTimer = 0f;
-                        quoteText.color = new UColor(0.6f, 0.6f, 0.6f, 0.8f);
+                        quoteText.color = new Color(0.6f, 0.6f, 0.6f, 0.8f);
                     }
                 }
             }
@@ -266,7 +247,7 @@ public static class LoadPatch
 
             // 发光层脉冲呼吸
             float breathe = Mathf.Sin(Time.time * 1.5f) * 0.12f + 0.35f;
-            logoGlow.color = new Color(1f, 1f, 1f, breathe).ToUnityColor();
+            logoGlow.color = new Color(1f, 1f, 1f, breathe);
 
             // Logo 微微旋转摆动
             float rotZ = Mathf.Sin(Time.time * 0.3f) * 1.5f;
@@ -289,7 +270,7 @@ public static class LoadPatch
 
                     // 粒子透明度呼吸
                     float alpha = Mathf.Sin(pt.life * 1.2f + i) * 0.15f + 0.2f;
-                    pt.renderer.color = new UColor(1, 1, 1, alpha);
+                    pt.renderer.color = new Color(1, 1, 1, alpha);
 
                     // 循环边界
                     if (pos.x > 3.5f) pos.x = -3.5f;
@@ -320,7 +301,7 @@ public static class LoadPatch
             {
                 p -= Time.deltaTime * 2f;
                 foreach (var pt in particles)
-                    pt.renderer.color = new UColor(1, 1, 1, pt.renderer.color.a * 0.9f);
+                    pt.renderer.color = new Color(1, 1, 1, pt.renderer.color.a * 0.9f);
                 yield return null;
             }
             foreach (var pt in particles)
@@ -338,7 +319,7 @@ public static class LoadPatch
         while (p < 1f)
         {
             p += Time.deltaTime * 2f;
-            logoGlow.color = new Color(1f, 1f, 1f, 0.45f * (1f - p)).ToUnityColor();
+            logoGlow.color = new Color(1f, 1f, 1f, 0.45f * (1f - p));
             yield return null;
         }
         UnityEngine.Object.Destroy(logoGlow.gameObject);

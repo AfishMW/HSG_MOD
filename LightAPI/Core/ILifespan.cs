@@ -1,4 +1,6 @@
-﻿public interface ILifespan
+namespace LightInDark.Core;
+
+public interface ILifespan
 {
     bool IsDeadObject { get; }
     bool IsAliveObject => !IsDeadObject;
@@ -34,11 +36,4 @@ public interface IGameComponent { }
 public interface IGameOperator : IGameComponent,IReleasable,ILifespan
 {
     void OnReleased() { }
-}
-public static class GameEntityExtension
-{
-    public static T Register<T>(this T gameEntity, ILifespan lifespan) where T : IGameOperator
-    {
-        return gameEntity;
-    }
 }

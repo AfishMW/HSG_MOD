@@ -3,7 +3,7 @@ using UnityEngine;
 namespace LightInDark.UI.Window;
 
 /// <summary>
-/// Unity 辅助方法，对应 Nebula 的 UnityHelper
+/// Unity 辅助方法
 /// </summary>
 public static class UnityHelper
 {
@@ -34,10 +34,19 @@ public static class UnityHelper
         obj.transform.localScale = Vector3.one;
         return obj;
     }
+
+    /// <summary>查找渲染指定图层的相机（优先 UI 相机，找不到时回退主相机）</summary>
+    public static Camera? FindCamera(int layer)
+    {
+        int mask = 1 << layer;
+        foreach (var cam in Camera.allCameras)
+            if ((cam.cullingMask & mask) != 0) return cam;
+        return Camera.main;
+    }
 }
 
 /// <summary>
-/// 层级扩展，对应 Nebula 的 LayerExpansion
+/// 层级扩展
 /// </summary>
 public static class LayerExpansion
 {

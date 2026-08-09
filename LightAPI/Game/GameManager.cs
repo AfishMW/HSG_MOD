@@ -1,4 +1,5 @@
-﻿using LightInDark.Events;
+using LightInDark.Core;
+using LightInDark.Events;
 using LightInDark.UI;
 using System.Collections.Generic;
 using System.Linq;
@@ -52,7 +53,7 @@ namespace LightInDark.Game
         public void Update()
         {
             _entities.RemoveAll(e => e.IsDeadObject);
-            // 按钮更新由 PlayerControl.FixedUpdate 补丁驱动（参考 MiraAPI）
+            // 按钮更新由 PlayerControl.FixedUpdate 补丁驱动
             // 能力更新也由补丁驱动
         }
 

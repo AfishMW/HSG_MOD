@@ -1,4 +1,4 @@
-﻿using LightInDark.Configuration;
+using LightInDark.Configuration;
 using LightInDark.Core;
 using LightInDark.Events;
 using LightInDark.Roles;
@@ -73,13 +73,19 @@ namespace LightInDark.Game
         /// <summary>
         /// 切换角色（本地立即切换，并发送RPC同步）
         /// </summary>
-        public void SetRole(DefinedRole newRole)
+        public void SetRole(DefinedRole newRole, int[] arguments = null)
         {
             if (newRole == null) return;
+            arguments ??= newRole.DefaultArguments;
 
-            Role?.Release();
-            Role = newRole.CreateInstance(this);
-            RpcDefinitions.SyncRole(Control, newRole.Name);
+            var ev = new PlayerTryToChangeRoleEvent(Control, Role, newRole);
+            EventSystem.RunEvent(ev);
+            if (ev.IsCanceled) return;
+
+            Role?.Inactivate();
+            Role = newRole.CreateInstance(this, arguments);
+            EventSystem.RunEvent(new RoleAssignedEvent(Control, newRole, arguments));
+            RpcDefinitions.SetRole(Control.PlayerId, newRole.Id, arguments);
 
             Core.LightLogger.Log($"[Player] {Name} → {newRole.Name}");
         }
@@ -87,12 +93,13 @@ namespace LightInDark.Game
         /// <summary>
         /// 仅本地设置角色（用于RPC接收）
         /// </summary>
-        internal void SetRoleLocal(DefinedRole newRole)
+        internal void SetRoleLocal(DefinedRole newRole, int[] arguments = null)
         {
             if (newRole == null) return;
+            arguments ??= newRole.DefaultArguments;
 
-            Role?.Release();
-            Role = newRole.CreateInstance(this);
+            Role?.Inactivate();
+            Role = newRole.CreateInstance(this, arguments);
 
             Core.LightLogger.Log($"[Player] {Name} (本地) → {newRole.Name}");
         }
