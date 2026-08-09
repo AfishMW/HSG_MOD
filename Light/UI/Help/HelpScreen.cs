@@ -495,14 +495,46 @@ public static class HelpScreen
     {
         var gui = LIDGUI.Instance;
         var attr = gui.GetAttribute(AttributeAsset.OverlayContent);
-        return gui.VerticalHolder(GUIAlignment.Left,
+
+        // 立绘区：框 + 画像重叠，无立绘时不显示
+        GUIWidget? portrait = null;
+        if (role.IconImage != null)
+        {
+            portrait = new GUIOverlapHolder(GUIAlignment.Left,
+                gui.Image(GUIAlignment.Left, HudUIAssets.FrameSprite, new FuzzySize(0.55f, 0.55f)),
+                gui.Image(GUIAlignment.Left, role.IconImage, new FuzzySize(0.5f, 0.5f)));
+        }
+
+        // 右侧文字列：职业名 + 开场白（开场白为空时不显示）
+        var texts = new List<GUIWidget?>
+        {
             gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.OverlayTitle),
                 gui.ColorTextComponent(role.Color, new RawTextComponent(role.Name)).GetString()),
+            gui.VerticalMargin(0.03f),
+        };
+        if (!string.IsNullOrEmpty(role.IntroBlurb))
+        {
+            texts.Add(gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.OverlayContent),
+                gui.ColorTextComponent(role.Color, new RawTextComponent(role.IntroBlurb)).GetString()));
+        }
+        var textColumn = gui.VerticalHolder(GUIAlignment.Left, texts.ToArray());
+
+        // 头部行：左对齐，立绘与文字列垂直居中等高
+        var headerWidgets = new List<GUIWidget?>();
+        if (portrait != null) headerWidgets.Add(portrait);
+        headerWidgets.Add(textColumn);
+        var header = gui.HorizontalHolder(GUIAlignment.Left, headerWidgets.ToArray());
+
+        // 技能介绍：优先 SkillDescription，为空回退 Description
+        var skill = string.IsNullOrEmpty(role.SkillDescription) ? role.Description : role.SkillDescription;
+
+        return gui.VerticalHolder(GUIAlignment.Left,
+            header,
+            gui.VerticalMargin(0.1f),
+            gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.DocumentStandard), skill),
             gui.VerticalMargin(0.1f),
             gui.RawText(GUIAlignment.Left, attr,
                 Language.Translate("help.role.category", "阵营") + ": " + GetCategoryName(role.Category)),
-            gui.VerticalMargin(0.1f),
-            gui.RawText(GUIAlignment.Left, attr, role.Description),
             gui.VerticalMargin(0.1f),
             gui.RawText(GUIAlignment.Left, attr, GetAllocationLine(role)));
     }

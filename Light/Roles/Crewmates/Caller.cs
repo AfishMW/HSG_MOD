@@ -16,6 +16,12 @@ public class Caller : DefinedRole
     {
     }
 
+    /// <summary>开场白：分配职业播报时显示在职业名底部</summary>
+    public override string IntroBlurb => "紧急会议，随时可以召开。";
+
+    /// <summary>技能介绍：帮助详情立绘下方，多行用 \n 分隔</summary>
+    public override string SkillDescription => "可以在任意时刻强制召开紧急会议。\n按 E 键使用，冷却 20 秒。";
+
     /// <summary>分配参数：每局必出 1 名 Caller</summary>
     public override AllocationParameters Allocation => new() { MaxCount = 1, GuaranteedCount = 1, Chance = 100 };
 

@@ -7,23 +7,17 @@
 		<VersionSuffix>dev</VersionSuffix>
 		<Description>Add more roles for Among Us</Description>
 		<Authors>hvtXsvc and MaoMao</Authors>
-		<!-- 游戏目录：优先使用环境变量 LIGHT_AMONGUS，否则用默认路径 -->
+		<!-- 游戏目录：仅用于自动复制，优先使用环境变量 LIGHT_AMONGUS -->
 		<AmongUs Condition="'$(LIGHT_AMONGUS)' != ''">$(LIGHT_AMONGUS)</AmongUs>
 		<AmongUs Condition="'$(LIGHT_AMONGUS)' == ''">F:\AU\暗中辉0.0.0.1</AmongUs>
-		<AmongUsBase>$(AmongUs)\BepInEx</AmongUsBase>
-		<CoreDir>$(AmongUsBase)\core</CoreDir>
-		<InteropDir>$(AmongUsBase)\interop</InteropDir>
-		<GameExe>$(AmongUs)\Among Us.exe</GameExe>
 		<Nullable>disable</Nullable>
 		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
 	</PropertyGroup>
 	<ItemGroup>
-	  <Compile Remove="mem-log\**" />
-	  <EmbeddedResource Remove="mem-log\**" />
-	  <None Remove="mem-log\**" />
-	</ItemGroup>
-	<ItemGroup>
-	  <None Remove="CODELY.md" />
+		<Compile Remove="mem-log\**" />
+		<EmbeddedResource Remove="mem-log\**" />
+		<None Remove="mem-log\**" />
+		<None Remove="CODELY.md" />
 	</ItemGroup>
 	<ItemGroup>
 		<Reference Include="..\Libs\0Harmony.dll" />
@@ -181,4 +175,9 @@
 		<Reference Include="..\Libs\WasmDisassembler.dll" />
 		<Reference Include="..\Libs\__Generated.dll" />
 	</ItemGroup>
+
+	<!-- 编译完成后自动复制到游戏插件目录 -->
+	<Target Name="Copy" AfterTargets="Build" Condition="'$(AmongUs)' != ''">
+		<Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AmongUs)/BepInEx/plugins/" />
+	</Target>
 </Project>

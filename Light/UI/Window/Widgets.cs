@@ -484,3 +484,44 @@ public class HorizontalWidgetsHolder : WidgetsHolder
         return myObj;
     }
 }
+
+// =====================================================================
+// GUIOverlapHolder — 重叠容器（子元素叠放，后加入的渲染在前面）
+// =====================================================================
+
+public class GUIOverlapHolder : WidgetsHolder
+{
+    public GUIOverlapHolder(GUIAlignment alignment, IEnumerable<GUIWidget?> widgets) : base(alignment, widgets) { }
+    public GUIOverlapHolder(GUIAlignment alignment, params GUIWidget?[] widgets) : base(alignment, widgets) { }
+
+    public override GameObject? Instantiate(Size size, out Size actualSize)
+    {
+        var results = Widgets.Select(c => (c.Instantiate(size, out var acSize), acSize)).ToArray();
+
+        // 计算最大宽高作为容器实际尺寸
+        float maxWidth = 0f;
+        float maxHeight = 0f;
+        foreach (var r in results)
+        {
+            maxWidth = Mathf.Max(maxWidth, r.acSize.Width);
+            maxHeight = Mathf.Max(maxHeight, r.acSize.Height);
+        }
+
+        var myObj = UnityHelper.CreateObject("WidgetsHolder", null, Vector3.zero, LayerExpansion.GetUILayer());
+
+        // 子元素原地叠放，z 依次递减保证后加入的渲染在前面
+        float z = 0f;
+        foreach (var r in results)
+        {
+            if (r.Item1 != null)
+            {
+                r.Item1.transform.SetParent(myObj.transform);
+                r.Item1.transform.localPosition = new Vector3(0f, 0f, z);
+            }
+            z -= 0.01f;
+        }
+
+        actualSize = new Size(maxWidth, maxHeight);
+        return myObj;
+    }
+}
