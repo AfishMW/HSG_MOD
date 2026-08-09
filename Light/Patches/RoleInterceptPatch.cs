@@ -25,12 +25,19 @@ namespace Light.Patches
     {
         public static void Postfix(GameManager __instance)
         {
-            __instance.ShouldCheckForGameEnd = false;
-            EventSystem.RunEvent(new GameStartEvent
+            try
             {
-                PlayerCount = PlayerControl.AllPlayerControls.Count
-            });
-            LightLogger.Log("[Patch] 游戏开始，已禁用原版结束检查");
+                __instance.ShouldCheckForGameEnd = false;
+                EventSystem.RunEvent(new GameStartEvent
+                {
+                    PlayerCount = PlayerControl.AllPlayerControls.Count
+                });
+                LightLogger.Log("[Patch] 游戏开始，已禁用原版结束检查");
+            }
+            catch (System.Exception ex)
+            {
+                LightLogger.LogWarning("[Light] GameManagerStartPatch.Postfix NRE: " + ex.Message + "\n" + ex.StackTrace);
+            }
         }
     }
 
@@ -39,8 +46,16 @@ namespace Light.Patches
     {
         public static bool Prefix(ref bool __result)
         {
-            __result = false;
-            return false;
+            try
+            {
+                __result = false;
+                return false;
+            }
+            catch (System.Exception ex)
+            {
+                LightLogger.LogWarning("[Light] BlockTaskCompletionPatch.Prefix NRE: " + ex.Message + "\n" + ex.StackTrace);
+                return false;
+            }
         }
     }
 
@@ -49,11 +64,19 @@ namespace Light.Patches
     {
         public static bool Prefix(ref bool __result)
         {
-            var ev = new GameTryEndEvent { CrewmatesWin = true, Reason = "task" };
-            EventSystem.RunEvent(ev);
-            if (ev.IsCanceled) { __result = false; return false; }
-            __result = ev.CrewmatesWin && !ev.ImpostorsWin;
-            return false;
+            try
+            {
+                var ev = new GameTryEndEvent { CrewmatesWin = true, Reason = "task" };
+                EventSystem.RunEvent(ev);
+                if (ev.IsCanceled) { __result = false; return false; }
+                __result = ev.CrewmatesWin && !ev.ImpostorsWin;
+                return false;
+            }
+            catch (System.Exception ex)
+            {
+                LightLogger.LogWarning("[Light] BlockEndGameViaTasksPatch.Prefix NRE: " + ex.Message + "\n" + ex.StackTrace);
+                return false;
+            }
         }
     }
 
@@ -62,8 +85,16 @@ namespace Light.Patches
     {
         public static bool Prefix(ref bool __result)
         {
-            __result = false;
-            return false;
+            try
+            {
+                __result = false;
+                return false;
+            }
+            catch (System.Exception ex)
+            {
+                LightLogger.LogWarning("[Light] BlockGameOverDueToDeathPatch.Prefix NRE: " + ex.Message + "\n" + ex.StackTrace);
+                return false;
+            }
         }
     }
 
@@ -76,24 +107,32 @@ namespace Light.Patches
     {
         public static bool Prefix(RoleManager __instance)
         {
-            LightLogger.Log("[Patch] 拦截 SelectRoles，开始自定义分配");
-            LightInDark.Game.GameManager.Instance.Initialize();
-
-            // 复制到系统 List 并洗牌（AllPlayerControls 不支持 System.Linq）
-            var players = new System.Collections.Generic.List<PlayerControl>();
-            foreach (var pc in PlayerControl.AllPlayerControls) players.Add(pc);
-            for (int i = players.Count - 1; i > 0; i--)
+            try
             {
-                int j = UnityEngine.Random.Range(0, i + 1);
-                (players[i], players[j]) = (players[j], players[i]);
+                LightLogger.Log("[Patch] 拦截 SelectRoles，开始自定义分配");
+                LightInDark.Game.GameManager.Instance.Initialize();
+
+                // 复制到系统 List 并洗牌（AllPlayerControls 不支持 System.Linq）
+                var players = new System.Collections.Generic.List<PlayerControl>();
+                foreach (var pc in PlayerControl.AllPlayerControls) players.Add(pc);
+                for (int i = players.Count - 1; i > 0; i--)
+                {
+                    int j = UnityEngine.Random.Range(0, i + 1);
+                    (players[i], players[j]) = (players[j], players[i]);
+                }
+
+                int impNum = Mathf.Clamp(GameOptionsManager.Instance.CurrentGameOptions.NumImpostors, 1, Mathf.Max(1, players.Count - 1));
+                var impostors = players.Take(impNum).Select(p => p.PlayerId).ToList();
+                var others = players.Skip(impNum).Select(p => p.PlayerId).ToList();
+
+                new StandardRoleAllocator().Assign(impostors, others);
+                return false;
             }
-
-            int impNum = Mathf.Clamp(GameOptionsManager.Instance.CurrentGameOptions.NumImpostors, 1, Mathf.Max(1, players.Count - 1));
-            var impostors = players.Take(impNum).Select(p => p.PlayerId).ToList();
-            var others = players.Skip(impNum).Select(p => p.PlayerId).ToList();
-
-            new StandardRoleAllocator().Assign(impostors, others);
-            return false;
+            catch (System.Exception ex)
+            {
+                LightLogger.LogWarning("[Light] RoleSelectPatch.Prefix NRE: " + ex.Message + "\n" + ex.StackTrace);
+                return false;
+            }
         }
     }
 
@@ -102,7 +141,15 @@ namespace Light.Patches
     {
         public static bool Prefix()
         {
-            return false;
+            try
+            {
+                return false;
+            }
+            catch (System.Exception ex)
+            {
+                LightLogger.LogWarning("[Light] BlockGhostRolePatch.Prefix NRE: " + ex.Message + "\n" + ex.StackTrace);
+                return false;
+            }
         }
     }
 
@@ -111,10 +158,18 @@ namespace Light.Patches
     {
         public static bool Prefix(RoleBehaviour __instance)
         {
-            if (__instance.Player == null) return true;
-            if (HudManager.Instance != null && HudManager.Instance.AbilityButton != null)
-                HudManager.Instance.AbilityButton.gameObject.SetActive(false);
-            return false;
+            try
+            {
+                if (__instance.Player == null) return true;
+                if (HudManager.Instance != null && HudManager.Instance.AbilityButton != null)
+                    HudManager.Instance.AbilityButton.gameObject.SetActive(false);
+                return false;
+            }
+            catch (System.Exception ex)
+            {
+                LightLogger.LogWarning("[Light] BlockRoleInitializePatch.Prefix NRE: " + ex.Message + "\n" + ex.StackTrace);
+                return true;
+            }
         }
     }
 
@@ -123,9 +178,17 @@ namespace Light.Patches
     {
         public static bool Prefix()
         {
-            if (HudManager.Instance != null && HudManager.Instance.AbilityButton != null)
-                HudManager.Instance.AbilityButton.gameObject.SetActive(false);
-            return false;
+            try
+            {
+                if (HudManager.Instance != null && HudManager.Instance.AbilityButton != null)
+                    HudManager.Instance.AbilityButton.gameObject.SetActive(false);
+                return false;
+            }
+            catch (System.Exception ex)
+            {
+                LightLogger.LogWarning("[Light] BlockAbilityButtonPatch.Prefix NRE: " + ex.Message + "\n" + ex.StackTrace);
+                return false;
+            }
         }
     }
 
@@ -138,11 +201,18 @@ namespace Light.Patches
     {
         public static void Postfix(PlayerControl __instance, DeathReason reason)
         {
-            EventSystem.RunEvent(new PlayerDeathEvent
+            try
             {
-                Player = __instance,
-                Reason = reason
-            });
+                EventSystem.RunEvent(new PlayerDeathEvent
+                {
+                    Player = __instance,
+                    Reason = reason
+                });
+            }
+            catch (System.Exception ex)
+            {
+                LightLogger.LogWarning("[Light] PlayerDeathPatch.Postfix NRE: " + ex.Message + "\n" + ex.StackTrace);
+            }
         }
     }
 
@@ -159,19 +229,26 @@ namespace Light.Patches
     {
         public static void Postfix(PlayerControl __instance)
         {
-            int completed = 0, total = 0;
-            if (__instance.Data?.Tasks != null)
+            try
             {
-                total = __instance.Data.Tasks.Count;
-                foreach (var task in __instance.Data.Tasks)
-                    if (task != null && task.Complete) completed++;
+                int completed = 0, total = 0;
+                if (__instance.Data?.Tasks != null)
+                {
+                    total = __instance.Data.Tasks.Count;
+                    foreach (var task in __instance.Data.Tasks)
+                        if (task != null && task.Complete) completed++;
+                }
+                EventSystem.RunEvent(new PlayerTaskCompleteEvent
+                {
+                    Player = __instance,
+                    CompletedTasks = completed,
+                    TotalTasks = total
+                });
             }
-            EventSystem.RunEvent(new PlayerTaskCompleteEvent
+            catch (System.Exception ex)
             {
-                Player = __instance,
-                CompletedTasks = completed,
-                TotalTasks = total
-            });
+                LightLogger.LogWarning("[Light] TaskCompletePatch.Postfix NRE: " + ex.Message + "\n" + ex.StackTrace);
+            }
         }
     }
 
@@ -184,14 +261,21 @@ namespace Light.Patches
     {
         public static void Postfix(PlayerControl __instance, NetworkedPlayerInfo target)
         {
-            bool isEmergency = target == null;
-            EventSystem.RunEvent(new MeetingStartEvent
+            try
             {
-                Reporter = __instance,
-                ReportedBody = target,
-                IsEmergencyMeeting = isEmergency
-            });
-            LightLogger.Log($"[Patch] {(isEmergency ? "紧急会议" : "尸体报告")} by {__instance.name}");
+                bool isEmergency = target == null;
+                EventSystem.RunEvent(new MeetingStartEvent
+                {
+                    Reporter = __instance,
+                    ReportedBody = target,
+                    IsEmergencyMeeting = isEmergency
+                });
+                LightLogger.Log($"[Patch] {(isEmergency ? "紧急会议" : "尸体报告")} by {__instance.name}");
+            }
+            catch (System.Exception ex)
+            {
+                LightLogger.LogWarning("[Light] ReportDeadBodyPatch.Postfix NRE: " + ex.Message + "\n" + ex.StackTrace);
+            }
         }
     }
 
@@ -200,11 +284,18 @@ namespace Light.Patches
     {
         public static void Postfix(MeetingHud __instance, byte suspectStateIdx)
         {
-            EventSystem.RunEvent(new PlayerVoteEvent
+            try
             {
-                Player = PlayerControl.LocalPlayer,
-                VotedForPlayerId = suspectStateIdx
-            });
+                EventSystem.RunEvent(new PlayerVoteEvent
+                {
+                    Player = PlayerControl.LocalPlayer,
+                    VotedForPlayerId = suspectStateIdx
+                });
+            }
+            catch (System.Exception ex)
+            {
+                LightLogger.LogWarning("[Light] MeetingVotePatch.Postfix NRE: " + ex.Message + "\n" + ex.StackTrace);
+            }
         }
     }
 
@@ -217,12 +308,19 @@ namespace Light.Patches
     {
         public static void Postfix(AmongUsClient __instance, ClientData data)
         {
-            if (data?.Character != null)
+            try
             {
-                EventSystem.RunEvent(new PlayerDisconnectEvent
+                if (data?.Character != null)
                 {
-                    Player = data.Character
-                });
+                    EventSystem.RunEvent(new PlayerDisconnectEvent
+                    {
+                        Player = data.Character
+                    });
+                }
+            }
+            catch (System.Exception ex)
+            {
+                LightLogger.LogWarning("[Light] PlayerLeftPatch.Postfix NRE: " + ex.Message + "\n" + ex.StackTrace);
             }
         }
     }
@@ -236,10 +334,17 @@ namespace Light.Patches
     {
         public static void Postfix(ExileController __instance)
         {
-            // ExileController 的 exiled 属性可能在 Il2Cpp 中需要不同访问方式
-            // 暂时只记录日志
-            LightLogger.Log("[Patch] 放逐动画开始");
-            EventSystem.RunEvent(new PlayerExileEvent { });
+            try
+            {
+                // ExileController 的 exiled 属性可能在 Il2Cpp 中需要不同访问方式
+                // 暂时只记录日志
+                LightLogger.Log("[Patch] 放逐动画开始");
+                EventSystem.RunEvent(new PlayerExileEvent { });
+            }
+            catch (System.Exception ex)
+            {
+                LightLogger.LogWarning("[Light] ExileBeginPatch.Postfix NRE: " + ex.Message + "\n" + ex.StackTrace);
+            }
         }
     }
 
@@ -252,7 +357,14 @@ namespace Light.Patches
     {
         public static void Postfix()
         {
-            EventSystem.RunEvent(new EmergencyButtonBrokenEvent());
+            try
+            {
+                EventSystem.RunEvent(new EmergencyButtonBrokenEvent());
+            }
+            catch (System.Exception ex)
+            {
+                LightLogger.LogWarning("[Light] EmergencyButtonBrokenPatch.Postfix NRE: " + ex.Message + "\n" + ex.StackTrace);
+            }
         }
     }
 

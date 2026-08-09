@@ -1,4 +1,5 @@
 using HarmonyLib;
+using LightInDark.Core;
 using UnityEngine;
 
 namespace Light.Patches;
@@ -8,15 +9,22 @@ public static class DisableLobbyEnginePowerPatch
 {
     public static void Postfix(LobbyBehaviour __instance)
     {
-        if (Input.GetKeyDown(KeyCode.LeftControl))
+        try
         {
-            var LeftEngine = __instance.transform.GetChild(2);
-            LeftEngine.gameObject.SetActive(!LeftEngine.gameObject.activeSelf);
+            if (Input.GetKeyDown(KeyCode.LeftControl))
+            {
+                var LeftEngine = __instance.transform.GetChild(2);
+                LeftEngine.gameObject.SetActive(!LeftEngine.gameObject.activeSelf);
+            }
+            if(Input.GetKeyDown(KeyCode.RightControl))
+            {
+                var RightEngine = __instance.transform.GetChild(1);
+                RightEngine.gameObject.SetActive(!RightEngine.gameObject.activeSelf);
+            }
         }
-        if(Input.GetKeyDown(KeyCode.RightControl))
+        catch (System.Exception ex)
         {
-            var RightEngine = __instance.transform.GetChild(1);
-            RightEngine.gameObject.SetActive(!RightEngine.gameObject.activeSelf);
+            LightLogger.LogWarning("[Light] DisableLobbyEnginePowerPatch.Postfix NRE: " + ex.Message + "\n" + ex.StackTrace);
         }
     }
 }

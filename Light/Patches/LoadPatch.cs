@@ -1,5 +1,6 @@
 using BepInEx.Unity.IL2CPP.Utils.Collections;
 using HarmonyLib;
+using LightInDark.Core;
 using Light.Utilities;
 using System.Collections;
 using TMPro;
@@ -340,23 +341,38 @@ public static class LoadPatch
 
     public static bool Prefix(SplashManager __instance)
     {
-        cachedDoneLoadingRefData |= __instance.doneLoadingRefdata;
-        __instance.doneLoadingRefdata = false;
-
-        if (cachedDoneLoadingRefData
-            && !__instance.startedSceneLoad
-            && Time.time - __instance.startTime > Mathf.Max(__instance.minimumSecondsBeforeSceneChange, SplashDisplayTime)
-            && !loaded)
+        try
         {
-            loaded = true;
-            __instance.StartCoroutine(CoLoadLight(__instance).WrapToIl2Cpp());
-        }
+            cachedDoneLoadingRefData |= __instance.doneLoadingRefdata;
+            __instance.doneLoadingRefdata = false;
 
-        return false;
+            if (cachedDoneLoadingRefData
+                && !__instance.startedSceneLoad
+                && Time.time - __instance.startTime > Mathf.Max(__instance.minimumSecondsBeforeSceneChange, SplashDisplayTime)
+                && !loaded)
+            {
+                loaded = true;
+                __instance.StartCoroutine(CoLoadLight(__instance).WrapToIl2Cpp());
+            }
+
+            return false;
+        }
+        catch (System.Exception ex)
+        {
+            LightLogger.LogWarning("[Light] LoadPatch.Prefix NRE: " + ex.Message + "\n" + ex.StackTrace);
+            return false;
+        }
     }
 
     public static void Postfix(SplashManager __instance)
     {
-        __instance.doneLoadingRefdata = cachedDoneLoadingRefData;
+        try
+        {
+            __instance.doneLoadingRefdata = cachedDoneLoadingRefData;
+        }
+        catch (System.Exception ex)
+        {
+            LightLogger.LogWarning("[Light] LoadPatch.Postfix NRE: " + ex.Message + "\n" + ex.StackTrace);
+        }
     }
 }

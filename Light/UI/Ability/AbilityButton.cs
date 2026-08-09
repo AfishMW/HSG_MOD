@@ -517,7 +517,14 @@ namespace Light.UI.Ability
     {
         public static void Postfix()
         {
-            AbilityButtonManager.CreateAllPending();
+            try
+            {
+                AbilityButtonManager.CreateAllPending();
+            }
+            catch (System.Exception ex)
+            {
+                LightLogger.LogWarning("[Light] HudManagerStartPatch.Postfix NRE: " + ex.Message + "\n" + ex.StackTrace);
+            }
         }
     }
 
@@ -527,7 +534,14 @@ namespace Light.UI.Ability
     {
         public static void Postfix(bool isActive)
         {
-            AbilityButtonManager.SetAllVisible(isActive);
+            try
+            {
+                AbilityButtonManager.SetAllVisible(isActive);
+            }
+            catch (System.Exception ex)
+            {
+                LightLogger.LogWarning("[Light] HudManagerSetHudActivePatch.Postfix NRE: " + ex.Message + "\n" + ex.StackTrace);
+            }
         }
     }
 
@@ -536,8 +550,15 @@ namespace Light.UI.Ability
     {
         public static void Postfix(PlayerControl __instance)
         {
-            if (!__instance.AmOwner) return;
-            AbilityButtonManager.UpdateAll();
+            try
+            {
+                if (!__instance.AmOwner) return;
+                AbilityButtonManager.UpdateAll();
+            }
+            catch (System.Exception ex)
+            {
+                LightLogger.LogWarning("[Light] PlayerControlFixedUpdatePatch.Postfix NRE: " + ex.Message + "\n" + ex.StackTrace);
+            }
         }
     }
 }

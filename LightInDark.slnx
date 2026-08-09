@@ -7,4 +7,5 @@
   <Project Path="LightInDarkUpdater/LightInDarkUpdater.pyproj" Type="888888a0-9f3d-457c-b088-3a5042f75d52" Id="3fdd65f5-3350-4145-9636-741a5c071a99">
     <Build Project="false" />
   </Project>
+  <Project Path="LightLoader/LightLoader/LightLoader.csproj" Id="ccd74d6e-c25b-403c-977d-cdad746364e9" />
 </Solution>

@@ -14,7 +14,14 @@ public static class IntroPatch
 {
     public static void Postfix(IntroCutscene __instance)
     {
-        __instance.StartCoroutine(CoOverrideBlurb(__instance).WrapToIl2Cpp());
+        try
+        {
+            __instance.StartCoroutine(CoOverrideBlurb(__instance).WrapToIl2Cpp());
+        }
+        catch (System.Exception ex)
+        {
+            LightLogger.LogWarning("[Light] IntroPatch.Postfix NRE: " + ex.Message + "\n" + ex.StackTrace);
+        }
     }
 
     private static IEnumerator CoOverrideBlurb(IntroCutscene __instance)

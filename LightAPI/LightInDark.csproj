@@ -7,9 +7,6 @@
 		<VersionSuffix>dev</VersionSuffix>
 		<Description>Add more roles for Among Us</Description>
 		<Authors>hvtXsvc and MaoMao</Authors>
-		<!-- 游戏目录：仅用于自动复制，优先使用环境变量 LIGHT_AMONGUS -->
-		<AmongUs Condition="'$(LIGHT_AMONGUS)' != ''">$(LIGHT_AMONGUS)</AmongUs>
-		<AmongUs Condition="'$(LIGHT_AMONGUS)' == ''">F:\AU\暗中辉0.0.0.1</AmongUs>
 		<Nullable>disable</Nullable>
 		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
 	</PropertyGroup>
@@ -176,8 +173,4 @@
 		<Reference Include="..\Libs\__Generated.dll" />
 	</ItemGroup>
 
-	<!-- 编译完成后自动复制到游戏插件目录 -->
-	<Target Name="Copy" AfterTargets="Build" Condition="'$(AmongUs)' != ''">
-		<Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AmongUs)/BepInEx/plugins/" />
-	</Target>
 </Project>

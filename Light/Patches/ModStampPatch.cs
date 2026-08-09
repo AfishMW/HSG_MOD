@@ -16,18 +16,25 @@ public static class ModStampPatch
 {
     public static void Postfix()
     {
-        Dispatcher.Instance.Enqueue(() =>
+        try
         {
-            var modStamp = GameObject.Find("ModStamp");
-            if (modStamp == null)
+            Dispatcher.Instance.Enqueue(() =>
             {
-                LightLogger.LogWarning("[ModStampPatch] ModStamp not found!");
-                return;
-            }
-            modStamp.transform.localScale = Vector3.one * 0.06f;
-            var sr = modStamp.GetComponent<SpriteRenderer>();
-            if (sr != null)
-                sr.sprite = ResourceHelper.LoadSpriteFromResource("Light.Resources.ModStamp.png");
-        });
+                var modStamp = GameObject.Find("ModStamp");
+                if (modStamp == null)
+                {
+                    LightLogger.LogWarning("[ModStampPatch] ModStamp not found!");
+                    return;
+                }
+                modStamp.transform.localScale = Vector3.one * 0.06f;
+                var sr = modStamp.GetComponent<SpriteRenderer>();
+                if (sr != null)
+                    sr.sprite = ResourceHelper.LoadSpriteFromResource("Light.Resources.ModStamp.png");
+            });
+        }
+        catch (System.Exception ex)
+        {
+            LightLogger.LogWarning("[Light] ModStampPatch.Postfix NRE: " + ex.Message + "\n" + ex.StackTrace);
+        }
     }
 }

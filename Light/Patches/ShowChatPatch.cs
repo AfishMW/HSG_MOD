@@ -1,4 +1,5 @@
 using HarmonyLib;
+using LightInDark.Core;
 using UnityEngine;
 
 namespace Light.Patches;
@@ -14,8 +15,15 @@ public static class ShowChatPatch
     [HarmonyPostfix]
     public static void Postfix()
     {
-        if (HudManager.Instance?.Chat == null) return;
-        if (!NeedShowFreeChat) return;
-        HudManager.Instance.Chat.gameObject.SetActive(true);
+        try
+        {
+            if (HudManager.Instance?.Chat == null) return;
+            if (!NeedShowFreeChat) return;
+            HudManager.Instance.Chat.gameObject.SetActive(true);
+        }
+        catch (System.Exception ex)
+        {
+            LightLogger.LogWarning("[Light] ShowChatPatch.Postfix NRE: " + ex.Message + "\n" + ex.StackTrace);
+        }
     }
 }

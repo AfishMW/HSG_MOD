@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <DebugType>embedded</DebugType>
+
+        <VersionPrefix>1.0.0</VersionPrefix>
+        <VersionSuffix>dev</VersionSuffix>
+        <Description>Mod generated using Reactor Template</Description>
+        <Authors>hvtXsvc MaoMao</Authors>
+    </PropertyGroup>
+	<Target Name="AddGameReferences" BeforeTargets="ResolveAssemblyReferences">
+		<ItemGroup>
+			<_LibDlls Include="..\..\Libs\*.dll" Exclude="..\Libs\netstandard.dll" />
+			<Reference Include="@(_LibDlls->'%(FileName)')">
+				<HintPath>%(FullPath)</HintPath>
+				<Private>false</Private>
+			</Reference>
+		</ItemGroup>
+	</Target>
+	
+    <Target Name="Copy" AfterTargets="Build" Condition="'$(AmongUs)' != ''">
+        <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AmongUs)/BepInEx/plugins/" UseSymboliclinksIfPossible="true" />
+    </Target>
+</Project>
