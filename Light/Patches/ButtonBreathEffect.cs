@@ -32,19 +32,35 @@ public static class ButtonBreathEffect
     private const float FollowRadius = 0.15f;
     private const float FloatAmount = 0.006f;
     private const float BreathAmount = 0.014f;
-    private const float ButtonScale = 0.93f;
+    private const float ButtonScale = 0.88f;
 
     public static void Init()
     {
         _states.Clear();
         _nextId = 0;
 
-        var leftPanel = GameObject.Find("LeftPanel");
-        if (leftPanel == null) return;
+        // LeftPanel 解构后按钮被 reparent，LeftPanel 本身 SetActive(false)
+        // 所以从 mainMenuUI 下搜索所有 PassiveButton
+        var mainMenuUI = GameObject.Find("MainUI");
+        if (mainMenuUI == null)
+        {
+            // fallback：尝试 LeftPanel（首次布局前）
+            var leftPanel = GameObject.Find("LeftPanel");
+            if (leftPanel == null) return;
+            foreach (var btn in leftPanel.GetComponentsInChildren<PassiveButton>(true))
+            {
+                if (btn == null) continue;
+                Register(btn);
+            }
+            return;
+        }
 
-        foreach (var btn in leftPanel.GetComponentsInChildren<PassiveButton>(true))
+        foreach (var btn in mainMenuUI.GetComponentsInChildren<PassiveButton>(true))
         {
             if (btn == null) continue;
+            // 跳过非菜单按钮（如 Logo、LightScreen 内的按钮、自定义按钮等）
+            var name = btn.gameObject.name;
+            if (name == "LightLogo" || name.StartsWith("CustomButton")) continue;
             Register(btn);
         }
     }

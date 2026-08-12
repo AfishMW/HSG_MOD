@@ -31,7 +31,7 @@ public class StandardRoleAllocator : IRoleAllocator
         foreach (var p in others)
             if (!table.HasRole(p)) table.SetRole(p, VanillaCrewmate.Instance);
 
-        EventSystem.RunEvent(new PreFixAssignmentEvent(table));
+        EventTriggers.OnPreFixAssignment(table);
         table.Determine();
     }
 

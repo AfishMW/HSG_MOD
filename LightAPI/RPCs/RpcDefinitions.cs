@@ -1,4 +1,6 @@
 using LightInDark.Core;
+using LightInDark.Events;
+using LightInDark.Game;
 using LightInDark.Roles;
 using System;
 using UnityEngine;
@@ -20,25 +22,29 @@ namespace LightInDark.RPCs
             var gamePlayer = Game.GameManager.Instance.GetPlayer(playerId);
             if (gamePlayer == null) return;
             gamePlayer.SetRoleLocal(definedRole, arguments);
+            Game.LightPlayerDataManager.SetRole(playerId, definedRole.Name);
+            EventTriggers.OnPlayerRoleSet(gamePlayer.Control, gamePlayer.Role);
         }
 
         // ============ 玩家操作 ============
 
         [LidRPC]
-        public static void Suicide(PlayerControl player, bool needLog = true, string state = "suicide")
+        public static void Suicide(PlayerControl player, bool needLog = true, string state = "suicide", PlayerState playerState = PlayerState.Suicide)
         {
             if (player == null || player.Data.IsDead) return;
             player.RpcMurderPlayer(player, true);
-            Events.EventSystem.RunEvent(new Events.PlayerSuicideEvent { Player = player, Reason = state, NeedLog = needLog });
+            EventTriggers.OnPlayerSuicide(player, state, playerState, needLog);
+            LightPlayerDataManager.SetDeath(player.PlayerId, playerState, player.PlayerId, LightPlayerDataManager.CurrentMeetingNumber);
             if (needLog) LightLogger.Log($"[RPC] {player.name} suicide. state:{state}");
         }
 
         [LidRPC]
-        public static void MurderPlayer(PlayerControl killer, PlayerControl victim)
+        public static void MurderPlayer(PlayerControl killer, PlayerControl victim, PlayerState state = PlayerState.BeKilled)
         {
             if (killer == null || victim == null) return;
             killer.RpcMurderPlayer(victim, true);
-            Events.EventSystem.RunEvent(new Events.PlayerMurderEvent { Player = killer, Victim = victim });
+            EventTriggers.OnPlayerMurder(killer, victim, state);
+            LightPlayerDataManager.SetDeath(victim.PlayerId, state, killer.PlayerId, LightPlayerDataManager.CurrentMeetingNumber);
         }
 
         /// <summary>恢复玩家（取消死亡状态）</summary>
@@ -49,7 +55,7 @@ namespace LightInDark.RPCs
                 if (pc.PlayerId == playerId && pc.Data.IsDead)
                 {
                     pc.Revive();
-                    Events.EventSystem.RunEvent(new Events.PlayerReviveEvent { Player = pc });
+                    EventTriggers.OnPlayerRevive(pc);
                     LightLogger.Log($"[RPC] {pc.name} 已复活");
                     break;
                 }
@@ -119,7 +125,7 @@ namespace LightInDark.RPCs
             if (ShipStatus.Instance != null)
             {
                 ShipStatus.Instance.BreakEmergencyButton();
-                Events.EventSystem.RunEvent(new Events.EmergencyButtonBrokenEvent());
+                EventTriggers.OnEmergencyButtonBroken();
             }
         }
 
@@ -147,7 +153,7 @@ namespace LightInDark.RPCs
                 if (pc.PlayerId == playerId)
                 {
                     HudManager.Instance?.Chat?.AddChat(pc, message, false);
-                    Events.EventSystem.RunEvent(new Events.ChatMessageEvent { Player = pc, Message = message });
+                    EventTriggers.OnChatMessage(pc, message);
                     break;
                 }
         }

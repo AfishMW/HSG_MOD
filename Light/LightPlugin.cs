@@ -13,6 +13,8 @@ using Light.Patches;
 using Light.Roles.Crewmates;
 using Light.Roles.Vanilla;
 using Reactor;
+using Light.UI;
+using System.Text.Json.Nodes;
 
 namespace Light;
 
@@ -31,7 +33,7 @@ public partial class LightPlugin : BasePlugin
     public const string RichVersion = "<color=#4FD1C5>ver</color> <color=#38B2AC>1.0.0</color>";
     /// <summary>原版 AU 版本号（由 VersionPatch 写入）</summary>
     public static string AUVersion;
-
+    public static string CursurDataPath = Application.persistentDataPath;
     public Harmony Harmony { get; } = new(Id);
 
     // 静态日志引用，供 Patch 类使用
@@ -40,22 +42,26 @@ public partial class LightPlugin : BasePlugin
     public override void Load()
     {
         StaticLog = Log;
-        RoleRegistry.Register<Caller>();
-        RoleRegistry.Register<VanillaImpostor>(VanillaImpostor.Instance);
-        RoleRegistry.Register<VanillaCrewmate>(VanillaCrewmate.Instance);
         Harmony.PatchAll();
         bool vM =VersionMaker.MakeVersion();
         if (!vM)
             Log.LogError($"json 加载失败。具体异常请查看Light.log。");
-
         LoadCommand();
         EventSystem.ScanAndRegisterAll();
         ExtractLanguageFiles();
         Language.Load();
         LidRpcRegistry.ScanAndPatch(Harmony);
+        LoadRole();
         // 订阅 API 提供的聊天显示事件，更新聊天框状态
         RpcDefinitions.OnFreeChatStateChanged += show => ShowChatPatch.NeedShowFreeChat = show;
+        AddCursorComponent();
         Log.LogInfo($"模组 {Name} v{Version} 已加载！");
+    }
+
+    /// <summary>初始化光标（纯静态，不再 AddComponent）</summary>
+    private static void AddCursorComponent()
+    {
+        UI.Cursor.Initialize();
     }
 
     /// <summary>把嵌入的默认语言文件解压到 BepInEx/Language（已存在则不覆盖，玩家可编辑）</summary>
@@ -84,7 +90,6 @@ public partial class LightPlugin : BasePlugin
         }
     }
 
-    // 聊天指令拦截（ChatController.SendChat Prefix）
     private static void LoadCommand()
     {
         var harmony = new Harmony("Light.cmd.harmony");
@@ -93,5 +98,11 @@ public partial class LightPlugin : BasePlugin
         var prefixMethod = AccessTools.Method(typeof(PatchManager), nameof(PatchManager.OnSendChat));
         if (prefixMethod == null) return;
         harmony.Patch(orig, new HarmonyMethod(prefixMethod));
+    }
+    private static void LoadRole()
+    {
+        RoleRegistry.Register<Caller>();
+        RoleRegistry.Register<VanillaImpostor>(VanillaImpostor.Instance);
+        RoleRegistry.Register<VanillaCrewmate>(VanillaCrewmate.Instance);
     }
 }

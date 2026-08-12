@@ -139,7 +139,7 @@ namespace LightInDark.Roles
         /// <summary>
         /// 任务完成事件监听。更新名字显示中的任务计数。
         /// </summary>
-        [EventPriority(0)]
+        [EventPriorityAttribute(0)]
         void OnTaskComplete(PlayerTaskCompleteEvent ev)
         {
             if (ev.Player == MyPlayer.Control)

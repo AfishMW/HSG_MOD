@@ -5,6 +5,8 @@ namespace Light.Utilities;
 
 public static class ResourceHelper
 {
+    private const string DefaultResourceRoot = "Light.Resources.";
+    public static string ResourceRoot { get; set; } = DefaultResourceRoot;
     /// <summary>
     /// 从当前程序集的嵌入资源加载 Texture2D
     /// </summary>
@@ -38,6 +40,18 @@ public static class ResourceHelper
         Texture2D tex = LoadTextureFromResource(resourcePath);
         if (tex == null) return null;
 
+        Vector2 pivotPoint = pivot ?? new Vector2(0.5f, 0.5f);
+        return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), pivotPoint, pixelsPerUnit);
+    }
+    public static Texture2D LoadTexture(string relativePath)
+    {
+        string fullPath = ResourceRoot + relativePath.Replace('/', '.').Replace('\\', '.');
+        return LoadTextureFromResource(fullPath);
+    }
+    public static Sprite LoadSprite(string relativePath, float pixelsPerUnit = 100f, Vector2? pivot = null)
+    {
+        Texture2D tex = LoadTexture(relativePath);
+        if (tex == null) return null;
         Vector2 pivotPoint = pivot ?? new Vector2(0.5f, 0.5f);
         return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), pivotPoint, pixelsPerUnit);
     }

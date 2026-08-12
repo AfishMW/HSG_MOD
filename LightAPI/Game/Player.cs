@@ -84,7 +84,7 @@ namespace LightInDark.Game
 
             Role?.Inactivate();
             Role = newRole.CreateInstance(this, arguments);
-            EventSystem.RunEvent(new RoleAssignedEvent(Control, newRole, arguments));
+            EventTriggers.OnRoleAssigned(Control, newRole, arguments);
             RpcDefinitions.SetRole(Control.PlayerId, newRole.Id, arguments);
 
             Core.LightLogger.Log($"[Player] {Name} → {newRole.Name}");
@@ -105,8 +105,8 @@ namespace LightInDark.Game
         }
 
         // ---- 操作 ----
-        public void Suicide() => RpcDefinitions.Suicide(Control);
-        public void MurderPlayer(PlayerControl victim) => RpcDefinitions.MurderPlayer(Control, victim);
+        public void Suicide(PlayerState state = PlayerState.Suicide) => RpcDefinitions.Suicide(Control, playerState: state);
+        public void MurderPlayer(PlayerControl victim, PlayerState state = PlayerState.BeKilled) => RpcDefinitions.MurderPlayer(Control, victim, state);
 
         // ---- 判断 ----
         public bool IsRole(string roleName) => Role?.Definition?.Name == roleName;
@@ -122,5 +122,32 @@ namespace LightInDark.Game
         }
 
         void IGameOperator.OnReleased() { }
+    }
+    public enum PlayerState : uint
+    {
+        /// <summary>
+        /// 普通死亡，会在复盘时显示真正的凶手。
+        /// </summary>
+        Dead = 0,
+        /// <summary>
+        /// 自杀，凶手记录为本人。
+        /// </summary>
+        Suicide = 1,
+        /// <summary>
+        /// 被猜测，凶手记录为猜测者。非会议中触发本死因将会被替换为PlayerState.Dead。
+        /// </summary>
+        BeGuessed = 2,
+        /// <summary>
+        /// 更精确的指向“被击杀”的死因。事实上，更建议使用PlayerState.Dead。凶手被记录为击杀者。
+        /// </summary>
+        BeKilled = 3,
+        /// <summary>
+        /// 警长击杀时走火。凶手记录为尝试击杀的人。
+        /// </summary>
+        GoOff = 4,
+        /// <summary>
+        /// 被放逐，不记录凶手。
+        /// </summary>
+        Exile = 5,
     }
 }

@@ -15,18 +15,21 @@ using System.Linq;
 using System.Linq.Expressions;
 using UnityEngine;
 using static UnityEngine.GraphicsBuffer;
+using System.Text;
 
 namespace Light.ChatCommands;
 
 [Harmony]
 public class PatchManager
 {
+    
     public static bool IsHost(PlayerControl player) => AmongUsClient.Instance.AmHost;
-    public static void SendLocalMessage(string msg)
+    public static void SendLocalMessage(string msg,bool rename = true)
     {
         var pc = PlayerControl.LocalPlayer;
         string orig = pc.name;
-        pc.SetName("System");
+        if(rename)
+            pc.SetName("System");
         HudManager.Instance.Chat.AddChat(pc, msg);
         pc.SetName(orig);
     }
@@ -132,6 +135,86 @@ public class PatchManager
                 catch(Exception ex)
                 {
                     LightLogger.LogWarning($"踢人失败:{ex.Message}");
+                    __instance.freeChatField.Clear();
+                    return false;
+                }
+            case "/autosave":
+                try
+                {
+                    LightPlayerDataManager.AutoSaveEnabled = !LightPlayerDataManager.AutoSaveEnabled;
+                    SendLocalMessage($"自动保存复盘: {(LightPlayerDataManager.AutoSaveEnabled ? "已开启" : "已关闭")}");
+                    __instance.freeChatField.Clear();
+                    return false;
+                }
+                catch (Exception ex)
+                {
+                    LightLogger.LogWarning($"autosave切换失败:{ex.Message}");
+                    __instance.freeChatField.Clear();
+                    return false;
+                }
+            case "/replay":
+                try
+                {
+                    var replayText = LightInDark.Game.LightPlayerDataManager.BuildReplayText();
+                    SendLocalMessage(replayText);
+                    __instance.freeChatField.Clear();
+                    return false;
+                }
+                catch (Exception ex)
+                {
+                    LightLogger.LogWarning($"复盘显示失败:{ex.Message}");
+                    __instance.freeChatField.Clear();
+                    return false;
+                }
+            case "/cur":
+                try
+                {
+                    if(parts.Length < 2
+                        )
+                    {
+                        SendLocalMessage("请输入子命令。");
+                    }
+                    string subCmd = parts[1].ToLower();
+                    switch (subCmd)
+                    {
+                        case "help":
+                            SendLocalMessage("/cur set <索引> 设置鼠标指针。\n/cur list 获取所有指针的索引。\n/cur now 获取当前鼠标指针的索引。");
+                            break;
+                        case "list":
+                            StringBuilder sb = new();
+                            sb.AppendLine("0 - 系统默认鼠标");
+                            sb.AppendLine("1 - 全家福");
+                            sb.AppendLine("2 - 二代全家福");
+                            SendLocalMessage(sb.ToString());
+                            break;
+                        case "set":
+                            string subInxStr = parts[2];
+                            if(int.TryParse(subInxStr,out int subInx))
+                            {
+                                if (UI.Cursor.ChangeCursorFromIndex(subInx) == true)
+                                {
+                                    SendLocalMessage($"更换成功！已将光标更换为索引{subInx}");
+                                }
+                                else if(UI.Cursor.ChangeCursorFromIndex(subInx) == null)
+                                {
+                                    SendLocalMessage($"更换失败！请将根目录下Light.log发送给开发者！");
+                                }
+                                else
+                                {
+                                    SendLocalMessage("请输入正确的索引数字！");
+                                }
+                            }
+                            else
+                            {
+                                SendLocalMessage("请输入正确的索引数字！");
+                            }
+                            break;
+                    }
+                    __instance.freeChatField.Clear();
+                    return false;
+                }
+                catch
+                {
                     __instance.freeChatField.Clear();
                     return false;
                 }

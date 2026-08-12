@@ -28,10 +28,8 @@ namespace Light.Patches
             try
             {
                 __instance.ShouldCheckForGameEnd = false;
-                EventSystem.RunEvent(new GameStartEvent
-                {
-                    PlayerCount = PlayerControl.AllPlayerControls.Count
-                });
+                LightPlayerDataManager.Initialize();
+                EventTriggers.OnGameStart(PlayerControl.AllPlayerControls.Count);
                 LightLogger.Log("[Patch] 游戏开始，已禁用原版结束检查");
             }
             catch (System.Exception ex)
@@ -113,7 +111,7 @@ namespace Light.Patches
                 LightInDark.Game.GameManager.Instance.Initialize();
 
                 // 复制到系统 List 并洗牌（AllPlayerControls 不支持 System.Linq）
-                var players = new System.Collections.Generic.List<PlayerControl>();
+                var players = new List<PlayerControl>();
                 foreach (var pc in PlayerControl.AllPlayerControls) players.Add(pc);
                 for (int i = players.Count - 1; i > 0; i--)
                 {
@@ -203,11 +201,18 @@ namespace Light.Patches
         {
             try
             {
-                EventSystem.RunEvent(new PlayerDeathEvent
+                EventTriggers.OnPlayerDeath(__instance, reason);
+                // 死亡状态已由 RpcDefinitions.Suicide/MurderPlayer 记录到 LightPlayerDataManager
+                // 此处仅在尚未记录时补充（如原版直接触发的死亡）
+                var existing = LightPlayerDataManager.GetData(__instance.PlayerId);
+                if (existing != null && !existing.IsDead)
                 {
-                    Player = __instance,
-                    Reason = reason
-                });
+                    // 根据 vanilla DeathReason 映射到 PlayerState
+                    // 0=Kill, 1=Exile, 2=Disconnect
+                    PlayerState state = ((int)reason == 1) ? PlayerState.Exile : PlayerState.Dead;
+                    LightPlayerDataManager.SetDeath(
+                        __instance.PlayerId, state, null, LightPlayerDataManager.CurrentMeetingNumber);
+                }
             }
             catch (System.Exception ex)
             {
@@ -238,12 +243,9 @@ namespace Light.Patches
                     foreach (var task in __instance.Data.Tasks)
                         if (task != null && task.Complete) completed++;
                 }
-                EventSystem.RunEvent(new PlayerTaskCompleteEvent
-                {
-                    Player = __instance,
-                    CompletedTasks = completed,
-                    TotalTasks = total
-                });
+                EventTriggers.OnTaskComplete(__instance, completed, total);
+                
+                LightPlayerDataManager.UpdateTaskProgress(__instance.PlayerId, completed, total);
             }
             catch (System.Exception ex)
             {
@@ -264,12 +266,7 @@ namespace Light.Patches
             try
             {
                 bool isEmergency = target == null;
-                EventSystem.RunEvent(new MeetingStartEvent
-                {
-                    Reporter = __instance,
-                    ReportedBody = target,
-                    IsEmergencyMeeting = isEmergency
-                });
+                EventTriggers.OnMeetingStart(__instance, target, isEmergency);
                 LightLogger.Log($"[Patch] {(isEmergency ? "紧急会议" : "尸体报告")} by {__instance.name}");
             }
             catch (System.Exception ex)
@@ -286,11 +283,7 @@ namespace Light.Patches
         {
             try
             {
-                EventSystem.RunEvent(new PlayerVoteEvent
-                {
-                    Player = PlayerControl.LocalPlayer,
-                    VotedForPlayerId = suspectStateIdx
-                });
+                EventTriggers.OnPlayerVote(PlayerControl.LocalPlayer, suspectStateIdx);
             }
             catch (System.Exception ex)
             {
@@ -312,10 +305,8 @@ namespace Light.Patches
             {
                 if (data?.Character != null)
                 {
-                    EventSystem.RunEvent(new PlayerDisconnectEvent
-                    {
-                        Player = data.Character
-                    });
+                    EventTriggers.OnPlayerDisconnect(data.Character);
+                    LightPlayerDataManager.SetDisconnected(data.Character.PlayerId);
                 }
             }
             catch (System.Exception ex)
@@ -336,10 +327,9 @@ namespace Light.Patches
         {
             try
             {
-                // ExileController 的 exiled 属性可能在 Il2Cpp 中需要不同访问方式
-                // 暂时只记录日志
                 LightLogger.Log("[Patch] 放逐动画开始");
-                EventSystem.RunEvent(new PlayerExileEvent { });
+                LightPlayerDataManager.CurrentMeetingNumber++;
+                EventTriggers.OnPlayerExile(null);
             }
             catch (System.Exception ex)
             {
@@ -359,7 +349,7 @@ namespace Light.Patches
         {
             try
             {
-                EventSystem.RunEvent(new EmergencyButtonBrokenEvent());
+                EventTriggers.OnEmergencyButtonBroken();
             }
             catch (System.Exception ex)
             {
@@ -367,8 +357,13 @@ namespace Light.Patches
             }
         }
     }
-
-    // =====================================================================
-    // 破坏系统 — AU 方法签名不同，暂时跳过
-    // =====================================================================
+    [HarmonyPatch(typeof(PlayerControl),nameof(PlayerControl.RpcMurderPlayer))]
+    public static class PlayerTryMurderPatch
+    {
+        public static bool Prefix()
+        {
+            bool needCanceled = false;
+            return true;
+        }
+    }
 }

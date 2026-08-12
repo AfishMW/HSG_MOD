@@ -60,7 +60,7 @@ public static class GameManager_StartGame_Patch
     {
         LightLogger.Log("[游戏] 游戏开始，初始化 GameManager");
         Game.GameManager.Instance.Initialize();
-        EventSystem.RunEvent(new GameStartEvent() { PlayerCount = PlayerControl.AllPlayerControls.Count });
+        EventTriggers.OnGameStart(PlayerControl.AllPlayerControls.Count);
     }
 }
 

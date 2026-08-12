@@ -6,24 +6,6 @@ using LightInDark.Core;
 
 namespace LightInDark.Events
 {
-    public interface IEvent { }
-
-    [AttributeUsage(AttributeTargets.Method)]
-    public class EventPriority : Attribute
-    {
-        public int Priority;
-        public EventPriority(int priority = 0) => Priority = priority;
-    }
-
-    [AttributeUsage(AttributeTargets.Method)]
-    public class OnlyMyPlayer : Attribute { }
-
-    [AttributeUsage(AttributeTargets.Method)]
-    public class OnlyHost : Attribute { }
-
-    [AttributeUsage(AttributeTargets.Method)]
-    public class Local : Attribute { }
-
     public static class EventSystem
     {
         private class ListenerEntry
@@ -42,8 +24,10 @@ namespace LightInDark.Events
         public static void ScanAndRegisterAll()
         {
             _listeners.Clear();
-            var assembly = Assembly.GetExecutingAssembly();
+            var assemblies = new[] { Assembly.GetExecutingAssembly(), AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == "Light") }
+                .Where(a => a != null).Distinct();
 
+            foreach (var assembly in assemblies)
             foreach (var type in assembly.GetTypes())
             {
                 if (type.IsAbstract || type.IsInterface || !type.IsClass)
@@ -59,10 +43,10 @@ namespace LightInDark.Events
                     if (!typeof(IEvent).IsAssignableFrom(eventType))
                         continue;
 
-                    var priority = method.GetCustomAttribute<EventPriority>()?.Priority ?? 0;
-                    var onlyHost = method.GetCustomAttribute<OnlyHost>() != null;
-                    var onlyMyPlayer = method.GetCustomAttribute<OnlyMyPlayer>() != null;
-                    var local = method.GetCustomAttribute<Local>() != null;
+                    var priority = method.GetCustomAttribute<EventPriorityAttribute>()?.Priority ?? 0;
+                    var onlyHost = method.GetCustomAttribute<OnlyHostAttribute>() != null;
+                    var onlyMyPlayer = method.GetCustomAttribute<OnlyMyPlayerAttribute>() != null;
+                    var local = method.GetCustomAttribute<LocalAttribute>() != null;
 
                     if (!_listeners.ContainsKey(eventType))
                         _listeners[eventType] = new List<ListenerEntry>();

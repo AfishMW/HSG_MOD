@@ -37,12 +37,6 @@ public struct Color
 }
 public static class ColorHelper
 {
-    public static UnityEngine.Color ToUnityColor(this Color color)
-    {
-        return new UnityEngine.Color(color.R,color.G,color.B,color.A);
-    }
-    public static Color ToLIDColor(this UnityEngine.Color color)
-    {
-        return new Color(color.r, color.g, color.b, color.a);
-    }
+    public static UColor ToUnityColor(this Color color) => new(color.R, color.G, color.B, color.A);
+    public static Color ToLIDColor(this UnityEngine.Color color) => new(color.r, color.g, color.b, color.a);
 }

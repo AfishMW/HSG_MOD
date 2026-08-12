@@ -47,16 +47,12 @@ public static class MainMenuPatch
     private static bool _updaterChecked;
     private static bool _lateUpdateLogged;
 
-    // ════════════════════════════════════════════
-    //  主入口：MainMenuManager.Start Postfix
-    // ════════════════════════════════════════════
     [HarmonyPatch(typeof(MainMenuManager), "Start")]
     [HarmonyPostfix]
     public static void Postfix(MainMenuManager __instance)
     {
         try
         {
-            // 0. 清除上一场景的残留引用（对象已被销毁）
             _showingPanel = false;
             _rightPanel = null;
             _lightScreen = null;
@@ -83,9 +79,11 @@ public static class MainMenuPatch
             if (ambience != null)
             {
                 ambience.transform.FindChild("PlayerParticles")?.gameObject.SetActive(false);
-                ambience.transform.GetChild(0).gameObject.SetActive(false);
+                var stars = ambience.transform.GetChild(0);
+                //var snowFlakes = UnityEngine.Object.Instantiate(stars);
+                stars.gameObject.SetActive(false);
             }
-            UnityEngine.Object.FindObjectOfType<VersionShower>()?.gameObject.SetActive(false);
+            //UnityEngine.Object.FindObjectOfType<VersionShower>()?.gameObject.SetActive(false);
 
             // 2. 背景激活（每次重新滚动，不持久化 _bgMoved）
             _bgMoved = false;
@@ -189,9 +187,6 @@ public static class MainMenuPatch
             // 10. 按钮配色（在解构 LeftPanel 之前执行，否则找不到子按钮）
             ColorAllButtons();
 
-            // 10b. 按钮呼吸灯效果
-            ApplyButtonEffects(__instance);
-
             // 11. LeftPanel 解构（子释放 + 隐藏）
             if (leftPanel != null)
             {
@@ -203,6 +198,9 @@ public static class MainMenuPatch
 
             // 12. Divider 隐藏
             FindGO("Divider")?.SetActive(false);
+
+            // 12b. 按钮呼吸灯效果（必须在 LeftPanel 解构后执行，否则坐标会错位）
+            ApplyButtonEffects(__instance);
 
             // 13. RightPanel
             SetupRightPanel(__instance);
@@ -244,6 +242,9 @@ public static class MainMenuPatch
             foreach (var obj in UnityEngine.Resources.FindObjectsOfTypeAll<GameObject>())
                 if (obj.name is "FreePlayButton" or "HowToPlayButton")
                     obj.SetActive(false);
+
+            // 18. 创建底部自定义按钮（克隆退出按钮 x4）
+            SetupCustomButtons(__instance, btns);
 
             StaticLog.LogWarning("[Light.UI] === 布局完成 ===");
 
@@ -320,10 +321,18 @@ public static class MainMenuPatch
         var fp = clone.transform.FindChild("FontPlacer");
         if (fp != null && fp.childCount > 0)
         {
+            DateTime now = DateTime.Now;
+            int m = now.Month;
+            int d = now.Day;
             var tmp = fp.GetChild(0).GetComponent<TextMeshPro>();
-            if (tmp != null) tmp.text = "LIGHT";
+
+            if (tmp != null) 
+            {
+                if (m == 4 && d == 1) tmp.text = "A JOKE.";
+                else tmp.text = "LIGHT";
+            } 
             var trans = fp.GetChild(0).GetComponent<TextTranslatorTMP>();
-            if (trans != null) trans.enabled = false;
+            trans?.enabled = false;
         }
 
         // 注册到 scalerList
@@ -336,6 +345,84 @@ public static class MainMenuPatch
 
         // 添加到场景按钮字典
         btns["LightButton"] = passive;
+    }
+
+    // ════════════════════════════════════════════
+    //  底部自定义按钮（克隆退出按钮 x4，横排）
+    // ════════════════════════════════════════════
+
+    private static readonly Color32[] CustomButtonColors = new Color32[]
+    {
+        new Color32(255, 192, 203, 255),  // 粉
+        new Color32(148, 112, 219, 255),  // 紫
+        new Color32(79, 209, 197, 255),   // 青
+        new Color32(255, 215, 0, 255),    // 金
+    };
+
+    private static readonly string[] CustomButtonNames = { "按钮A", "按钮B", "按钮C", "按钮D" };
+
+    private static void SetupCustomButtons(MainMenuManager __instance, Dictionary<string, PassiveButton> btns)
+    {
+        // FS 模式：用 creditsButton 和 quitButton 作为模板
+        if (!btns.TryGetValue("CreditsButton", out var creditsBtn)) return;
+        if (!btns.TryGetValue("ExitGameButton", out var exitBtn)) return;
+
+        // 模板：左列用 creditsBtn，右列用 exitBtn
+        var templates = new PassiveButton[] { creditsBtn, exitBtn };
+        // 获取实际 localPosition 作为 X 基准
+        float leftX = creditsBtn.transform.localPosition.x;
+        float rightX = exitBtn.transform.localPosition.x;
+        float baseY = exitBtn.transform.localPosition.y;
+        LightLogger.Log($"[CustomButtons] creditsBtn pos=({leftX},{creditsBtn.transform.localPosition.y}), exitBtn pos=({rightX},{baseY})");
+
+        for (int i = 0; i < 4; i++)
+        {
+            int col = i % 2;       // 0=左, 1=右
+            int row = i / 2;        // 0=第一行, 1=第二行
+            var template = templates[col];
+
+            var clone = GameObject.Instantiate(template.gameObject, template.transform.parent);
+            clone.name = $"CustomButton{i}";
+
+            // 保持与原版按钮相同的缩放
+            clone.transform.localScale = template.transform.localScale;
+
+            // 位置：X 与对应列的原版按钮一致，Y 逐行下移
+            float x = col == 0 ? leftX : rightX;
+            float y = baseY - (row + 1) * 0.59f;
+            clone.transform.localPosition = new Vector3(x, y, 0f);
+
+            // 文字
+            var fp = clone.transform.FindChild("FontPlacer");
+            if (fp != null && fp.childCount > 0)
+            {
+                var tmp = fp.GetChild(0).GetComponent<TextMeshPro>();
+                if (tmp != null) tmp.text = CustomButtonNames[i];
+                var tr = fp.GetChild(0).GetComponent<TextTranslatorTMP>();
+                if (tr != null) tr.enabled = false;
+            }
+
+            // 自定义颜色
+            var pb = clone.GetComponent<PassiveButton>();
+            if (pb != null)
+            {
+                FormatBtn(pb, CustomButtonColors[i], new Color(0f, 0f, 0f, 0f), Color.white, Color.white);
+                pb.OnClick = new UnityEngine.UI.Button.ButtonClickedEvent();
+                var idx = i;
+                pb.OnClick.AddListener((UnityEngine.Events.UnityAction)(() =>
+                {
+                    LightLogger.Log($"[Light] 自定义按钮 {idx} 被点击");
+                }));
+            }
+
+            // 注册到 scalerList
+            var scalerList = GameObject.FindObjectOfType<SlicedAspectScaler>();
+            if (scalerList != null)
+            {
+                var scaled = clone.GetComponent<AspectScaledAsset>();
+                if (scaled != null) scalerList.objectsToScale.Add(scaled);
+            }
+        }
     }
 
     // ════════════════════════════════════════════
@@ -434,7 +521,7 @@ public static class MainMenuPatch
         var sr = _rightPanel.GetComponent<SpriteRenderer>();
         if (sr != null) sr.color = new Color32(173, 214, 255, 255);
 
-        // LOGO — 挂到 playButton 下
+        // LOGO — 挂到 mainMenuUI 下的空对象（不挂 RightPanel/playButton，避免被移动）
         if (__instance.playButton == null) return;
 
         var tex = GraphicsHelper.LoadTextureFromResources("Light.Resources.Lobby.LightInDark.png");
@@ -442,16 +529,54 @@ public static class MainMenuPatch
         var spr = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
             new Vector2(0.5f, 0.5f), 100f);
 
+        // 创建空对象作为 Logo 的父级，挂到 mainMenuUI 下（不被 RightPanel 滑动影响）
+        var logoHolder = new GameObject("LightLogoHolder");
+        logoHolder.transform.SetParent(__instance.mainMenuUI.transform);
+        // 放在开始按钮正上方
+        var playPos = __instance.playButton.transform.localPosition;
+        logoHolder.transform.localPosition = new Vector3(playPos.x, playPos.y + 1.2f, -5f);
+        logoHolder.transform.localScale = Vector3.one;
+
         var logo = UnityHelper.CreateObject<SpriteRenderer>("LightLogo",
-            __instance.playButton.transform, new Vector3(0.1f, 1f, 1f));
-        logo.transform.localScale = new Vector3(0.12f, 0.12f, 1f);
+            logoHolder.transform, new Vector3(0f, 0f, 0f));
+        logo.transform.localScale = new Vector3(0.24f, 0.24f, 1f);
         logo.sprite = spr;
 
         var glow = UnityHelper.CreateObject<SpriteRenderer>("LightLogoGlow",
-            __instance.playButton.transform, new Vector3(0.1f, 1f, 1f));
-        glow.transform.localScale = new Vector3(0.12f, 0.12f, 1f);
+            logoHolder.transform, new Vector3(0f, 0f, -0.1f));
+        glow.transform.localScale = new Vector3(0.24f, 0.24f, 1f);
         glow.sprite = spr;
         glow.color = Color.white;
+
+        // 彩蛋：点击 Logo 时给予较大的缩放反馈
+        var logoCollider = logo.gameObject.AddComponent<BoxCollider2D>();
+        logoCollider.isTrigger = true;
+        logoCollider.size = new Vector2(2f, 1f);
+        var logoBtn = logo.gameObject.AddComponent<PassiveButton>();
+        logoBtn.OnClick = new UnityEngine.UI.Button.ButtonClickedEvent();
+        logoBtn.OnClick.AddListener((UnityEngine.Events.UnityAction)(() =>
+        {
+            __instance.StartCoroutine(CoLogoBounce(logo.transform).WrapToIl2Cpp());
+        }));
+    }
+
+    /// <summary>Logo 点击彩蛋：大幅度弹跳缩放</summary>
+    private static IEnumerator CoLogoBounce(Transform logo)
+    {
+        var original = logo.localScale;
+        float t = 0f;
+        while (t < 0.6f)
+        {
+            t += Time.deltaTime;
+            float p = t / 0.6f;
+            // 先放大到 1.5 倍再回弹
+            float scale = p < 0.3f
+                ? Mathf.Lerp(1f, 1.5f, p / 0.3f)
+                : Mathf.Lerp(1.5f, 1f, (p - 0.3f) / 0.7f);
+            logo.localScale = original * scale;
+            yield return null;
+        }
+        logo.localScale = original;
     }
 
     // ════════════════════════════════════════════
