@@ -370,5 +370,7 @@ LightBuilder/
 AU/
 
 # agent
-**/.codely-cli/*.*
-**/mem-log/*.*
+CODELY.md
+LightAPI/.vs/
+LightAPI/.codely-cli/
+LightAPI/mem-log/
