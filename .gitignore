@@ -374,3 +374,4 @@ CODELY.md
 LightAPI/.vs/
 LightAPI/.codely-cli/
 LightAPI/mem-log/
+.codely-cli/
