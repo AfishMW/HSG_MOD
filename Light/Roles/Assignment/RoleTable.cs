@@ -3,6 +3,8 @@ using System.Linq;
 using LightInDark.Configuration;
 using LightInDark.Roles;
 using LightInDark.RPCs;
+using LightInDark.Core;
+using System;
 
 namespace Light.Roles.Assignment;
 
@@ -22,7 +24,14 @@ public class RoleTable : IRoleTable
 
     public void Determine()
     {
-        foreach (var kv in _assignments)
-            RpcDefinitions.SetRole(kv.Key, kv.Value.Role.Id, kv.Value.Arguments);
+        try
+        {
+            foreach (var kv in _assignments)
+                RpcDefinitions.SetRole(kv.Key, kv.Value.Role.Id, kv.Value.Arguments);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[RoleTable.Determine]", ex);
+        }
     }
 }

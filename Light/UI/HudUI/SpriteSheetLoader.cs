@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
+using LightInDark.Core;
+using System;
 
 namespace Light.UI.HudUI;
 
@@ -16,10 +18,17 @@ public static class SpriteSheetLoader
     /// </summary>
     public static Sprite Load(string resourcePath, float pixelsPerUnit = 100f)
     {
-        var tex = LoadTexture(resourcePath);
-        if (tex == null) return null!;
-        return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
-            new Vector2(0.5f, 0.5f), pixelsPerUnit);
+        try
+        {
+            var tex = LoadTexture(resourcePath);
+            if (tex == null) return null!;
+            return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                new Vector2(0.5f, 0.5f), pixelsPerUnit);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[SpriteSheetLoader.Load]", ex); return default;
+        }
     }
 
     /// <summary>
@@ -37,48 +46,55 @@ public static class SpriteSheetLoader
         int cols, int rows,
         int borderLeft = 0, int borderRight = 0, int borderTop = 0, int borderBottom = 0)
     {
-        var cacheKey = $"{resourcePath}_{cols}x{rows}_{borderLeft}_{borderRight}_{borderTop}_{borderBottom}";
-        if (_cache.TryGetValue(cacheKey, out var cached))
-            return cached;
-
-        var tex = LoadTexture(resourcePath);
-        if (tex == null) return null!;
-
-        var sprites = new Sprite[cols * rows];
-        int cellW = tex.width / cols;
-        int cellH = tex.height / rows;
-
-        for (int row = 0; row < rows; row++)
+        try
         {
-            for (int col = 0; col < cols; col++)
+            var cacheKey = $"{resourcePath}_{cols}x{rows}_{borderLeft}_{borderRight}_{borderTop}_{borderBottom}";
+            if (_cache.TryGetValue(cacheKey, out var cached))
+                return cached;
+
+            var tex = LoadTexture(resourcePath);
+            if (tex == null) return null!;
+
+            var sprites = new Sprite[cols * rows];
+            int cellW = tex.width / cols;
+            int cellH = tex.height / rows;
+
+            for (int row = 0; row < rows; row++)
             {
-                // Unity Texture 坐标：左下为原点，精灵图从上到下排列
-                int x = col * cellW;
-                int y = (rows - 1 - row) * cellH;
+                for (int col = 0; col < cols; col++)
+                {
+                    // Unity Texture 坐标：左下为原点，精灵图从上到下排列
+                    int x = col * cellW;
+                    int y = (rows - 1 - row) * cellH;
 
-                var rect = new Rect(x, y, cellW, cellH);
+                    var rect = new Rect(x, y, cellW, cellH);
 
-                // 九宫格边框
-                Vector4 border = new(
-                    borderLeft, borderBottom,
-                    borderRight, borderTop);
+                    // 九宫格边框
+                    Vector4 border = new(
+                        borderLeft, borderBottom,
+                        borderRight, borderTop);
 
-                // 需要确保 border 不超过 cell 尺寸
-                border.x = Mathf.Min(border.x, cellW * 0.5f);
-                border.z = Mathf.Min(border.z, cellW * 0.5f);
-                border.y = Mathf.Min(border.y, cellH * 0.5f);
-                border.w = Mathf.Min(border.w, cellH * 0.5f);
+                    // 需要确保 border 不超过 cell 尺寸
+                    border.x = Mathf.Min(border.x, cellW * 0.5f);
+                    border.z = Mathf.Min(border.z, cellW * 0.5f);
+                    border.y = Mathf.Min(border.y, cellH * 0.5f);
+                    border.w = Mathf.Min(border.w, cellH * 0.5f);
 
-                var sprite = Sprite.Create(tex, rect,
-                    new Vector2(0.5f, 0.5f), pixelsPerUnit,
-                    0, SpriteMeshType.FullRect, border);
+                    var sprite = Sprite.Create(tex, rect,
+                        new Vector2(0.5f, 0.5f), pixelsPerUnit,
+                        0, SpriteMeshType.FullRect, border);
 
-                sprites[row * cols + col] = sprite;
+                    sprites[row * cols + col] = sprite;
+                }
             }
-        }
 
-        _cache[cacheKey] = sprites;
-        return sprites;
+            _cache[cacheKey] = sprites;
+            return sprites;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[SpriteSheetLoader.LoadDivided]", ex); return default;
+        }
     }
 
     /// <summary>
@@ -87,38 +103,52 @@ public static class SpriteSheetLoader
     public static Sprite LoadSliced(string resourcePath, float pixelsPerUnit,
         int borderLeft, int borderRight, int borderTop, int borderBottom)
     {
-        var tex = LoadTexture(resourcePath);
-        if (tex == null) return null!;
+        try
+        {
+            var tex = LoadTexture(resourcePath);
+            if (tex == null) return null!;
 
-        var rect = new Rect(0, 0, tex.width, tex.height);
-        Vector4 border = new(borderLeft, borderBottom, borderRight, borderTop);
+            var rect = new Rect(0, 0, tex.width, tex.height);
+            Vector4 border = new(borderLeft, borderBottom, borderRight, borderTop);
 
-        return Sprite.Create(tex, rect,
-            new Vector2(0.5f, 0.5f), pixelsPerUnit,
-            0, SpriteMeshType.FullRect, border);
+            return Sprite.Create(tex, rect,
+                new Vector2(0.5f, 0.5f), pixelsPerUnit,
+                0, SpriteMeshType.FullRect, border);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[SpriteSheetLoader.LoadSliced]", ex); return default;
+        }
     }
 
     private static Texture2D LoadTexture(string resourcePath)
     {
-        var assembly = Assembly.GetExecutingAssembly();
-        using var stream = assembly.GetManifestResourceStream(resourcePath);
-        if (stream == null)
+        try
         {
-            LightInDark.Core.LightLogger.LogWarning($"[SpriteSheetLoader] 资源未找到: {resourcePath}");
-            return null!;
+            var assembly = Assembly.GetExecutingAssembly();
+            using var stream = assembly.GetManifestResourceStream(resourcePath);
+            if (stream == null)
+            {
+                LightInDark.Core.LightLogger.LogWarning($"[SpriteSheetLoader] 资源未找到: {resourcePath}");
+                return null!;
+            }
+
+            byte[] bytes = new byte[stream.Length];
+            stream.Read(bytes, 0, bytes.Length);
+
+            var tex = new Texture2D(2, 2, TextureFormat.ARGB32, false);
+            if (!ImageConversion.LoadImage(tex, bytes, false))
+            {
+                LightInDark.Core.LightLogger.LogWarning($"[SpriteSheetLoader] 图片加载失败: {resourcePath}");
+                return null!;
+            }
+            tex.wrapMode = TextureWrapMode.Clamp;
+            return tex;
         }
-
-        byte[] bytes = new byte[stream.Length];
-        stream.Read(bytes, 0, bytes.Length);
-
-        var tex = new Texture2D(2, 2, TextureFormat.ARGB32, false);
-        if (!ImageConversion.LoadImage(tex, bytes, false))
+        catch (Exception ex)
         {
-            LightInDark.Core.LightLogger.LogWarning($"[SpriteSheetLoader] 图片加载失败: {resourcePath}");
-            return null!;
+            LightLogger.LogError("[SpriteSheetLoader.LoadTexture]", ex); return default;
         }
-        tex.wrapMode = TextureWrapMode.Clamp;
-        return tex;
     }
 }
 
@@ -135,10 +165,17 @@ public static class HudUIAssets
     {
         get
         {
-            if (_buttonSprites != null) return _buttonSprites;
-            _buttonSprites = SpriteSheetLoader.LoadDivided(
-                "Light.Resources.GUI.Button.png", 150f, 3, 2, 12, 12, 12, 12);
-            return _buttonSprites!;
+            try
+            {
+                if (_buttonSprites != null) return _buttonSprites;
+                _buttonSprites = SpriteSheetLoader.LoadDivided(
+                    "Light.Resources.GUI.Button.png", 150f, 3, 2, 12, 12, 12, 12);
+                return _buttonSprites!;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("[SpriteSheetLoader.get]", ex); return default;
+            }
         }
     }
 
@@ -153,10 +190,17 @@ public static class HudUIAssets
     {
         get
         {
-            if (_checkmarkSprites != null) return _checkmarkSprites;
-            _checkmarkSprites = SpriteSheetLoader.LoadDivided(
-                "Light.Resources.GUI.Checkmark.png", 150f, 2, 1, 0, 0, 0, 0);
-            return _checkmarkSprites!;
+            try
+            {
+                if (_checkmarkSprites != null) return _checkmarkSprites;
+                _checkmarkSprites = SpriteSheetLoader.LoadDivided(
+                    "Light.Resources.GUI.Checkmark.png", 150f, 2, 1, 0, 0, 0, 0);
+                return _checkmarkSprites!;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("[SpriteSheetLoader.get]", ex); return default;
+            }
         }
     }
     public static Sprite CheckmarkUnselected => CheckmarkSprites[0];
@@ -168,10 +212,17 @@ public static class HudUIAssets
     {
         get
         {
-            if (_closeButtonSprites != null) return _closeButtonSprites;
-            _closeButtonSprites = SpriteSheetLoader.LoadDivided(
-                "Light.Resources.GUI.CloseButton.png", 150f, 2, 1, 0, 0, 0, 0);
-            return _closeButtonSprites!;
+            try
+            {
+                if (_closeButtonSprites != null) return _closeButtonSprites;
+                _closeButtonSprites = SpriteSheetLoader.LoadDivided(
+                    "Light.Resources.GUI.CloseButton.png", 150f, 2, 1, 0, 0, 0, 0);
+                return _closeButtonSprites!;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("[SpriteSheetLoader.get]", ex); return default;
+            }
         }
     }
     public static Sprite CloseNormal => CloseButtonSprites[0];
@@ -183,10 +234,17 @@ public static class HudUIAssets
     {
         get
         {
-            if (_navButtonSprites != null) return _navButtonSprites;
-            _navButtonSprites = SpriteSheetLoader.LoadDivided(
-                "Light.Resources.GUI.NavButton.png", 150f, 2, 2, 0, 0, 0, 0);
-            return _navButtonSprites!;
+            try
+            {
+                if (_navButtonSprites != null) return _navButtonSprites;
+                _navButtonSprites = SpriteSheetLoader.LoadDivided(
+                    "Light.Resources.GUI.NavButton.png", 150f, 2, 2, 0, 0, 0, 0);
+                return _navButtonSprites!;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("[SpriteSheetLoader.get]", ex); return default;
+            }
         }
     }
     public static Sprite NavLeftNormal => NavButtonSprites[0];
@@ -200,10 +258,17 @@ public static class HudUIAssets
     {
         get
         {
-            if (_frameSprite != null) return _frameSprite;
-            _frameSprite = SpriteSheetLoader.LoadSliced(
-                "Light.Resources.GUI.Background_Frame.png", 100f, 12, 12, 12, 12);
-            return _frameSprite;
+            try
+            {
+                if (_frameSprite != null) return _frameSprite;
+                _frameSprite = SpriteSheetLoader.LoadSliced(
+                    "Light.Resources.GUI.Background_Frame.png", 100f, 12, 12, 12, 12);
+                return _frameSprite;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("[SpriteSheetLoader.get]", ex); return default;
+            }
         }
     }
 
@@ -213,10 +278,17 @@ public static class HudUIAssets
     {
         get
         {
-            if (_innerSprite != null) return _innerSprite;
-            _innerSprite = SpriteSheetLoader.LoadSliced(
-                "Light.Resources.GUI.Background_Inner.png", 100f, 8, 8, 8, 8);
-            return _innerSprite;
+            try
+            {
+                if (_innerSprite != null) return _innerSprite;
+                _innerSprite = SpriteSheetLoader.LoadSliced(
+                    "Light.Resources.GUI.Background_Inner.png", 100f, 8, 8, 8, 8);
+                return _innerSprite;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("[SpriteSheetLoader.get]", ex); return default;
+            }
         }
     }
 
@@ -226,10 +298,17 @@ public static class HudUIAssets
     {
         get
         {
-            if (_colorButtonSprite != null) return _colorButtonSprite;
-            _colorButtonSprite = SpriteSheetLoader.LoadSliced(
-                "Light.Resources.GUI.ColorButton.png", 100f, 4, 4, 4, 4);
-            return _colorButtonSprite;
+            try
+            {
+                if (_colorButtonSprite != null) return _colorButtonSprite;
+                _colorButtonSprite = SpriteSheetLoader.LoadSliced(
+                    "Light.Resources.GUI.ColorButton.png", 100f, 4, 4, 4, 4);
+                return _colorButtonSprite;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("[SpriteSheetLoader.get]", ex); return default;
+            }
         }
     }
 
@@ -239,10 +318,17 @@ public static class HudUIAssets
     {
         get
         {
-            if (_colorButtonSelectedSprite != null) return _colorButtonSelectedSprite;
-            _colorButtonSelectedSprite = SpriteSheetLoader.LoadSliced(
-                "Light.Resources.GUI.ColorButtonSelected.png", 100f, 4, 4, 4, 4);
-            return _colorButtonSelectedSprite;
+            try
+            {
+                if (_colorButtonSelectedSprite != null) return _colorButtonSelectedSprite;
+                _colorButtonSelectedSprite = SpriteSheetLoader.LoadSliced(
+                    "Light.Resources.GUI.ColorButtonSelected.png", 100f, 4, 4, 4, 4);
+                return _colorButtonSelectedSprite;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("[SpriteSheetLoader.get]", ex); return default;
+            }
         }
     }
 
@@ -252,10 +338,17 @@ public static class HudUIAssets
     {
         get
         {
-            if (_whiteSprite != null) return _whiteSprite;
-            _whiteSprite = SpriteSheetLoader.Load(
-                "Light.Resources.GUI.ColorFullBase.png", 100f);
-            return _whiteSprite;
+            try
+            {
+                if (_whiteSprite != null) return _whiteSprite;
+                _whiteSprite = SpriteSheetLoader.Load(
+                    "Light.Resources.GUI.ColorFullBase.png", 100f);
+                return _whiteSprite;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("[SpriteSheetLoader.get]", ex); return default;
+            }
         }
     }
 }

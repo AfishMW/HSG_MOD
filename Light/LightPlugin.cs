@@ -15,6 +15,8 @@ using Light.Roles.Vanilla;
 using Reactor;
 using Light.UI;
 using System.Text.Json.Nodes;
+using LightInDark.Core;
+using System;
 
 namespace Light;
 
@@ -41,27 +43,44 @@ public partial class LightPlugin : BasePlugin
 
     public override void Load()
     {
-        StaticLog = Log;
-        Harmony.PatchAll();
-        bool vM =VersionMaker.MakeVersion();
-        if (!vM)
-            Log.LogError($"json 加载失败。具体异常请查看Light.log。");
-        LoadCommand();
-        EventSystem.ScanAndRegisterAll();
-        ExtractLanguageFiles();
-        Language.Load();
-        LidRpcRegistry.ScanAndPatch(Harmony);
-        LoadRole();
-        // 订阅 API 提供的聊天显示事件，更新聊天框状态
-        RpcDefinitions.OnFreeChatStateChanged += show => ShowChatPatch.NeedShowFreeChat = show;
-        AddCursorComponent();
-        Log.LogInfo($"模组 {Name} v{Version} 已加载！");
+        try
+        {
+            FirstChanceExceptionLogger.Initialize();
+            StaticLog = Log;
+            Harmony.PatchAll();
+            bool vM =VersionMaker.MakeVersion();
+            if (!vM)
+                Log.LogError($"json 加载失败。具体异常请查看Light.log。");
+            LoadCommand();
+            EventSystem.ScanAndRegisterAll();
+            ExtractLanguageFiles();
+            Language.Load();
+            LidRpcRegistry.ScanAndPatch(Harmony);
+            LoadRole();
+#if !DEBUG
+            LightLogger.ClearLog();
+#endif
+            RpcDefinitions.OnFreeChatStateChanged += show => ShowChatPatch.NeedShowFreeChat = show;
+            AddCursorComponent();
+            Log.LogInfo($"模组 {Name} v{Version} 已加载！");
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[LightPlugin.Load]", ex);
+        }
     }
 
     /// <summary>初始化光标（纯静态，不再 AddComponent）</summary>
     private static void AddCursorComponent()
     {
-        UI.Cursor.Initialize();
+        try
+        {
+            UI.Cursor.Initialize();
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[LightPlugin.AddCursorComponent]", ex);
+        }
     }
 
     /// <summary>把嵌入的默认语言文件解压到 BepInEx/Language（已存在则不覆盖，玩家可编辑）</summary>
@@ -92,17 +111,60 @@ public partial class LightPlugin : BasePlugin
 
     private static void LoadCommand()
     {
-        var harmony = new Harmony("Light.cmd.harmony");
-        var orig = AccessTools.Method(typeof(ChatController), "SendChat");
-        if (orig == null) return;
-        var prefixMethod = AccessTools.Method(typeof(PatchManager), nameof(PatchManager.OnSendChat));
-        if (prefixMethod == null) return;
-        harmony.Patch(orig, new HarmonyMethod(prefixMethod));
+        try
+        {
+            var harmony = new Harmony("Light.cmd.harmony");
+            var orig = AccessTools.Method(typeof(ChatController), "SendChat");
+            if (orig == null) return;
+            var prefixMethod = AccessTools.Method(typeof(PatchManager), nameof(PatchManager.OnSendChat));
+            if (prefixMethod == null) return;
+            harmony.Patch(orig, new HarmonyMethod(prefixMethod));
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[LightPlugin.LoadCommand]", ex);
+        }
     }
     private static void LoadRole()
     {
-        RoleRegistry.Register<Caller>();
-        RoleRegistry.Register<VanillaImpostor>(VanillaImpostor.Instance);
-        RoleRegistry.Register<VanillaCrewmate>(VanillaCrewmate.Instance);
+        try
+        {
+            RoleRegistry.Register<Caller>();
+            RoleRegistry.Register<VanillaImpostor>(VanillaImpostor.Instance);
+            RoleRegistry.Register<VanillaCrewmate>(VanillaCrewmate.Instance);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[LightPlugin.LoadRole]", ex);
+        }
+    }
+    public static class FirstChanceExceptionLogger
+    {
+        static bool _init = false;
+        static readonly object _lock = new object();
+        public static void Initialize()
+        {
+            if (_init) return;
+            lock (_lock)
+            {
+                if (_init) return;
+                AppDomain.CurrentDomain.FirstChanceException += (sender, e) =>
+                {
+                    try
+                    {
+                        string dir = @"D:\log";
+                        if(!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                        string name = $"FIRST_CHANCE{DateTime.Now:yyyyMMdd_HHmmss_fff}.txt";
+                        string pathF = Path.Combine(dir, name);
+                        File.WriteAllText(pathF,e.Exception.ToString());
+                    }
+                    catch(Exception ex)
+                    {
+                        LightLogger.LogError($"FirstChance捕获失败",ex);
+                    }
+                };
+                _init = true;
+            }
+        }
     }
 }

@@ -17,13 +17,20 @@ namespace LightInDark.RPCs
         [LidRPC]
         public static void SetRole(byte playerId, int roleId, int[] arguments)
         {
-            var definedRole = RoleRegistry.GetById(roleId);
-            if (definedRole == null) { LightLogger.LogWarning($"[RPC] 未知角色Id: {roleId}"); return; }
-            var gamePlayer = Game.GameManager.Instance.GetPlayer(playerId);
-            if (gamePlayer == null) return;
-            gamePlayer.SetRoleLocal(definedRole, arguments);
-            Game.LightPlayerDataManager.SetRole(playerId, definedRole.Name);
-            EventTriggers.OnPlayerRoleSet(gamePlayer.Control, gamePlayer.Role);
+            try
+            {
+                var definedRole = RoleRegistry.GetById(roleId);
+                if (definedRole == null) { LightLogger.LogWarning($"[RPC] 未知角色Id: {roleId}"); return; }
+                var gamePlayer = Game.GameManager.Instance.GetPlayer(playerId);
+                if (gamePlayer == null) return;
+                gamePlayer.SetRoleLocal(definedRole, arguments);
+                Game.LightPlayerDataManager.SetRole(playerId, definedRole.Name);
+                EventTriggers.OnPlayerRoleSet(gamePlayer.Control, gamePlayer.Role);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RpcDefinitions.SetRole", ex);
+            }
         }
 
         // ============ 玩家操作 ============
@@ -31,60 +38,95 @@ namespace LightInDark.RPCs
         [LidRPC]
         public static void Suicide(PlayerControl player, bool needLog = true, string state = "suicide", PlayerState playerState = PlayerState.Suicide)
         {
-            if (player == null || player.Data.IsDead) return;
-            player.RpcMurderPlayer(player, true);
-            EventTriggers.OnPlayerSuicide(player, state, playerState, needLog);
-            LightPlayerDataManager.SetDeath(player.PlayerId, playerState, player.PlayerId, LightPlayerDataManager.CurrentMeetingNumber);
-            if (needLog) LightLogger.Log($"[RPC] {player.name} suicide. state:{state}");
+            try
+            {
+                if (player == null || player.Data.IsDead) return;
+                player.RpcMurderPlayer(player, true);
+                EventTriggers.OnPlayerSuicide(player, state, playerState, needLog);
+                LightPlayerDataManager.SetDeath(player.PlayerId, playerState, player.PlayerId, LightPlayerDataManager.CurrentMeetingNumber);
+                if (needLog) LightLogger.Log($"[RPC] {player.name} suicide. state:{state}");
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RpcDefinitions.Suicide", ex);
+            }
         }
 
         [LidRPC]
         public static void MurderPlayer(PlayerControl killer, PlayerControl victim, PlayerState state = PlayerState.BeKilled)
         {
-            if (killer == null || victim == null) return;
-            killer.RpcMurderPlayer(victim, true);
-            EventTriggers.OnPlayerMurder(killer, victim, state);
-            LightPlayerDataManager.SetDeath(victim.PlayerId, state, killer.PlayerId, LightPlayerDataManager.CurrentMeetingNumber);
+            try
+            {
+                if (killer == null || victim == null) return;
+                killer.RpcMurderPlayer(victim, true);
+                EventTriggers.OnPlayerMurder(killer, victim, state);
+                LightPlayerDataManager.SetDeath(victim.PlayerId, state, killer.PlayerId, LightPlayerDataManager.CurrentMeetingNumber);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RpcDefinitions.MurderPlayer", ex);
+            }
         }
 
         /// <summary>恢复玩家（取消死亡状态）</summary>
         [LidRPC(OnlyHost = true)]
         public static void RevivePlayer(byte playerId)
         {
-            foreach (var pc in PlayerControl.AllPlayerControls)
-                if (pc.PlayerId == playerId && pc.Data.IsDead)
-                {
-                    pc.Revive();
-                    EventTriggers.OnPlayerRevive(pc);
-                    LightLogger.Log($"[RPC] {pc.name} 已复活");
-                    break;
-                }
+            try
+            {
+                foreach (var pc in PlayerControl.AllPlayerControls)
+                    if (pc.PlayerId == playerId && pc.Data.IsDead)
+                    {
+                        pc.Revive();
+                        EventTriggers.OnPlayerRevive(pc);
+                        LightLogger.Log($"[RPC] {pc.name} 已复活");
+                        break;
+                    }
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RpcDefinitions.RevivePlayer", ex);
+            }
         }
 
         /// <summary>设置玩家可见性</summary>
         [LidRPC]
         public static void SetPlayerInvisible(byte playerId, bool invisible)
         {
-            foreach (var pc in PlayerControl.AllPlayerControls)
-                if (pc.PlayerId == playerId)
-                {
-                    pc.SetInvisibility(invisible);
-                    break;
-                }
+            try
+            {
+                foreach (var pc in PlayerControl.AllPlayerControls)
+                    if (pc.PlayerId == playerId)
+                    {
+                        pc.SetInvisibility(invisible);
+                        break;
+                    }
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RpcDefinitions.SetPlayerInvisible", ex);
+            }
         }
 
         /// <summary>传送玩家到指定位置</summary>
         [LidRPC(OnlyHost = true)]
         public static void TeleportPlayer(byte playerId, Vector2 position)
         {
-            foreach (var pc in PlayerControl.AllPlayerControls)
-                if (pc.PlayerId == playerId)
-                {
-                    var pos = new UnityEngine.Vector3(position.x, position.y, pc.transform.position.z);
-                    pc.NetTransform.SnapTo(pos);
-                    LightLogger.Log($"[RPC] {pc.name} 传送到 {position}");
-                    break;
-                }
+            try
+            {
+                foreach (var pc in PlayerControl.AllPlayerControls)
+                    if (pc.PlayerId == playerId)
+                    {
+                        var pos = new UnityEngine.Vector3(position.x, position.y, pc.transform.position.z);
+                        pc.NetTransform.SnapTo(pos);
+                        LightLogger.Log($"[RPC] {pc.name} 传送到 {position}");
+                        break;
+                    }
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RpcDefinitions.TeleportPlayer", ex);
+            }
         }
 
         // ============ 会议 ============
@@ -92,40 +134,68 @@ namespace LightInDark.RPCs
         [LidRPC]
         public static void StartMeeting(byte reporterId, byte reportedId)
         {
-            if (MeetingHud.Instance != null) return;
-            PlayerControl reporter = null;
-            foreach (var pc in PlayerControl.AllPlayerControls)
-                if (pc.PlayerId == reporterId) { reporter = pc; break; }
+            try
+            {
+                if (MeetingHud.Instance != null) return;
+                PlayerControl reporter = null;
+                foreach (var pc in PlayerControl.AllPlayerControls)
+                    if (pc.PlayerId == reporterId) { reporter = pc; break; }
 
-            if (reporter == null) return;
+                if (reporter == null) return;
 
-            NetworkedPlayerInfo reportedBody = reportedId == byte.MaxValue ? null : null; // TODO
-            reporter.RpcStartMeeting(reportedBody);
-            LightLogger.Log($"[RPC] 会议开始: reporter={reporter.name}");
+                NetworkedPlayerInfo reportedBody = reportedId == byte.MaxValue ? null : null; // TODO
+                reporter.RpcStartMeeting(reportedBody);
+                LightLogger.Log($"[RPC] 会议开始: reporter={reporter.name}");
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RpcDefinitions.StartMeeting", ex);
+            }
         }
 
         [LidRPC]
         public static void RpcStartMeeting()
         {
-            PlayerControl.LocalPlayer?.RpcStartMeeting(null);
+            try
+            {
+                PlayerControl.LocalPlayer?.RpcStartMeeting(null);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RpcDefinitions.RpcStartMeeting", ex);
+            }
         }
 
         [LidRPC(OnlyHost = true)]
         public static void ForceEndMeeting()
         {
-            if (MeetingHud.Instance == null) return;
-            // 简单关闭会议
-            MeetingHud.Instance.gameObject.SetActive(false);
-            LightLogger.Log("[RPC] 强制结束会议");
+            try
+            {
+                if (MeetingHud.Instance == null) return;
+                // 简单关闭会议
+                MeetingHud.Instance.gameObject.SetActive(false);
+                LightLogger.Log("[RPC] 强制结束会议");
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RpcDefinitions.ForceEndMeeting", ex);
+            }
         }
 
         [LidRPC(OnlyHost = true)]
         public static void BreakEmergencyButton()
         {
-            if (ShipStatus.Instance != null)
+            try
             {
-                ShipStatus.Instance.BreakEmergencyButton();
-                EventTriggers.OnEmergencyButtonBroken();
+                if (ShipStatus.Instance != null)
+                {
+                    ShipStatus.Instance.BreakEmergencyButton();
+                    EventTriggers.OnEmergencyButtonBroken();
+                }
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RpcDefinitions.BreakEmergencyButton", ex);
             }
         }
 
@@ -137,25 +207,46 @@ namespace LightInDark.RPCs
         [LidRPC]
         public static void ShowChat()
         {
-            OnFreeChatStateChanged?.Invoke(true);
+            try
+            {
+                OnFreeChatStateChanged?.Invoke(true);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RpcDefinitions.ShowChat", ex);
+            }
         }
 
         [LidRPC]
         public static void HideChat()
         {
-            OnFreeChatStateChanged?.Invoke(false);
+            try
+            {
+                OnFreeChatStateChanged?.Invoke(false);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RpcDefinitions.HideChat", ex);
+            }
         }
 
         [LidRPC]
         public static void SendChatMessage(byte playerId, string message)
         {
-            foreach (var pc in PlayerControl.AllPlayerControls)
-                if (pc.PlayerId == playerId)
-                {
-                    HudManager.Instance?.Chat?.AddChat(pc, message, false);
-                    EventTriggers.OnChatMessage(pc, message);
-                    break;
-                }
+            try
+            {
+                foreach (var pc in PlayerControl.AllPlayerControls)
+                    if (pc.PlayerId == playerId)
+                    {
+                        HudManager.Instance?.Chat?.AddChat(pc, message, false);
+                        EventTriggers.OnChatMessage(pc, message);
+                        break;
+                    }
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RpcDefinitions.SendChatMessage", ex);
+            }
         }
 
         // ============ 踢出 ============
@@ -163,41 +254,62 @@ namespace LightInDark.RPCs
         [LidRPC(OnlyHost = true)]
         public static void KickPlayer(byte playerId)
         {
-            foreach (var pc in PlayerControl.AllPlayerControls)
-                if (pc.PlayerId == playerId)
-                {
-                    var client = Utilities.AmongUsEdited.GetClient(pc);
-                    if (client != null) AmongUsClient.Instance.KickPlayer(client.Id, false);
-                    break;
-                }
+            try
+            {
+                foreach (var pc in PlayerControl.AllPlayerControls)
+                    if (pc.PlayerId == playerId)
+                    {
+                        var client = Utilities.Utils.GetClient(pc);
+                        if (client != null) AmongUsClient.Instance.KickPlayer(client.Id, false);
+                        break;
+                    }
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RpcDefinitions.KickPlayer", ex);
+            }
         }
 
         [LidRPC]
         public static void SetKickReason(byte targetPlayerId, string reason)
         {
-            if (PlayerControl.LocalPlayer?.PlayerId == targetPlayerId)
+            try
             {
-                Utilities.AmongUsEdited.KickManager.kickReason = reason;
-                Utilities.AmongUsEdited.KickManager.kickReasonWaitUntil = Time.realtimeSinceStartup + 30f;
-                Utilities.AmongUsEdited.KickManager.kickReasonConsumeUntil = 0f;
+                if (PlayerControl.LocalPlayer?.PlayerId == targetPlayerId)
+                {
+                    Utilities.Utils.KickManager.kickReason = reason;
+                    Utilities.Utils.KickManager.kickReasonWaitUntil = Time.realtimeSinceStartup + 30f;
+                    Utilities.Utils.KickManager.kickReasonConsumeUntil = 0f;
+                }
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RpcDefinitions.SetKickReason", ex);
             }
         }
 
         [LidRPC(OnlyHost = true)]
         public static void KickPlayerWithReason(byte playerId, string reason)
         {
-            foreach (var pc in PlayerControl.AllPlayerControls)
-                if (pc.PlayerId == playerId)
-                {
-                    if (PlayerControl.LocalPlayer.PlayerId == playerId)
+            try
+            {
+                foreach (var pc in PlayerControl.AllPlayerControls)
+                    if (pc.PlayerId == playerId)
                     {
-                        Utilities.AmongUsEdited.KickManager.kickReason = reason;
-                        Utilities.AmongUsEdited.KickManager.kickReasonConsumeUntil = Time.realtimeSinceStartup + 5f;
+                        if (PlayerControl.LocalPlayer.PlayerId == playerId)
+                        {
+                            Utilities.Utils.KickManager.kickReason = reason;
+                            Utilities.Utils.KickManager.kickReasonConsumeUntil = Time.realtimeSinceStartup + 5f;
+                        }
+                        var client = Utilities.Utils.GetClient(pc);
+                        if (client != null) AmongUsClient.Instance.KickPlayer(client.Id, false);
+                        break;
                     }
-                    var client = Utilities.AmongUsEdited.GetClient(pc);
-                    if (client != null) AmongUsClient.Instance.KickPlayer(client.Id, false);
-                    break;
-                }
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RpcDefinitions.KickPlayerWithReason", ex);
+            }
         }
     }
 
@@ -212,56 +324,173 @@ namespace LightInDark.RPCs
     {
         /// <summary>分配角色给玩家（同步）</summary>
         public static void AssignRole(Game.Player player, DefinedRole role)
-            => player.SetRole(role, role.DefaultArguments);
+        {
+            try
+            {
+                player.SetRole(role, role.DefaultArguments);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("GameActions.AssignRole", ex);
+            }
+        }
 
         /// <summary>让玩家自杀</summary>
         public static void KillSelf(PlayerControl player, string reason = "suicide")
-            => RpcDefinitions.Suicide(player, true, reason);
+        {
+            try
+            {
+                RpcDefinitions.Suicide(player, true, reason);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("GameActions.KillSelf", ex);
+            }
+        }
 
         /// <summary>击杀玩家</summary>
         public static void Murder(PlayerControl killer, PlayerControl victim)
-            => RpcDefinitions.MurderPlayer(killer, victim);
+        {
+            try
+            {
+                RpcDefinitions.MurderPlayer(killer, victim);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("GameActions.Murder", ex);
+            }
+        }
 
         /// <summary>复活玩家（仅房主）</summary>
         public static void Revive(PlayerControl player)
-            => RpcDefinitions.RevivePlayer(player.PlayerId);
+        {
+            try
+            {
+                RpcDefinitions.RevivePlayer(player.PlayerId);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("GameActions.Revive", ex);
+            }
+        }
 
         /// <summary>传送玩家</summary>
         public static void Teleport(PlayerControl player, Vector2 position)
-            => RpcDefinitions.TeleportPlayer(player.PlayerId, position);
+        {
+            try
+            {
+                RpcDefinitions.TeleportPlayer(player.PlayerId, position);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("GameActions.Teleport", ex);
+            }
+        }
 
         /// <summary>隐身/显形</summary>
         public static void SetInvisible(PlayerControl player, bool invisible)
-            => RpcDefinitions.SetPlayerInvisible(player.PlayerId, invisible);
+        {
+            try
+            {
+                RpcDefinitions.SetPlayerInvisible(player.PlayerId, invisible);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("GameActions.SetInvisible", ex);
+            }
+        }
 
         /// <summary>召开紧急会议</summary>
         public static void StartMeeting()
-            => RpcDefinitions.RpcStartMeeting();
+        {
+            try
+            {
+                RpcDefinitions.RpcStartMeeting();
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("GameActions.StartMeeting", ex);
+            }
+        }
 
         /// <summary>强制结束会议</summary>
         public static void ForceEndMeeting()
-            => RpcDefinitions.ForceEndMeeting();
+        {
+            try
+            {
+                RpcDefinitions.ForceEndMeeting();
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("GameActions.ForceEndMeeting", ex);
+            }
+        }
 
         /// <summary>破坏紧急按钮</summary>
         public static void BreakEmergencyButton()
-            => RpcDefinitions.BreakEmergencyButton();
+        {
+            try
+            {
+                RpcDefinitions.BreakEmergencyButton();
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("GameActions.BreakEmergencyButton", ex);
+            }
+        }
 
         /// <summary>显示聊天</summary>
-        public static void ShowChat() => RpcDefinitions.ShowChat();
+        public static void ShowChat()
+        {
+            try
+            {
+                RpcDefinitions.ShowChat();
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("GameActions.ShowChat", ex);
+            }
+        }
 
         /// <summary>隐藏聊天</summary>
-        public static void HideChat() => RpcDefinitions.HideChat();
+        public static void HideChat()
+        {
+            try
+            {
+                RpcDefinitions.HideChat();
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("GameActions.HideChat", ex);
+            }
+        }
 
         /// <summary>发送聊天消息</summary>
         public static void SendMessage(PlayerControl player, string message)
-            => RpcDefinitions.SendChatMessage(player.PlayerId, message);
+        {
+            try
+            {
+                RpcDefinitions.SendChatMessage(player.PlayerId, message);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("GameActions.SendMessage", ex);
+            }
+        }
 
         /// <summary>踢出玩家</summary>
         public static void Kick(PlayerControl player, string reason = "")
         {
-            if (!string.IsNullOrEmpty(reason))
-                RpcDefinitions.SetKickReason(player.PlayerId, reason);
-            RpcDefinitions.KickPlayer(player.PlayerId);
+            try
+            {
+                if (!string.IsNullOrEmpty(reason))
+                    RpcDefinitions.SetKickReason(player.PlayerId, reason);
+                RpcDefinitions.KickPlayer(player.PlayerId);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("GameActions.Kick", ex);
+            }
         }
 
         /// <summary>获取所有存活玩家</summary>
@@ -281,15 +510,23 @@ namespace LightInDark.RPCs
         /// <summary>获取最近玩家</summary>
         public static PlayerControl GetClosestPlayer(PlayerControl source, float maxDistance = 2f)
         {
-            PlayerControl closest = null;
-            float closestDist = maxDistance;
-            foreach (var pc in AlivePlayers())
+            try
             {
-                if (pc == source) continue;
-                float dist = Vector2.Distance(source.transform.position, pc.transform.position);
-                if (dist < closestDist) { closestDist = dist; closest = pc; }
+                PlayerControl closest = null;
+                float closestDist = maxDistance;
+                foreach (var pc in AlivePlayers())
+                {
+                    if (pc == source) continue;
+                    float dist = Vector2.Distance(source.transform.position, pc.transform.position);
+                    if (dist < closestDist) { closestDist = dist; closest = pc; }
+                }
+                return closest;
             }
-            return closest;
+            catch (Exception ex)
+            {
+                LightLogger.LogError("GameActions.GetClosestPlayer", ex);
+                return null;
+            }
         }
 
         /// <summary>获取本地玩家</summary>

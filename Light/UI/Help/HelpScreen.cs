@@ -9,6 +9,7 @@ using LightInDark.UI.Window;
 using Light.UI.HudUI;
 using Light.UI.Window;
 using UnityEngine;
+using LightInDark.Core;
 using Color = LightInDark.Color;
 using FontStyle = LightInDark.UI.Window.FontStyle;
 using LightGameManager = LightInDark.Game.GameManager;
@@ -43,8 +44,15 @@ public static class HelpScreen
     /// <summary>打开帮助</summary>
     public static void TryOpenHelpScreen()
     {
-        if (_lastScreen) return;
-        _lastScreen = OpenHelpScreen();
+        try
+        {
+            if (_lastScreen) return;
+            _lastScreen = OpenHelpScreen();
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HelpScreen.TryOpenHelpScreen]", ex);
+        }
     }
 
     /// <summary>关闭帮助</summary>
@@ -64,41 +72,62 @@ public static class HelpScreen
     /// <summary>当前有效页签（MyInfo 仅游戏中已分配角色时显示）</summary>
     private static HelpTab GetValidTabs()
     {
-        var valid = HelpTab.Search | HelpTab.Roles | HelpTab.Overview | HelpTab.Options
-            | HelpTab.Slides | HelpTab.Achievements | HelpTab.Stamps;
-        if (LightGameManager.Instance?.LocalPlayer?.HasRole == true)
-            valid |= HelpTab.MyInfo;
-        return valid;
+        try
+        {
+            var valid = HelpTab.Search | HelpTab.Roles | HelpTab.Overview | HelpTab.Options
+                | HelpTab.Slides | HelpTab.Achievements | HelpTab.Stamps;
+            if (LightGameManager.Instance?.LocalPlayer?.HasRole == true)
+                valid |= HelpTab.MyInfo;
+            return valid;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HelpScreen.GetValidTabs]", ex); return default;
+        }
     }
 
     private static MetaScreen OpenHelpScreen()
     {
-        Transform? parent;
-        if (HudManager.Instance != null)
-            // 挂 HUD 根节点（UI 层由 UI 相机最后渲染），确保窗口盖住场景内所有 UI
-            parent = HudManager.Instance.transform;
-        else if (GameObject.FindObjectOfType<MainMenuManager>() != null)
-            parent = GameObject.FindObjectOfType<MainMenuManager>().transform;
-        else
-            parent = Camera.main != null ? Camera.main.transform : null;
+        try
+        {
+            Transform? parent;
+            if (HudManager.Instance != null)
+                // 挂 HUD 根节点（UI 层由 UI 相机最后渲染），确保窗口盖住场景内所有 UI
+                parent = HudManager.Instance.transform;
+            else if (GameObject.FindObjectOfType<MainMenuManager>() != null)
+                parent = GameObject.FindObjectOfType<MainMenuManager>().transform;
+            else
+                parent = Camera.main != null ? Camera.main.transform : null;
 
-        var screen = MetaScreen.GenerateWindow(HelpSize, parent, new Vector3(0, 0, 0),
-            withBlackScreen: true, closeOnClickOutside: false,
-            background: BackgroundSetting.Modern, withCloseButton: true);
+            var screen = MetaScreen.GenerateWindow(HelpSize, parent, new Vector3(0, 0, 0),
+                withBlackScreen: true, closeOnClickOutside: false,
+                background: BackgroundSetting.Modern, withCloseButton: true);
 
-        var validTabs = GetValidTabs();
-        // 上次标签已无效（MyInfo 仅游戏中已分配角色时有效）时回退到默认标签
-        if (_lastTab == HelpTab.MyInfo && LightGameManager.Instance?.LocalPlayer?.HasRole != true)
-            _lastTab = HelpTab.Roles;
+            var validTabs = GetValidTabs();
+            // 上次标签已无效（MyInfo 仅游戏中已分配角色时有效）时回退到默认标签
+            if (_lastTab == HelpTab.MyInfo && LightGameManager.Instance?.LocalPlayer?.HasRole != true)
+                _lastTab = HelpTab.Roles;
 
-        ShowScreen(screen, validTabs, _lastTab);
-        return screen;
+            ShowScreen(screen, validTabs, _lastTab);
+            return screen;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HelpScreen.OpenHelpScreen]", ex); return default;
+        }
     }
 
     private static void ShowScreen(MetaScreen screen, HelpTab validTabs, HelpTab tab)
     {
-        _lastTab = tab;
-        screen.SetWidget(BuildTabWidget(screen, validTabs, tab), out _);
+        try
+        {
+            _lastTab = tab;
+            screen.SetWidget(BuildTabWidget(screen, validTabs, tab), out _);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HelpScreen.ShowScreen]", ex);
+        }
     }
 
     // =====================================================================
@@ -132,26 +161,40 @@ public static class HelpScreen
 
     private static GUIWidget BuildTabWidget(MetaScreen screen, HelpTab validTabs, HelpTab tab)
     {
-        var gui = LIDGUI.Instance;
-        return gui.VerticalHolder(GUIAlignment.Center,
-            BuildTabsWidget(screen, validTabs, tab),
-            gui.VerticalMargin(0.1f),
-            BuildTabContent(tab));
+        try
+        {
+            var gui = LIDGUI.Instance;
+            return gui.VerticalHolder(GUIAlignment.Center,
+                BuildTabsWidget(screen, validTabs, tab),
+                gui.VerticalMargin(0.1f),
+                BuildTabContent(tab));
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HelpScreen.BuildTabWidget]", ex); return default;
+        }
     }
 
     /// <summary>标签栏：当前白、其他灰，按钮紧贴排列</summary>
     private static GUIWidget BuildTabsWidget(MetaScreen screen, HelpTab validTabs, HelpTab current)
     {
-        var gui = LIDGUI.Instance;
-        var buttons = new List<GUIWidget?>();
-        foreach (var tab in TabOrder)
+        try
         {
-            if ((validTabs & tab) == 0) continue;
-            var color = tab == current ? Color.White : Color.Gray;
-            buttons.Add(gui.RawButton(GUIAlignment.Center, TabButtonAttr, GetTabName(tab),
-                _ => ShowScreen(screen, validTabs, tab), color: color, selectedColor: color));
+            var gui = LIDGUI.Instance;
+            var buttons = new List<GUIWidget?>();
+            foreach (var tab in TabOrder)
+            {
+                if ((validTabs & tab) == 0) continue;
+                var color = tab == current ? Color.White : Color.Gray;
+                buttons.Add(gui.RawButton(GUIAlignment.Center, TabButtonAttr, GetTabName(tab),
+                    _ => ShowScreen(screen, validTabs, tab), color: color, selectedColor: color));
+            }
+            return gui.HorizontalHolder(GUIAlignment.Center, buttons.ToArray());
         }
-        return gui.HorizontalHolder(GUIAlignment.Center, buttons.ToArray());
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HelpScreen.BuildTabsWidget]", ex); return default;
+        }
     }
 
     private static GUIWidget BuildTabContent(HelpTab tab) => tab switch
@@ -170,11 +213,18 @@ public static class HelpScreen
     /// <summary>占位页：功能尚未实现时的空滚动页</summary>
     private static GUIWidget ShowPlaceholderScreen(string key, string name)
     {
-        var gui = LIDGUI.Instance;
-        var text = gui.RawText(GUIAlignment.Center, gui.GetAttribute(AttributeAsset.DocumentStandard),
-            Language.Translate(key + ".empty", name + "内容尚未实装"));
-        return gui.ScrollView(GUIAlignment.Center, new Size(7.4f, 4.1f), null,
-            gui.VerticalHolder(GUIAlignment.Center, text), out _);
+        try
+        {
+            var gui = LIDGUI.Instance;
+            var text = gui.RawText(GUIAlignment.Center, gui.GetAttribute(AttributeAsset.DocumentStandard),
+                Language.Translate(key + ".empty", name + "内容尚未实装"));
+            return gui.ScrollView(GUIAlignment.Center, new Size(7.4f, 4.1f), null,
+                gui.VerticalHolder(GUIAlignment.Center, text), out _);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HelpScreen.ShowPlaceholderScreen]", ex); return default;
+        }
     }
 
     // =====================================================================
@@ -188,40 +238,47 @@ public static class HelpScreen
 
     private static GUIWidget ShowAssignableScreen()
     {
-        var gui = LIDGUI.Instance;
-        var listed = new List<DefinedRole>();
-        var inner = new List<GUIWidget?>();
-
-        void AddCategory(RoleCategory category, string title, Color titleColor)
+        try
         {
-            var roles = new List<DefinedRole>();
-            foreach (var role in RoleRegistry.AllRoles)
-                if (role.Category == category) roles.Add(role);
-            if (roles.Count == 0) return;
+            var gui = LIDGUI.Instance;
+            var listed = new List<DefinedRole>();
+            var inner = new List<GUIWidget?>();
 
-            if (inner.Count > 0) inner.Add(gui.VerticalMargin(0.2f));
-            inner.Add(gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.DocumentTitle),
-                gui.ColorTextComponent(titleColor, new RawTextComponent(title)).GetString()));
-            inner.Add(gui.VerticalMargin(0.1f));
-
-            var buttons = new List<GUIWidget?>();
-            foreach (var role in roles)
+            void AddCategory(RoleCategory category, string title, Color titleColor)
             {
-                listed.Add(role);
-                int index = listed.Count - 1;
-                var name = gui.ColorTextComponent(role.Color, new RawTextComponent(role.Name)).GetString();
-                buttons.Add(gui.RawButton(GUIAlignment.Center, RoleButtonAttr, name,
-                    _ => OpenAssignableHelp(listed, index)));
+                var roles = new List<DefinedRole>();
+                foreach (var role in RoleRegistry.AllRoles)
+                    if (role.Category == category) roles.Add(role);
+                if (roles.Count == 0) return;
+
+                if (inner.Count > 0) inner.Add(gui.VerticalMargin(0.2f));
+                inner.Add(gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.DocumentTitle),
+                    gui.ColorTextComponent(titleColor, new RawTextComponent(title)).GetString()));
+                inner.Add(gui.VerticalMargin(0.1f));
+
+                var buttons = new List<GUIWidget?>();
+                foreach (var role in roles)
+                {
+                    listed.Add(role);
+                    int index = listed.Count - 1;
+                    var name = gui.ColorTextComponent(role.Color, new RawTextComponent(role.Name)).GetString();
+                    buttons.Add(gui.RawButton(GUIAlignment.Center, RoleButtonAttr, name,
+                        _ => OpenAssignableHelp(listed, index)));
+                }
+                inner.Add(gui.Arrange(GUIAlignment.Center, buttons, 4));
             }
-            inner.Add(gui.Arrange(GUIAlignment.Center, buttons, 4));
+
+            AddCategory(RoleCategory.Impostor, Language.Translate("role.category.impostor", "内鬼"), Color.ImpostorColor);
+            AddCategory(RoleCategory.Neutral, Language.Translate("role.category.neutral", "中立"), new Color(1f, 0.7f, 0f));
+            AddCategory(RoleCategory.Crewmate, Language.Translate("role.category.crewmate", "船员"), Color.CrewmateColor);
+
+            return gui.ScrollView(GUIAlignment.Center, new Size(7.4f, 4.1f), null,
+                gui.VerticalHolder(GUIAlignment.Center, inner), out _);
         }
-
-        AddCategory(RoleCategory.Impostor, Language.Translate("role.category.impostor", "内鬼"), Color.ImpostorColor);
-        AddCategory(RoleCategory.Neutral, Language.Translate("role.category.neutral", "中立"), new Color(1f, 0.7f, 0f));
-        AddCategory(RoleCategory.Crewmate, Language.Translate("role.category.crewmate", "船员"), Color.CrewmateColor);
-
-        return gui.ScrollView(GUIAlignment.Center, new Size(7.4f, 4.1f), null,
-            gui.VerticalHolder(GUIAlignment.Center, inner), out _);
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HelpScreen.ShowAssignableScreen]", ex); return default;
+        }
     }
 
     // =====================================================================
@@ -230,24 +287,31 @@ public static class HelpScreen
 
     private static GUIWidget ShowMyRolesScreen()
     {
-        var gui = LIDGUI.Instance;
-        var role = LightGameManager.Instance?.LocalPlayer?.Role?.Definition;
-        var inner = new List<GUIWidget?>();
-
-        if (role != null)
+        try
         {
-            var name = gui.ColorTextComponent(role.Color, new RawTextComponent(role.Name)).GetString();
-            inner.Add(gui.RawButton(GUIAlignment.Center, RoleButtonAttr, name,
-                _ => OpenAssignableHelp(new List<DefinedRole> { role }, 0)));
-        }
-        else
-        {
-            inner.Add(gui.RawText(GUIAlignment.Center, gui.GetAttribute(AttributeAsset.DocumentStandard),
-                Language.Translate("help.myInfo.none", "当前未分配职业")));
-        }
+            var gui = LIDGUI.Instance;
+            var role = LightGameManager.Instance?.LocalPlayer?.Role?.Definition;
+            var inner = new List<GUIWidget?>();
 
-        return gui.ScrollView(GUIAlignment.Center, new Size(7.4f, 3.4f), null,
-            gui.VerticalHolder(GUIAlignment.Center, inner), out _);
+            if (role != null)
+            {
+                var name = gui.ColorTextComponent(role.Color, new RawTextComponent(role.Name)).GetString();
+                inner.Add(gui.RawButton(GUIAlignment.Center, RoleButtonAttr, name,
+                    _ => OpenAssignableHelp(new List<DefinedRole> { role }, 0)));
+            }
+            else
+            {
+                inner.Add(gui.RawText(GUIAlignment.Center, gui.GetAttribute(AttributeAsset.DocumentStandard),
+                    Language.Translate("help.myInfo.none", "当前未分配职业")));
+            }
+
+            return gui.ScrollView(GUIAlignment.Center, new Size(7.4f, 3.4f), null,
+                gui.VerticalHolder(GUIAlignment.Center, inner), out _);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HelpScreen.ShowMyRolesScreen]", ex); return default;
+        }
     }
 
     // =====================================================================
@@ -256,69 +320,83 @@ public static class HelpScreen
 
     private static GUIWidget ShowSearchScreen()
     {
-        var gui = LIDGUI.Instance;
-        var scrollView = new GUIScrollView(GUIAlignment.Center, new Size(7.4f, 3.2f),
-            () => BuildSearchResultWidget(gui, _searchKeyword));
-
-        void ShowResult(string keyword)
+        try
         {
-            _searchKeyword = keyword;
-            scrollView.Artifact?.SetWidget(BuildSearchResultWidget(gui, keyword), out _);
+            var gui = LIDGUI.Instance;
+            var scrollView = new GUIScrollView(GUIAlignment.Center, new Size(7.4f, 3.2f),
+                () => BuildSearchResultWidget(gui, _searchKeyword));
+
+            void ShowResult(string keyword)
+            {
+                _searchKeyword = keyword;
+                scrollView.Artifact?.SetWidget(BuildSearchResultWidget(gui, keyword), out _);
+            }
+
+            var field = new TextFieldWidget(GUIAlignment.Center, new Vector2(5f, 0.38f),
+                Language.Translate("help.search.inputHint", "输入关键词"),
+                keyword => ShowResult(keyword));
+
+            var searchButton = gui.RawButton(GUIAlignment.Center, gui.GetAttribute(AttributeAsset.CenteredBoldFixed),
+                Language.Translate("help.search.search", "搜索"),
+                _ => ShowResult(field.Field?.Text ?? ""));
+
+            return gui.VerticalHolder(GUIAlignment.Center,
+                gui.HorizontalHolder(GUIAlignment.Center, field, gui.HorizontalMargin(0.1f), searchButton),
+                gui.VerticalMargin(0.1f),
+                scrollView);
         }
-
-        var field = new TextFieldWidget(GUIAlignment.Center, new Vector2(5f, 0.38f),
-            Language.Translate("help.search.inputHint", "输入关键词"),
-            keyword => ShowResult(keyword));
-
-        var searchButton = gui.RawButton(GUIAlignment.Center, gui.GetAttribute(AttributeAsset.CenteredBoldFixed),
-            Language.Translate("help.search.search", "搜索"),
-            _ => ShowResult(field.Field?.Text ?? ""));
-
-        return gui.VerticalHolder(GUIAlignment.Center,
-            gui.HorizontalHolder(GUIAlignment.Center, field, gui.HorizontalMargin(0.1f), searchButton),
-            gui.VerticalMargin(0.1f),
-            scrollView);
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HelpScreen.ShowSearchScreen]", ex); return default;
+        }
     }
 
     /// <summary>搜索结果：匹配 Name 或 Description</summary>
     private static GUIWidget BuildSearchResultWidget(LIDGUI gui, string keyword)
     {
-        var inner = new List<GUIWidget?>();
-        keyword = keyword.Trim();
-
-        if (keyword.Length == 0)
+        try
         {
-            inner.Add(gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.DocumentStandard),
-                Language.Translate("help.search.hint", "输入关键词搜索职业")));
+            var inner = new List<GUIWidget?>();
+            keyword = keyword.Trim();
+
+            if (keyword.Length == 0)
+            {
+                inner.Add(gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.DocumentStandard),
+                    Language.Translate("help.search.hint", "输入关键词搜索职业")));
+                return gui.VerticalHolder(GUIAlignment.Left, inner);
+            }
+
+            var matched = new List<DefinedRole>();
+            foreach (var role in RoleRegistry.AllRoles)
+            {
+                if (role.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
+                    role.Description.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                    matched.Add(role);
+            }
+
+            if (matched.Count == 0)
+            {
+                inner.Add(gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.DocumentStandard),
+                    Language.Translate("help.search.noResult", "未找到相关职业")));
+            }
+            else
+            {
+                for (int i = 0; i < matched.Count; i++)
+                {
+                    int index = i;
+                    var name = gui.ColorTextComponent(matched[i].Color, new RawTextComponent(matched[i].Name)).GetString();
+                    inner.Add(gui.RawButton(GUIAlignment.Left, RoleButtonAttr, name,
+                        _ => OpenAssignableHelp(matched, index)));
+                    inner.Add(gui.VerticalMargin(0.1f));
+                }
+            }
+
             return gui.VerticalHolder(GUIAlignment.Left, inner);
         }
-
-        var matched = new List<DefinedRole>();
-        foreach (var role in RoleRegistry.AllRoles)
+        catch (Exception ex)
         {
-            if (role.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
-                role.Description.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-                matched.Add(role);
+            LightLogger.LogError("[HelpScreen.BuildSearchResultWidget]", ex); return default;
         }
-
-        if (matched.Count == 0)
-        {
-            inner.Add(gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.DocumentStandard),
-                Language.Translate("help.search.noResult", "未找到相关职业")));
-        }
-        else
-        {
-            for (int i = 0; i < matched.Count; i++)
-            {
-                int index = i;
-                var name = gui.ColorTextComponent(matched[i].Color, new RawTextComponent(matched[i].Name)).GetString();
-                inner.Add(gui.RawButton(GUIAlignment.Left, RoleButtonAttr, name,
-                    _ => OpenAssignableHelp(matched, index)));
-                inner.Add(gui.VerticalMargin(0.1f));
-            }
-        }
-
-        return gui.VerticalHolder(GUIAlignment.Left, inner);
     }
 
     // =====================================================================
@@ -327,51 +405,58 @@ public static class HelpScreen
 
     private static GUIWidget ShowPreviewScreen()
     {
-        var gui = LIDGUI.Instance;
-
-        // Il2Cpp 集合不支持 System.Linq，复制到 List 再 Count
-        int playerCount = 0;
-        if (PlayerControl.AllPlayerControls != null)
+        try
         {
-            var players = new List<PlayerControl>();
-            foreach (var pc in PlayerControl.AllPlayerControls) players.Add(pc);
-            playerCount = players.Count;
-        }
+            var gui = LIDGUI.Instance;
 
-        // 单列：分类标题 + 职业分配信息
-        GUIWidget BuildColumn(RoleCategory category, string title)
-        {
-            var column = new List<GUIWidget?>();
-            column.Add(gui.RawText(GUIAlignment.Center, gui.GetAttribute(AttributeAsset.DocumentTitle), title));
-            column.Add(gui.VerticalMargin(0.15f));
-            foreach (var role in RoleRegistry.AllRoles)
+            // Il2Cpp 集合不支持 System.Linq，复制到 List 再 Count
+            int playerCount = 0;
+            if (PlayerControl.AllPlayerControls != null)
             {
-                if (role.Category != category) continue;
-                column.Add(gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.DocumentStandard),
-                    GetAllocationLine(role)));
-                column.Add(gui.VerticalMargin(0.08f));
+                var players = new List<PlayerControl>();
+                foreach (var pc in PlayerControl.AllPlayerControls) players.Add(pc);
+                playerCount = players.Count;
             }
-            return gui.VerticalHolder(GUIAlignment.Center, column);
+
+            // 单列：分类标题 + 职业分配信息
+            GUIWidget BuildColumn(RoleCategory category, string title)
+            {
+                var column = new List<GUIWidget?>();
+                column.Add(gui.RawText(GUIAlignment.Center, gui.GetAttribute(AttributeAsset.DocumentTitle), title));
+                column.Add(gui.VerticalMargin(0.15f));
+                foreach (var role in RoleRegistry.AllRoles)
+                {
+                    if (role.Category != category) continue;
+                    column.Add(gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.DocumentStandard),
+                        GetAllocationLine(role)));
+                    column.Add(gui.VerticalMargin(0.08f));
+                }
+                return gui.VerticalHolder(GUIAlignment.Center, column);
+            }
+
+            // 三栏并排（内鬼 / 中立 / 船员）
+            var columns = gui.HorizontalHolder(GUIAlignment.Center,
+                BuildColumn(RoleCategory.Impostor, Language.Translate("help.category.impostor", "内鬼")),
+                gui.HorizontalMargin(0.5f),
+                BuildColumn(RoleCategory.Neutral, Language.Translate("help.category.neutral", "中立")),
+                gui.HorizontalMargin(0.5f),
+                BuildColumn(RoleCategory.Crewmate, Language.Translate("help.category.crewmate", "船员")));
+
+            var header = gui.VerticalHolder(GUIAlignment.Center,
+                gui.RawText(GUIAlignment.Center, gui.GetAttribute(AttributeAsset.DocumentTitle),
+                    Language.Translate("help.overview.header", "分配计划")),
+                gui.VerticalMargin(0.1f),
+                gui.RawText(GUIAlignment.Center, gui.GetAttribute(AttributeAsset.DocumentStandard),
+                    Language.Translate("help.overview.players", "当前玩家数") + ": " + playerCount),
+                gui.VerticalMargin(0.1f),
+                columns);
+
+            return gui.ScrollView(GUIAlignment.Center, new Size(7.4f, 2.92f), null, header, out _);
         }
-
-        // 三栏并排（内鬼 / 中立 / 船员）
-        var columns = gui.HorizontalHolder(GUIAlignment.Center,
-            BuildColumn(RoleCategory.Impostor, Language.Translate("help.category.impostor", "内鬼")),
-            gui.HorizontalMargin(0.5f),
-            BuildColumn(RoleCategory.Neutral, Language.Translate("help.category.neutral", "中立")),
-            gui.HorizontalMargin(0.5f),
-            BuildColumn(RoleCategory.Crewmate, Language.Translate("help.category.crewmate", "船员")));
-
-        var header = gui.VerticalHolder(GUIAlignment.Center,
-            gui.RawText(GUIAlignment.Center, gui.GetAttribute(AttributeAsset.DocumentTitle),
-                Language.Translate("help.overview.header", "分配计划")),
-            gui.VerticalMargin(0.1f),
-            gui.RawText(GUIAlignment.Center, gui.GetAttribute(AttributeAsset.DocumentStandard),
-                Language.Translate("help.overview.players", "当前玩家数") + ": " + playerCount),
-            gui.VerticalMargin(0.1f),
-            columns);
-
-        return gui.ScrollView(GUIAlignment.Center, new Size(7.4f, 2.92f), null, header, out _);
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HelpScreen.ShowPreviewScreen]", ex); return default;
+        }
     }
 
     // =====================================================================
@@ -380,73 +465,80 @@ public static class HelpScreen
 
     private static GUIWidget ShowOptionsScreen()
     {
-        var gui = LIDGUI.Instance;
-        var inner = new List<GUIWidget?>();
-
         try
         {
-            // CurrentGameOptions 返回 IGameOptions 接口，仅 MapId/NumImpostors 可直接访问，
-            // 其余字段运行时反射读取（字段名以 AmongUs.GameOptions 为准）
-            var options = GameOptionsManager.Instance.CurrentGameOptions;
-            if (options != null)
+            var gui = LIDGUI.Instance;
+            var inner = new List<GUIWidget?>();
+
+            try
             {
-                void AddLine(string name, string value)
+                // CurrentGameOptions 返回 IGameOptions 接口，仅 MapId/NumImpostors 可直接访问，
+                // 其余字段运行时反射读取（字段名以 AmongUs.GameOptions 为准）
+                var options = GameOptionsManager.Instance.CurrentGameOptions;
+                if (options != null)
                 {
-                    inner.Add(gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.DocumentStandard),
-                        $"{name}: {value}"));
-                    inner.Add(gui.VerticalMargin(0.03f));
-                }
-
-                string GetValue(string fieldName)
-                {
-                    try
+                    void AddLine(string name, string value)
                     {
-                        var type = options.GetType();
-                        var field = type.GetField(fieldName);
-                        if (field != null) return field.GetValue(options)?.ToString() ?? "?";
-                        var prop = type.GetProperty(fieldName);
-                        if (prop != null) return prop.GetValue(options)?.ToString() ?? "?";
+                        inner.Add(gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.DocumentStandard),
+                            $"{name}: {value}"));
+                        inner.Add(gui.VerticalMargin(0.03f));
                     }
-                    catch { }
-                    return "?";
+
+                    string GetValue(string fieldName)
+                    {
+                        try
+                        {
+                            var type = options.GetType();
+                            var field = type.GetField(fieldName);
+                            if (field != null) return field.GetValue(options)?.ToString() ?? "?";
+                            var prop = type.GetProperty(fieldName);
+                            if (prop != null) return prop.GetValue(options)?.ToString() ?? "?";
+                        }
+                        catch { }
+                        return "?";
+                    }
+
+                    string GetBoolValue(string fieldName) => GetValue(fieldName) == "True" ? GetBoolText(true) : GetBoolText(false);
+
+                    AddLine(Language.Translate("options.map", "地图"), GetMapName(options.MapId));
+                    AddLine(Language.Translate("options.impostors", "内鬼数量"), options.NumImpostors.ToString());
+                    AddLine(Language.Translate("options.killCooldown", "击杀冷却"),
+                        GetValue("KillCooldown") + Language.Translate("options.sec", "秒"));
+                    AddLine(Language.Translate("options.playerSpeed", "玩家速度"),
+                        GetValue("PlayerSpeedMod") + "×");
+                    AddLine(Language.Translate("options.crewLight", "船员视野"),
+                        GetValue("CrewLightMod") + "×");
+                    AddLine(Language.Translate("options.impostorLight", "内鬼视野"),
+                        GetValue("ImpostorLightMod") + "×");
+                    AddLine(Language.Translate("options.killDistance", "击杀距离"), GetKillDistance(GetValue("KillDistance")));
+                    AddLine(Language.Translate("options.commonTasks", "普通任务"), GetValue("NumCommonTasks"));
+                    AddLine(Language.Translate("options.longTasks", "长任务"), GetValue("NumLongTasks"));
+                    AddLine(Language.Translate("options.shortTasks", "短任务"), GetValue("NumShortTasks"));
+                    AddLine(Language.Translate("options.emergencyMeetings", "紧急会议"), GetValue("NumEmergencyMeetings"));
+                    AddLine(Language.Translate("options.emergencyCooldown", "会议冷却"),
+                        GetValue("EmergencyCooldown") + Language.Translate("options.sec", "秒"));
+                    AddLine(Language.Translate("options.discussionTime", "讨论时间"),
+                        GetValue("DiscussionTime") + Language.Translate("options.sec", "秒"));
+                    AddLine(Language.Translate("options.votingTime", "投票时间"),
+                        GetValue("VotingTime") + Language.Translate("options.sec", "秒"));
+                    AddLine(Language.Translate("options.anonymousVotes", "匿名投票"), GetBoolValue("AnonymousVotes"));
+                    AddLine(Language.Translate("options.confirmImpostor", "确认内鬼"), GetBoolValue("ConfirmImpostor"));
+                    AddLine(Language.Translate("options.visualTasks", "视觉任务"), GetBoolValue("VisualTasks"));
                 }
-
-                string GetBoolValue(string fieldName) => GetValue(fieldName) == "True" ? GetBoolText(true) : GetBoolText(false);
-
-                AddLine(Language.Translate("options.map", "地图"), GetMapName(options.MapId));
-                AddLine(Language.Translate("options.impostors", "内鬼数量"), options.NumImpostors.ToString());
-                AddLine(Language.Translate("options.killCooldown", "击杀冷却"),
-                    GetValue("KillCooldown") + Language.Translate("options.sec", "秒"));
-                AddLine(Language.Translate("options.playerSpeed", "玩家速度"),
-                    GetValue("PlayerSpeedMod") + "×");
-                AddLine(Language.Translate("options.crewLight", "船员视野"),
-                    GetValue("CrewLightMod") + "×");
-                AddLine(Language.Translate("options.impostorLight", "内鬼视野"),
-                    GetValue("ImpostorLightMod") + "×");
-                AddLine(Language.Translate("options.killDistance", "击杀距离"), GetKillDistance(GetValue("KillDistance")));
-                AddLine(Language.Translate("options.commonTasks", "普通任务"), GetValue("NumCommonTasks"));
-                AddLine(Language.Translate("options.longTasks", "长任务"), GetValue("NumLongTasks"));
-                AddLine(Language.Translate("options.shortTasks", "短任务"), GetValue("NumShortTasks"));
-                AddLine(Language.Translate("options.emergencyMeetings", "紧急会议"), GetValue("NumEmergencyMeetings"));
-                AddLine(Language.Translate("options.emergencyCooldown", "会议冷却"),
-                    GetValue("EmergencyCooldown") + Language.Translate("options.sec", "秒"));
-                AddLine(Language.Translate("options.discussionTime", "讨论时间"),
-                    GetValue("DiscussionTime") + Language.Translate("options.sec", "秒"));
-                AddLine(Language.Translate("options.votingTime", "投票时间"),
-                    GetValue("VotingTime") + Language.Translate("options.sec", "秒"));
-                AddLine(Language.Translate("options.anonymousVotes", "匿名投票"), GetBoolValue("AnonymousVotes"));
-                AddLine(Language.Translate("options.confirmImpostor", "确认内鬼"), GetBoolValue("ConfirmImpostor"));
-                AddLine(Language.Translate("options.visualTasks", "视觉任务"), GetBoolValue("VisualTasks"));
             }
+            catch { }
+
+            if (inner.Count == 0)
+                inner.Add(gui.RawText(GUIAlignment.Center, gui.GetAttribute(AttributeAsset.DocumentStandard),
+                    Language.Translate("help.options.unavailable", "无法读取游戏设置")));
+
+            return gui.ScrollView(GUIAlignment.Center, new Size(7.4f, 3.6f), null,
+                gui.VerticalHolder(GUIAlignment.Left, inner), out _);
         }
-        catch { }
-
-        if (inner.Count == 0)
-            inner.Add(gui.RawText(GUIAlignment.Center, gui.GetAttribute(AttributeAsset.DocumentStandard),
-                Language.Translate("help.options.unavailable", "无法读取游戏设置")));
-
-        return gui.ScrollView(GUIAlignment.Center, new Size(7.4f, 3.6f), null,
-            gui.VerticalHolder(GUIAlignment.Left, inner), out _);
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HelpScreen.ShowOptionsScreen]", ex); return default;
+        }
     }
 
     // =====================================================================
@@ -455,88 +547,102 @@ public static class HelpScreen
 
     private static void OpenAssignableHelp(List<DefinedRole> roles, int index)
     {
-        if (roles.Count == 0) return;
-        if (index < 0 || index >= roles.Count) index = 0;
-
-        int currentIndex = index;
-        MetaScreen? window = null;
-
-        Transform? GetParent()
+        try
         {
-            if (HudManager.Instance != null)
-                // 挂 HUD 根节点，与主帮助菜单同层级
-                return HudManager.Instance.transform;
-            if (GameObject.FindObjectOfType<MainMenuManager>() != null)
-                return GameObject.FindObjectOfType<MainMenuManager>().transform;
-            return Camera.main != null ? Camera.main.transform : null;
-        }
+            if (roles.Count == 0) return;
+            if (index < 0 || index >= roles.Count) index = 0;
 
-        void ReopenWindow()
-        {
-            if (window) window!.CloseScreen();
+            int currentIndex = index;
+            MetaScreen? window = null;
 
-            // 详情窗口后创建，排序相同的情况下自然渲染在帮助菜单之上
-            window = MetaScreen.GenerateWindow(new Vector2(7f, 4.5f), GetParent(), Vector3.zero,
-                withBlackScreen: true, closeOnClickOutside: true,
-                background: BackgroundSetting.Modern, sortingGroupOrder: 200);
-            window.SetWidget(BuildRoleDetailWidget(roles[currentIndex]), out _);
-
-            MetaScreen.SetUpNavButton(window, increment =>
+            Transform? GetParent()
             {
-                currentIndex = (roles.Count + currentIndex + (increment ? 1 : -1)) % roles.Count;
-                ReopenWindow();
-            });
-        }
+                if (HudManager.Instance != null)
+                    // 挂 HUD 根节点，与主帮助菜单同层级
+                    return HudManager.Instance.transform;
+                if (GameObject.FindObjectOfType<MainMenuManager>() != null)
+                    return GameObject.FindObjectOfType<MainMenuManager>().transform;
+                return Camera.main != null ? Camera.main.transform : null;
+            }
 
-        ReopenWindow();
+            void ReopenWindow()
+            {
+                if (window) window!.CloseScreen();
+
+                // 详情窗口后创建，排序相同的情况下自然渲染在帮助菜单之上
+                window = MetaScreen.GenerateWindow(new Vector2(7f, 4.5f), GetParent(), Vector3.zero,
+                    withBlackScreen: true, closeOnClickOutside: true,
+                    background: BackgroundSetting.Modern, sortingGroupOrder: 200);
+                window.SetWidget(BuildRoleDetailWidget(roles[currentIndex]), out _);
+
+                MetaScreen.SetUpNavButton(window, increment =>
+                {
+                    currentIndex = (roles.Count + currentIndex + (increment ? 1 : -1)) % roles.Count;
+                    ReopenWindow();
+                });
+            }
+
+            ReopenWindow();
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HelpScreen.OpenAssignableHelp]", ex);
+        }
     }
 
     private static GUIWidget BuildRoleDetailWidget(DefinedRole role)
     {
-        var gui = LIDGUI.Instance;
-        var attr = gui.GetAttribute(AttributeAsset.OverlayContent);
-
-        // 立绘区：框 + 画像重叠，无立绘时不显示
-        GUIWidget? portrait = null;
-        if (role.IconImage != null)
+        try
         {
-            portrait = new GUIOverlapHolder(GUIAlignment.Left,
-                gui.Image(GUIAlignment.Left, HudUIAssets.FrameSprite, new FuzzySize(0.55f, 0.55f)),
-                gui.Image(GUIAlignment.Left, role.IconImage, new FuzzySize(0.5f, 0.5f)));
+            var gui = LIDGUI.Instance;
+            var attr = gui.GetAttribute(AttributeAsset.OverlayContent);
+
+            // 立绘区：框 + 画像重叠，无立绘时不显示
+            GUIWidget? portrait = null;
+            if (role.IconImage != null)
+            {
+                portrait = new GUIOverlapHolder(GUIAlignment.Left,
+                    gui.Image(GUIAlignment.Left, HudUIAssets.FrameSprite, new FuzzySize(0.55f, 0.55f)),
+                    gui.Image(GUIAlignment.Left, role.IconImage, new FuzzySize(0.5f, 0.5f)));
+            }
+
+            // 右侧文字列：职业名 + 开场白（开场白为空时不显示）
+            var texts = new List<GUIWidget?>
+            {
+                gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.OverlayTitle),
+                    gui.ColorTextComponent(role.Color, new RawTextComponent(role.Name)).GetString()),
+                gui.VerticalMargin(0.03f),
+            };
+            if (!string.IsNullOrEmpty(role.IntroBlurb))
+            {
+                texts.Add(gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.OverlayContent),
+                    gui.ColorTextComponent(role.Color, new RawTextComponent(role.IntroBlurb)).GetString()));
+            }
+            var textColumn = gui.VerticalHolder(GUIAlignment.Left, texts.ToArray());
+
+            // 头部行：左对齐，立绘与文字列垂直居中等高
+            var headerWidgets = new List<GUIWidget?>();
+            if (portrait != null) headerWidgets.Add(portrait);
+            headerWidgets.Add(textColumn);
+            var header = gui.HorizontalHolder(GUIAlignment.Left, headerWidgets.ToArray());
+
+            // 技能介绍：优先 SkillDescription，为空回退 Description
+            var skill = string.IsNullOrEmpty(role.SkillDescription) ? role.Description : role.SkillDescription;
+
+            return gui.VerticalHolder(GUIAlignment.Left,
+                header,
+                gui.VerticalMargin(0.1f),
+                gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.DocumentStandard), skill),
+                gui.VerticalMargin(0.1f),
+                gui.RawText(GUIAlignment.Left, attr,
+                    Language.Translate("help.role.category", "阵营") + ": " + GetCategoryName(role.Category)),
+                gui.VerticalMargin(0.1f),
+                gui.RawText(GUIAlignment.Left, attr, GetAllocationLine(role)));
         }
-
-        // 右侧文字列：职业名 + 开场白（开场白为空时不显示）
-        var texts = new List<GUIWidget?>
+        catch (Exception ex)
         {
-            gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.OverlayTitle),
-                gui.ColorTextComponent(role.Color, new RawTextComponent(role.Name)).GetString()),
-            gui.VerticalMargin(0.03f),
-        };
-        if (!string.IsNullOrEmpty(role.IntroBlurb))
-        {
-            texts.Add(gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.OverlayContent),
-                gui.ColorTextComponent(role.Color, new RawTextComponent(role.IntroBlurb)).GetString()));
+            LightLogger.LogError("[HelpScreen.BuildRoleDetailWidget]", ex); return default;
         }
-        var textColumn = gui.VerticalHolder(GUIAlignment.Left, texts.ToArray());
-
-        // 头部行：左对齐，立绘与文字列垂直居中等高
-        var headerWidgets = new List<GUIWidget?>();
-        if (portrait != null) headerWidgets.Add(portrait);
-        headerWidgets.Add(textColumn);
-        var header = gui.HorizontalHolder(GUIAlignment.Left, headerWidgets.ToArray());
-
-        // 技能介绍：优先 SkillDescription，为空回退 Description
-        var skill = string.IsNullOrEmpty(role.SkillDescription) ? role.Description : role.SkillDescription;
-
-        return gui.VerticalHolder(GUIAlignment.Left,
-            header,
-            gui.VerticalMargin(0.1f),
-            gui.RawText(GUIAlignment.Left, gui.GetAttribute(AttributeAsset.DocumentStandard), skill),
-            gui.VerticalMargin(0.1f),
-            gui.RawText(GUIAlignment.Left, attr,
-                Language.Translate("help.role.category", "阵营") + ": " + GetCategoryName(role.Category)),
-            gui.VerticalMargin(0.1f),
-            gui.RawText(GUIAlignment.Left, attr, GetAllocationLine(role)));
     }
 
     // =====================================================================
@@ -553,16 +659,23 @@ public static class HelpScreen
     /// <summary>分配信息行（MaxCount==0 显示不参与分配）</summary>
     private static string GetAllocationLine(DefinedRole role)
     {
-        var allocation = role.Allocation;
-        if (allocation.MaxCount <= 0)
-            return role.Name + ": " + Language.Translate("help.overview.noAssign", "不参与分配");
+        try
+        {
+            var allocation = role.Allocation;
+            if (allocation.MaxCount <= 0)
+                return role.Name + ": " + Language.Translate("help.overview.noAssign", "不参与分配");
 
-        string text = $"{role.Name} × {allocation.MaxCount}";
-        if (allocation.GuaranteedCount > 0)
-            text += $" ({Language.Translate("help.overview.guaranteed", "必出")} {allocation.GuaranteedCount})";
-        else if (allocation.Chance < 100)
-            text += $" ({Language.Translate("help.overview.chance", "概率")} {allocation.Chance}%)";
-        return text;
+            string text = $"{role.Name} × {allocation.MaxCount}";
+            if (allocation.GuaranteedCount > 0)
+                text += $" ({Language.Translate("help.overview.guaranteed", "必出")} {allocation.GuaranteedCount})";
+            else if (allocation.Chance < 100)
+                text += $" ({Language.Translate("help.overview.chance", "概率")} {allocation.Chance}%)";
+            return text;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HelpScreen.GetAllocationLine]", ex); return default;
+        }
     }
 
     private static string GetBoolText(bool value) =>

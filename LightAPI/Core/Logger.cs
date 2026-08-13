@@ -36,7 +36,7 @@ public static class LightLogger
         AppendLog("=====Log Started " + StartupTime + "=====");
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
     }
-    public static void Log(string message = "undefined")
+    public static void Log(string message = "")
     {
         if (message == null)
         {
@@ -45,17 +45,13 @@ public static class LightLogger
         string logLine = $"[{DateTime.Now:yyyy/M/d HH:mm:ss}]: \"{message}\"";
         AppendLog(logLine);
     }
-    public static void LogError(string message = "undefined", string reason = "undefined")
+    public static void LogError(string message = "", Exception ex = null)
     {
-        if (message == null)
-        {
-            message = "日志值为null";
-        }
-        string logLine = $"[Error-{DateTime.Now:yyyy/M/d HH:mm:ss}]: \"{message}\"";
+        message ??= "日志值为null";
+        string logLine = $"[Error-{DateTime.Now:yyyy/M/d HH:mm:ss}]: \"{message}\"\n堆栈->{ex}";
         AppendLog(logLine);
-        throw new Exception($"Error. msg:{message},reason:{reason}");
     }
-    public static void LogWarning(string message = "undefined")
+    public static void LogWarning(string message = "")
     {
         if (message == null)
         {

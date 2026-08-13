@@ -34,57 +34,71 @@ public class VersionMaker
 
     public static string CheckForUpdate()
     {
-        string path = Path.Combine(Paths.GameRootPath, UpdaterExeName);
-        if (!File.Exists(path))
-        {
-            LightLogger.LogError($"未找到 {UpdaterExeName}，请确保它位于游戏根目录。");
-            return "path error";
-        }
-        ProcessStartInfo startInfo = new ProcessStartInfo
-        {
-            FileName = path,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            StandardOutputEncoding = System.Text.Encoding.UTF8
-        };
         try
         {
-            using (Process process = Process.Start(startInfo))
+            string path = Path.Combine(Paths.GameRootPath, UpdaterExeName);
+            if (!File.Exists(path))
             {
-                string output = process.StandardOutput.ReadToEnd().Trim();
-                process.WaitForExit();
-                return output;
+                LightLogger.LogError($"未找到 {UpdaterExeName}，请确保它位于游戏根目录。");
+                return "path error";
+            }
+            ProcessStartInfo startInfo = new ProcessStartInfo
+            {
+                FileName = path,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                StandardOutputEncoding = System.Text.Encoding.UTF8
+            };
+            try
+            {
+                using (Process process = Process.Start(startInfo))
+                {
+                    string output = process.StandardOutput.ReadToEnd().Trim();
+                    process.WaitForExit();
+                    return output;
+                }
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError($"更新检查失败: {ex.Message}");
+                return "check error";
             }
         }
         catch (Exception ex)
         {
-            LightLogger.LogError($"更新检查失败: {ex.Message}");
-            return "check error";
+            LightLogger.LogError("[VersionMaker.CheckForUpdate]", ex); return default;
         }
     }
     public static void StartUpdateProcess()
     {
-        string exePath = Path.Combine(Paths.GameRootPath, UpdaterExeName);
-        if (!File.Exists(exePath)) return;
-
-        ProcessStartInfo startInfo = new ProcessStartInfo
-        {
-            FileName = exePath,
-            Arguments = "--listen",
-            UseShellExecute = true,
-            WindowStyle = ProcessWindowStyle.Normal
-        };
-
         try
         {
-            Process.Start(startInfo);
-            AmongUsEdited.ShowCustomDisconnectWindow("更新器已在后台启动，等待游戏退出后自动更新。");
+            string exePath = Path.Combine(Paths.GameRootPath, UpdaterExeName);
+            if (!File.Exists(exePath)) return;
+
+            ProcessStartInfo startInfo = new ProcessStartInfo
+            {
+                FileName = exePath,
+                Arguments = "--listen",
+                UseShellExecute = true,
+                WindowStyle = ProcessWindowStyle.Normal
+            };
+
+            try
+            {
+                Process.Start(startInfo);
+                AmongUsEdited.ShowCustomDisconnectWindow("更新器已在后台启动，等待游戏退出后自动更新。");
+            }
+            catch (Exception ex)
+            {
+                AmongUsEdited.ShowCustomDisconnectWindow($"启动更新器失败。\n请将游戏目录下的Light.log发送给开发者或者QQ群中。\n不要直接将此界面截图/拍照给其他人。");
+                LightLogger.LogError($"启动更新器失败：{ex.Message}");
+            }
         }
         catch (Exception ex)
         {
-            AmongUsEdited.ShowCustomDisconnectWindow($"启动更新器失败。\n请将游戏目录下的Light.log发送给开发者或者QQ群中。\n不要直接将此界面截图/拍照给其他人。");
-            LightLogger.LogError($"启动更新器失败：{ex.Message}");
+            LightLogger.LogError("[VersionMaker.StartUpdateProcess]", ex);
         }
     }
 }

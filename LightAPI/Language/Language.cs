@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using AmongUs.Data;
+using LightInDark.Core;
 
 namespace LightInDark.Language;
 
@@ -17,86 +18,142 @@ public static class Language
 
     static Language()
     {
-        _langFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Language");
+        try
+        {
+            _langFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Language");
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("Language.Language(static ctor)", ex);
+        }
     }
 
     public static void Load()
     {
-        if (!Directory.Exists(_langFolder))
-            Directory.CreateDirectory(_langFolder);
-
-        foreach (string file in Directory.GetFiles(_langFolder, "*.json"))
+        try
         {
-            string name = Path.GetFileNameWithoutExtension(file);
-            try
-            {
-                string json = File.ReadAllText(file, Encoding.UTF8);
-                var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
-                if (dict != null)
-                    _all[name] = dict;
-            }
-            catch { }
-        }
+            if (!Directory.Exists(_langFolder))
+                Directory.CreateDirectory(_langFolder);
 
-        UpdateCurrentLanguage();
+            foreach (string file in Directory.GetFiles(_langFolder, "*.json"))
+            {
+                string name = Path.GetFileNameWithoutExtension(file);
+                try
+                {
+                    string json = File.ReadAllText(file, Encoding.UTF8);
+                    var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+                    if (dict != null)
+                        _all[name] = dict;
+                }
+                catch { }
+            }
+
+            UpdateCurrentLanguage();
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("Language.Load", ex);
+        }
     }
 
     public static void UpdateCurrentLanguage()
     {
-        string lang = DataManager.Settings.Language.CurrentLanguage.ToString();
-        if (_all.ContainsKey(lang))
-            _current = lang;
-        else if (_all.ContainsKey("English"))
-            _current = "English";
-        else
-            _current = _all.Keys.FirstOrDefault() ?? "English";
-
-        if (!_all.ContainsKey(_current))
+        try
         {
-            _all[_current] = new Dictionary<string, string>();
-            SaveLanguageFile(_current, _all[_current]);
+            string lang = DataManager.Settings.Language.CurrentLanguage.ToString();
+            if (_all.ContainsKey(lang))
+                _current = lang;
+            else if (_all.ContainsKey("English"))
+                _current = "English";
+            else
+                _current = _all.Keys.FirstOrDefault() ?? "English";
+
+            if (!_all.ContainsKey(_current))
+            {
+                _all[_current] = new Dictionary<string, string>();
+                SaveLanguageFile(_current, _all[_current]);
+            }
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("Language.UpdateCurrentLanguage", ex);
         }
     }
 
     public static string Translate(string key, string fallback = null)
     {
-        if (_all.TryGetValue(_current, out var dict) && dict.TryGetValue(key, out string val))
-            return val;
-
-        if (_current != "English" && _all.TryGetValue("English", out var enDict) && enDict.TryGetValue(key, out string enVal))
-            return enVal;
-
-        if (_all.TryGetValue(_current, out var currentDict))
+        try
         {
-            lock (_fileLock)
+            if (_all.TryGetValue(_current, out var dict) && dict.TryGetValue(key, out string val))
+                return val;
+
+            if (_current != "English" && _all.TryGetValue("English", out var enDict) && enDict.TryGetValue(key, out string enVal))
+                return enVal;
+
+            if (_all.TryGetValue(_current, out var currentDict))
             {
-                if (!currentDict.ContainsKey(key))
+                lock (_fileLock)
                 {
-                    currentDict[key] = "占位";
-                    SaveLanguageFile(_current, currentDict);
+                    if (!currentDict.ContainsKey(key))
+                    {
+                        currentDict[key] = "占位";
+                        SaveLanguageFile(_current, currentDict);
+                    }
                 }
             }
-        }
 
-        return fallback ?? key;
+            return fallback ?? key;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("Language.Translate", ex);
+            return default;
+        }
     }
 
     private static void SaveLanguageFile(string langName, Dictionary<string, string> dict)
     {
-        string path = Path.Combine(_langFolder, langName + ".json");
-        string json = JsonSerializer.Serialize(dict, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(path, json, Encoding.UTF8);
+        try
+        {
+            string path = Path.Combine(_langFolder, langName + ".json");
+            string json = JsonSerializer.Serialize(dict, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(path, json, Encoding.UTF8);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("Language.SaveLanguageFile", ex);
+        }
     }
 
-    public static string GetString(string key) => Translate(key, "*" + key);
+    public static string GetString(string key)
+    {
+        try
+        {
+            return Translate(key, "*" + key);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("Language.GetString", ex);
+            return default;
+        }
+    }
+
     public static bool TryGetString(string key, ref string output)
     {
-        string result = Translate(key, null);
-        if (result != key)
+        try
         {
-            output = result;
-            return true;
+            string result = Translate(key, null);
+            if (result != key)
+            {
+                output = result;
+                return true;
+            }
+            return false;
         }
-        return false;
+        catch (Exception ex)
+        {
+            LightLogger.LogError("Language.TryGetString", ex);
+            return default;
+        }
     }
 }

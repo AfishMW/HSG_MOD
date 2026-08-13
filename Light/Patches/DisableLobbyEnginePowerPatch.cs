@@ -1,6 +1,4 @@
-using HarmonyLib;
 using LightInDark.Core;
-using UnityEngine;
 
 namespace Light.Patches;
 

@@ -4,6 +4,7 @@ using System.Linq;
 using LightInDark.UI.Window;
 using TMPro;
 using UnityEngine;
+using LightInDark.Core;
 using Color = LightInDark.Color;
 using Font = LightInDark.UI.Window.Font;
 using FontStyle = LightInDark.UI.Window.FontStyle;
@@ -28,17 +29,24 @@ public class LIDGUI : IGUI
 
     public GUIWidget RealtimeText(GUIAlignment alignment, TextAttribute attribute, Func<string> textSupplier, float width)
     {
-        var widget = new NoSGUIText(alignment, attribute, new RawTextComponent(""))
+        try
         {
-            PostBuilder = text =>
+            var widget = new NoSGUIText(alignment, attribute, new RawTextComponent(""))
             {
-                text.text = textSupplier();
-                text.ForceMeshUpdate();
-                text.gameObject.AddComponent<RealtimeTextBehaviour>().TMP = text;
-                text.gameObject.GetComponent<RealtimeTextBehaviour>().Supplier = textSupplier;
-            }
-        };
-        return widget;
+                PostBuilder = text =>
+                {
+                    text.text = textSupplier();
+                    text.ForceMeshUpdate();
+                    text.gameObject.AddComponent<RealtimeTextBehaviour>().TMP = text;
+                    text.gameObject.GetComponent<RealtimeTextBehaviour>().Supplier = textSupplier;
+                }
+            };
+            return widget;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[LIDGUI.RealtimeText]", ex); return default;
+        }
     }
 
     public GUIWidget Button(GUIAlignment alignment, TextAttribute attribute, TextComponent text, GUIClickAction onClick,
@@ -60,9 +68,16 @@ public class LIDGUI : IGUI
 
     public GUIWidget ScrollView(GUIAlignment alignment, Size size, string? scrollerTag, GUIWidget? inner, out object artifact)
     {
-        var view = new GUIScrollView(alignment, size, inner == null ? null : () => inner);
-        artifact = view.Artifact;
-        return view;
+        try
+        {
+            var view = new GUIScrollView(alignment, size, inner == null ? null : () => inner);
+            artifact = view.Artifact;
+            return view;
+        }
+        catch (Exception ex)
+        {
+            artifact = default; LightLogger.LogError("[LIDGUI.ScrollView]", ex); return default;
+        }
     }
 
     public GUIWidget RawText(GUIAlignment alignment, TextAttribute attribute, string rawText)
@@ -93,23 +108,30 @@ public class LIDGUI : IGUI
 
     public GUIWidget Arrange(GUIAlignment alignment, IEnumerable<GUIWidget?> widgets, int perLine)
     {
-        var rows = new List<GUIWidget>();
-        var current = new List<GUIWidget>();
-
-        foreach (var w in widgets)
+        try
         {
-            if (w == null) continue;
-            current.Add(w);
-            if (current.Count == perLine)
-            {
-                rows.Add(HorizontalHolder(alignment, current.ToArray()));
-                current.Clear();
-            }
-        }
-        if (current.Count > 0)
-            rows.Add(HorizontalHolder(alignment, current.ToArray()));
+            var rows = new List<GUIWidget>();
+            var current = new List<GUIWidget>();
 
-        return VerticalHolder(alignment, rows.ToArray());
+            foreach (var w in widgets)
+            {
+                if (w == null) continue;
+                current.Add(w);
+                if (current.Count == perLine)
+                {
+                    rows.Add(HorizontalHolder(alignment, current.ToArray()));
+                    current.Clear();
+                }
+            }
+            if (current.Count > 0)
+                rows.Add(HorizontalHolder(alignment, current.ToArray()));
+
+            return VerticalHolder(alignment, rows.ToArray());
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[LIDGUI.Arrange]", ex); return default;
+        }
     }
 
     public GUIWidget Margin(FuzzySize margin)
@@ -117,83 +139,104 @@ public class LIDGUI : IGUI
 
     public TextAttribute GetAttribute(AttributeAsset attribute)
     {
-        if (_allAttrAsset.TryGetValue(attribute, out var attr))
-            return attr;
-
-        attr = attribute switch
+        try
         {
-            AttributeAsset.StandardMediumMasked => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.6f, 0.8f, 1.6f), new(1.45f, 0.3f), Color.White, false),
-            AttributeAsset.StandardLargeWideMasked => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.7f, 1f, 1.7f), new(2.9f, 0.45f), Color.White, false),
-            AttributeAsset.CenteredBold => new(TextAlignment.Center, GetFont(FontAsset.Gothic), FontStyle.Bold, new(1.9f, 1f, 1.9f), new(8f, 8f), Color.White, true),
-            AttributeAsset.CenteredBoldFixed => new(TextAlignment.Center, GetFont(FontAsset.Gothic), FontStyle.Bold, new(1.9f, 1f, 1.9f), new(1.1f, 0.32f), Color.White, false),
-            AttributeAsset.LeftBoldFixed => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Bold, new(1.9f, 1f, 1.9f), new(1.1f, 0.32f), Color.White, false),
-            AttributeAsset.DocumentStandard => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Normal, new(1.2f, 0.6f, 1.2f), new(7f, 6f), Color.White, true),
-            AttributeAsset.DocumentBold => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Bold, new(1.2f, 0.6f, 1.2f), new(5f, 6f), Color.White, true),
-            AttributeAsset.DocumentTitle => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Bold, new(2.2f, 0.6f, 2.2f), new(5f, 6f), Color.White, true),
-            AttributeAsset.DocumentSubtitle1 => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Bold, new(1.9f, 0.6f, 1.9f), new(5f, 6f), Color.White, true),
-            AttributeAsset.DocumentSubtitle2 => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Bold, new(1.6f, 0.6f, 1.6f), new(5f, 6f), Color.White, true),
-            AttributeAsset.OptionsTitle => new(TextAlignment.Left, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(4f, 0.4f), Color.White, false),
-            AttributeAsset.OptionsTitleHalf => new(TextAlignment.Left, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(1.8f, 0.4f), Color.White, false),
-            AttributeAsset.OptionsTitleShortest => new(TextAlignment.Left, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(1f, 0.4f), Color.White, false),
-            AttributeAsset.OptionsValue => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(1.1f, 0.4f), Color.White, false),
-            AttributeAsset.OptionsValueShorter => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(0.7f, 0.4f), Color.White, false),
-            AttributeAsset.OptionsButton => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(0.32f, 0.22f), Color.White, false),
-            AttributeAsset.OptionsButtonLonger => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(1.8f, 0.22f), Color.White, false),
-            AttributeAsset.OptionsButtonMedium => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(0.9f, 0.22f), Color.White, false),
-            AttributeAsset.OptionsFlexible => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(6f, 0.22f), Color.White, true),
-            AttributeAsset.OptionsGroupTitle => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Normal, new(1.5f, 1f, 1.6f), new(6f, 0.22f), Color.White, true, 0f),
-            AttributeAsset.MetaRoleButton => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(1.4f, 0.26f), Color.White, false),
-            AttributeAsset.OverlayTitle => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Bold, new(1.8f, 1f, 1.8f), new(5f, 6f), Color.White, true),
-            AttributeAsset.OverlayContent => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Normal, new(1.5f, 1.1f, 1.5f), new(5f, 6f), Color.White, true),
-            AttributeAsset.OverlayBold => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Bold, new(1.5f, 1.1f, 1.5f), new(5f, 6f), Color.White, true),
-            _ => new(TextAlignment.Center, GetFont(FontAsset.Gothic), FontStyle.Normal, new(2.2f, 1.2f, 2.5f), new(3f, 0.5f), Color.White, true),
-        };
-        _allAttrAsset[attribute] = attr;
-        return attr;
+            if (_allAttrAsset.TryGetValue(attribute, out var attr))
+                return attr;
+
+            attr = attribute switch
+            {
+                AttributeAsset.StandardMediumMasked => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.6f, 0.8f, 1.6f), new(1.45f, 0.3f), Color.White, false),
+                AttributeAsset.StandardLargeWideMasked => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.7f, 1f, 1.7f), new(2.9f, 0.45f), Color.White, false),
+                AttributeAsset.CenteredBold => new(TextAlignment.Center, GetFont(FontAsset.Gothic), FontStyle.Bold, new(1.9f, 1f, 1.9f), new(8f, 8f), Color.White, true),
+                AttributeAsset.CenteredBoldFixed => new(TextAlignment.Center, GetFont(FontAsset.Gothic), FontStyle.Bold, new(1.9f, 1f, 1.9f), new(1.1f, 0.32f), Color.White, false),
+                AttributeAsset.LeftBoldFixed => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Bold, new(1.9f, 1f, 1.9f), new(1.1f, 0.32f), Color.White, false),
+                AttributeAsset.DocumentStandard => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Normal, new(1.2f, 0.6f, 1.2f), new(7f, 6f), Color.White, true),
+                AttributeAsset.DocumentBold => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Bold, new(1.2f, 0.6f, 1.2f), new(5f, 6f), Color.White, true),
+                AttributeAsset.DocumentTitle => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Bold, new(2.2f, 0.6f, 2.2f), new(5f, 6f), Color.White, true),
+                AttributeAsset.DocumentSubtitle1 => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Bold, new(1.9f, 0.6f, 1.9f), new(5f, 6f), Color.White, true),
+                AttributeAsset.DocumentSubtitle2 => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Bold, new(1.6f, 0.6f, 1.6f), new(5f, 6f), Color.White, true),
+                AttributeAsset.OptionsTitle => new(TextAlignment.Left, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(4f, 0.4f), Color.White, false),
+                AttributeAsset.OptionsTitleHalf => new(TextAlignment.Left, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(1.8f, 0.4f), Color.White, false),
+                AttributeAsset.OptionsTitleShortest => new(TextAlignment.Left, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(1f, 0.4f), Color.White, false),
+                AttributeAsset.OptionsValue => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(1.1f, 0.4f), Color.White, false),
+                AttributeAsset.OptionsValueShorter => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(0.7f, 0.4f), Color.White, false),
+                AttributeAsset.OptionsButton => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(0.32f, 0.22f), Color.White, false),
+                AttributeAsset.OptionsButtonLonger => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(1.8f, 0.22f), Color.White, false),
+                AttributeAsset.OptionsButtonMedium => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(0.9f, 0.22f), Color.White, false),
+                AttributeAsset.OptionsFlexible => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(6f, 0.22f), Color.White, true),
+                AttributeAsset.OptionsGroupTitle => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Normal, new(1.5f, 1f, 1.6f), new(6f, 0.22f), Color.White, true, 0f),
+                AttributeAsset.MetaRoleButton => new(TextAlignment.Center, GetFont(FontAsset.GothicMasked), FontStyle.Bold, new(1.8f, 1f, 2f), new(1.4f, 0.26f), Color.White, false),
+                AttributeAsset.OverlayTitle => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Bold, new(1.8f, 1f, 1.8f), new(5f, 6f), Color.White, true),
+                AttributeAsset.OverlayContent => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Normal, new(1.5f, 1.1f, 1.5f), new(5f, 6f), Color.White, true),
+                AttributeAsset.OverlayBold => new(TextAlignment.Left, GetFont(FontAsset.Gothic), FontStyle.Bold, new(1.5f, 1.1f, 1.5f), new(5f, 6f), Color.White, true),
+                _ => new(TextAlignment.Center, GetFont(FontAsset.Gothic), FontStyle.Normal, new(2.2f, 1.2f, 2.5f), new(3f, 0.5f), Color.White, true),
+            };
+            _allAttrAsset[attribute] = attr;
+            return attr;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[LIDGUI.GetAttribute]", ex); return default;
+        }
     }
 
     public TextAttribute GenerateAttribute(AttributeParams param, Color color, FontSize fontSize, Size size)
     {
-        var flag = (AttributeTemplateFlag)(int)param;
-
-        TextAlignment alignment = (flag & AttributeTemplateFlag.AlignmentMask) switch
+        try
         {
-            AttributeTemplateFlag.AlignmentLeft => TextAlignment.Left,
-            AttributeTemplateFlag.AlignmentRight => TextAlignment.Right,
-            _ => TextAlignment.Center
-        };
+            var flag = (AttributeTemplateFlag)(int)param;
 
-        FontAsset fontAsset = (flag & (AttributeTemplateFlag.FontMask | AttributeTemplateFlag.MaterialMask)) switch
+            TextAlignment alignment = (flag & AttributeTemplateFlag.AlignmentMask) switch
+            {
+                AttributeTemplateFlag.AlignmentLeft => TextAlignment.Left,
+                AttributeTemplateFlag.AlignmentRight => TextAlignment.Right,
+                _ => TextAlignment.Center
+            };
+
+            FontAsset fontAsset = (flag & (AttributeTemplateFlag.FontMask | AttributeTemplateFlag.MaterialMask)) switch
+            {
+                AttributeTemplateFlag.FontStandard | AttributeTemplateFlag.MaterialBared => FontAsset.Gothic,
+                AttributeTemplateFlag.FontStandard => FontAsset.GothicMasked,
+                AttributeTemplateFlag.FontOblong | AttributeTemplateFlag.MaterialBared => FontAsset.Oblong,
+                AttributeTemplateFlag.FontOblong => FontAsset.OblongMasked,
+                AttributeTemplateFlag.FontBarlow | AttributeTemplateFlag.MaterialBared => FontAsset.Barlow,
+                AttributeTemplateFlag.FontBarlow => FontAsset.Barlow,
+                _ => FontAsset.GothicMasked,
+            };
+
+            FontStyle style = 0;
+            if ((flag & AttributeTemplateFlag.StyleBold) != 0) style |= FontStyle.Bold;
+
+            bool isFlexible = (flag & AttributeTemplateFlag.IsFlexible) != 0;
+
+            return new TextAttribute(alignment, GetFont(fontAsset), style, fontSize, size, color, isFlexible);
+        }
+        catch (Exception ex)
         {
-            AttributeTemplateFlag.FontStandard | AttributeTemplateFlag.MaterialBared => FontAsset.Gothic,
-            AttributeTemplateFlag.FontStandard => FontAsset.GothicMasked,
-            AttributeTemplateFlag.FontOblong | AttributeTemplateFlag.MaterialBared => FontAsset.Oblong,
-            AttributeTemplateFlag.FontOblong => FontAsset.OblongMasked,
-            AttributeTemplateFlag.FontBarlow | AttributeTemplateFlag.MaterialBared => FontAsset.Barlow,
-            AttributeTemplateFlag.FontBarlow => FontAsset.Barlow,
-            _ => FontAsset.GothicMasked,
-        };
-
-        FontStyle style = 0;
-        if ((flag & AttributeTemplateFlag.StyleBold) != 0) style |= FontStyle.Bold;
-
-        bool isFlexible = (flag & AttributeTemplateFlag.IsFlexible) != 0;
-
-        return new TextAttribute(alignment, GetFont(fontAsset), style, fontSize, size, color, isFlexible);
+            LightLogger.LogError("[LIDGUI.GenerateAttribute]", ex); return default;
+        }
     }
 
     public Font GetFont(FontAsset fontAsset)
     {
-        return fontAsset switch
+        try
         {
-            FontAsset.Prespawn => new Font { FontAsset = VanillaAsset.PreSpawnFont, IsMasked = false },
-            FontAsset.Barlow => new Font { FontAsset = VanillaAsset.VersionFont, IsMasked = false },
-            FontAsset.Gothic => new Font { FontAsset = VanillaAsset.GetStandardTextPrefab()?.font, IsMasked = false },
-            FontAsset.GothicMasked => new Font { FontAsset = VanillaAsset.GetStandardTextPrefab()?.font, FontMaterial = VanillaAsset.StandardMaskedFontMaterial, IsMasked = true },
-            FontAsset.Oblong => new Font { FontAsset = VanillaAsset.BrookFont, IsMasked = false },
-            FontAsset.OblongMasked => new Font { FontAsset = VanillaAsset.BrookFont, FontMaterial = VanillaAsset.StandardMaskedFontMaterial, IsMasked = true },
-            _ => new Font { FontAsset = VanillaAsset.GetStandardTextPrefab()?.font, IsMasked = false },
-        };
+            return fontAsset switch
+            {
+                FontAsset.Prespawn => new Font { FontAsset = VanillaAsset.PreSpawnFont, IsMasked = false },
+                FontAsset.Barlow => new Font { FontAsset = VanillaAsset.VersionFont, IsMasked = false },
+                FontAsset.Gothic => new Font { FontAsset = VanillaAsset.GetStandardTextPrefab()?.font, IsMasked = false },
+                FontAsset.GothicMasked => new Font { FontAsset = VanillaAsset.GetStandardTextPrefab()?.font, FontMaterial = VanillaAsset.StandardMaskedFontMaterial, IsMasked = true },
+                FontAsset.Oblong => new Font { FontAsset = VanillaAsset.BrookFont, IsMasked = false },
+                FontAsset.OblongMasked => new Font { FontAsset = VanillaAsset.BrookFont, FontMaterial = VanillaAsset.StandardMaskedFontMaterial, IsMasked = true },
+                _ => new Font { FontAsset = VanillaAsset.GetStandardTextPrefab()?.font, IsMasked = false },
+            };
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[LIDGUI.GetFont]", ex); return default;
+        }
     }
 
     public TextComponent RawTextComponent(string rawText) => new RawTextComponent(rawText);
@@ -212,13 +255,20 @@ public class RealtimeTextBehaviour : MonoBehaviour
 
     public void Update()
     {
-        if (TMP == null || Supplier == null) return;
-        var current = Supplier();
-        if (current != _lastText)
+        try
         {
-            _lastText = current;
-            TMP.text = current;
-            TMP.ForceMeshUpdate();
+            if (TMP == null || Supplier == null) return;
+            var current = Supplier();
+            if (current != _lastText)
+            {
+                _lastText = current;
+                TMP.text = current;
+                TMP.ForceMeshUpdate();
+            }
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[LIDGUI.Update]", ex);
         }
     }
 }

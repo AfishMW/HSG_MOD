@@ -9,6 +9,7 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.Rendering;
 using UnityEngine.UI;
+using LightInDark.Core;
 using Button = UnityEngine.UI.Button;
 using Object = UnityEngine.Object;
 using Color = LightInDark.Color;
@@ -77,68 +78,89 @@ public static class HudUIFont
 
     public static TMP_FontAsset FontAsset
     {
-        get { EnsureLoaded(); return _fontAsset!; }
+        get {
+            try
+            {     EnsureLoaded(); return _fontAsset!;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("[HudUI.get]", ex); return default;
+            } }
     }
 
     public static Material FontMaterial
     {
-        get { EnsureLoaded(); return _fontMaterial!; }
+        get {
+            try
+            {     EnsureLoaded(); return _fontMaterial!;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("[HudUI.get]", ex); return default;
+            } }
     }
 
     public static void EnsureLoaded()
     {
-        if (_triedInit) return;
-        _triedInit = true;
-
-        // 方案1：从 VersionShower.text 获取（VersionShower 有公开字段 text）
         try
         {
-            var versionShower = Object.FindObjectOfType<VersionShower>();
-            if (versionShower != null && versionShower.text != null && versionShower.text.font != null)
-            {
-                _fontAsset = versionShower.text.font;
-                _fontMaterial = versionShower.text.fontMaterial;
-                return;
-            }
-        }
-        catch { }
+            if (_triedInit) return;
+            _triedInit = true;
 
-        // 方案2：从 HudManager.Instance.Dialogue.target 获取
-        try
-        {
-            if (HudManager.Instance != null && HudManager.Instance.Dialogue != null &&
-                HudManager.Instance.Dialogue.target != null && HudManager.Instance.Dialogue.target.font != null)
+            // 方案1：从 VersionShower.text 获取（VersionShower 有公开字段 text）
+            try
             {
-                _fontAsset = HudManager.Instance.Dialogue.target.font;
-                _fontMaterial = HudManager.Instance.Dialogue.target.fontMaterial;
-                return;
+                var versionShower = Object.FindObjectOfType<VersionShower>();
+                if (versionShower != null && versionShower.text != null && versionShower.text.font != null)
+                {
+                    _fontAsset = versionShower.text.font;
+                    _fontMaterial = versionShower.text.fontMaterial;
+                    return;
+                }
             }
-        }
-        catch { }
+            catch { }
 
-        // 方案3：从场景中任意 TextMeshPro 获取
-        try
-        {
-            var anyTmp = Object.FindObjectOfType<TextMeshPro>();
-            if (anyTmp != null && anyTmp.font != null)
+            // 方案2：从 HudManager.Instance.Dialogue.target 获取
+            try
             {
-                _fontAsset = anyTmp.font;
-                _fontMaterial = anyTmp.fontMaterial;
-                return;
+                if (HudManager.Instance != null && HudManager.Instance.Dialogue != null &&
+                    HudManager.Instance.Dialogue.target != null && HudManager.Instance.Dialogue.target.font != null)
+                {
+                    _fontAsset = HudManager.Instance.Dialogue.target.font;
+                    _fontMaterial = HudManager.Instance.Dialogue.target.fontMaterial;
+                    return;
+                }
             }
-        }
-        catch { }
+            catch { }
 
-        // 方案4：TMP_Settings 默认
-        try
-        {
-            if (TMP_Settings.defaultFontAsset != null)
+            // 方案3：从场景中任意 TextMeshPro 获取
+            try
             {
-                _fontAsset = TMP_Settings.defaultFontAsset;
-                _fontMaterial = TMP_Settings.defaultFontAsset.material;
+                var anyTmp = Object.FindObjectOfType<TextMeshPro>();
+                if (anyTmp != null && anyTmp.font != null)
+                {
+                    _fontAsset = anyTmp.font;
+                    _fontMaterial = anyTmp.fontMaterial;
+                    return;
+                }
             }
+            catch { }
+
+            // 方案4：TMP_Settings 默认
+            try
+            {
+                if (TMP_Settings.defaultFontAsset != null)
+                {
+                    _fontAsset = TMP_Settings.defaultFontAsset;
+                    _fontMaterial = TMP_Settings.defaultFontAsset.material;
+                }
+            }
+            catch { }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.EnsureLoaded]", ex);
+        }
     }
 }
 
@@ -149,27 +171,34 @@ internal static class HudUITextHelper
 {
     public static TextMeshPro Create(Transform parent)
     {
-        var obj = new GameObject("Text");
-        obj.layer = LayerMask.NameToLayer("UI");
-        obj.transform.SetParent(parent, false);
-        obj.transform.localPosition = Vector3.zero;
-
-        var tmp = obj.AddComponent<TextMeshPro>();
-
-        HudUIFont.EnsureLoaded();
-        if (HudUIFont.FontAsset != null)
+        try
         {
-            tmp.font = HudUIFont.FontAsset;
-            tmp.fontSharedMaterial = HudUIFont.FontMaterial;
+            var obj = new GameObject("Text");
+            obj.layer = LayerMask.NameToLayer("UI");
+            obj.transform.SetParent(parent, false);
+            obj.transform.localPosition = Vector3.zero;
+
+            var tmp = obj.AddComponent<TextMeshPro>();
+
+            HudUIFont.EnsureLoaded();
+            if (HudUIFont.FontAsset != null)
+            {
+                tmp.font = HudUIFont.FontAsset;
+                tmp.fontSharedMaterial = HudUIFont.FontMaterial;
+            }
+
+            tmp.enableAutoSizing = false;
+            tmp.enableWordWrapping = false;
+            tmp.raycastTarget = false;
+            tmp.outlineWidth = 0.15f;
+            tmp.outlineColor = UnityEngine.Color.black;
+
+            return tmp;
         }
-
-        tmp.enableAutoSizing = false;
-        tmp.enableWordWrapping = false;
-        tmp.raycastTarget = false;
-        tmp.outlineWidth = 0.15f;
-        tmp.outlineColor = UnityEngine.Color.black;
-
-        return tmp;
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.Create]", ex); return default;
+        }
     }
 }
 
@@ -184,7 +213,14 @@ public class MetaScreen : MonoBehaviour
 {
     static MetaScreen()
     {
-        ClassInjector.RegisterTypeInIl2Cpp<MetaScreen>();
+        try
+        {
+            ClassInjector.RegisterTypeInIl2Cpp<MetaScreen>();
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.MetaScreen]", ex);
+        }
     }
 
     public void Awake()
@@ -205,36 +241,57 @@ public class MetaScreen : MonoBehaviour
     /// </summary>
     public void SetWidget(GUIWidget? widget, out Size actualSize)
     {
-        SetWidget(widget, new Vector2(0f, 1f), out actualSize);
+        try
+        {
+            SetWidget(widget, new Vector2(0f, 1f), out actualSize);
+        }
+        catch (Exception ex)
+        {
+            actualSize = default; LightLogger.LogError("[HudUI.SetWidget]", ex);
+        }
     }
 
     public void SetWidget(GUIWidget? widget, Vector2 anchor, out Size actualSize)
     {
-        ClearWidget();
-
-        if (widget == null)
+        try
         {
-            actualSize = Size.Zero;
-            return;
+            ClearWidget();
+
+            if (widget == null)
+            {
+                actualSize = Size.Zero;
+                return;
+            }
+
+            var anchorRecord = new Anchor(anchor,
+                new Vector3(_border.x * (anchor.x - 0.5f), _border.y * (anchor.y - 0.5f), -0.1f));
+
+            var obj = widget.Instantiate(anchorRecord, new Size(_border), out actualSize);
+            if (obj != null)
+            {
+                obj.transform.SetParent(transform, false);
+            }
         }
-
-        var anchorRecord = new Anchor(anchor,
-            new Vector3(_border.x * (anchor.x - 0.5f), _border.y * (anchor.y - 0.5f), -0.1f));
-
-        var obj = widget.Instantiate(anchorRecord, new Size(_border), out actualSize);
-        if (obj != null)
+        catch (Exception ex)
         {
-            obj.transform.SetParent(transform, false);
+            actualSize = default; LightLogger.LogError("[HudUI.SetWidget]", ex);
         }
     }
 
     private void ClearWidget()
     {
-        for (int i = transform.childCount - 1; i >= 0; i--)
+        try
         {
-            var child = transform.GetChild(i);
-            if (child.name != "BorderLine")
-                Object.Destroy(child.gameObject);
+            for (int i = transform.childCount - 1; i >= 0; i--)
+            {
+                var child = transform.GetChild(i);
+                if (child.name != "BorderLine")
+                    Object.Destroy(child.gameObject);
+            }
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.ClearWidget]", ex);
         }
     }
 
@@ -277,61 +334,68 @@ public class MetaScreen : MonoBehaviour
         BackgroundSetting backgroundSetting, bool withBlackScreen, bool withClickGuard,
         int sortingGroupOrder = 100)
     {
-        var window = CreateObject("MetaWindow", parent, localPos);
-        var sortGroup = window.AddComponent<SortingGroup>();
-        sortGroup.sortingOrder = sortingGroupOrder;
-
-        if (backgroundSetting == BackgroundSetting.Old)
+        try
         {
-            var renderer = CreateObject<SpriteRenderer>("Background", window.transform, new Vector3(0, 0, 0.1f));
-            renderer.sprite = Light.UI.Window.VanillaAsset.PopUpBackSprite;
-            renderer.drawMode = SpriteDrawMode.Sliced;
-            renderer.tileMode = SpriteTileMode.Continuous;
-            renderer.size = size + new Vector2(0.45f, 0.35f);
-            renderer.gameObject.layer = LayerExpansion.GetUILayer();
+            var window = CreateObject("MetaWindow", parent, localPos);
+            var sortGroup = window.AddComponent<SortingGroup>();
+            sortGroup.sortingOrder = sortingGroupOrder;
+
+            if (backgroundSetting == BackgroundSetting.Old)
+            {
+                var renderer = CreateObject<SpriteRenderer>("Background", window.transform, new Vector3(0, 0, 0.1f));
+                renderer.sprite = Light.UI.Window.VanillaAsset.PopUpBackSprite;
+                renderer.drawMode = SpriteDrawMode.Sliced;
+                renderer.tileMode = SpriteTileMode.Continuous;
+                renderer.size = size + new Vector2(0.45f, 0.35f);
+                renderer.gameObject.layer = LayerExpansion.GetUILayer();
+            }
+            else if (backgroundSetting == BackgroundSetting.Modern)
+            {
+                var inner = CreateObject<SpriteRenderer>("Inner", window.transform, new Vector3(0, 0, 0.1f));
+                inner.sprite = InnerSprite;
+                inner.drawMode = SpriteDrawMode.Sliced;
+                inner.tileMode = SpriteTileMode.Continuous;
+                inner.size = size + new Vector2(0.75f, 0.75f);
+                inner.gameObject.layer = LayerExpansion.GetUILayer();
+                inner.color = UnityEngine.Color.white.RGBMultiplied(0.55f);
+
+                var frame = CreateObject<SpriteRenderer>("Frame", window.transform, new Vector3(0, 0, -0.01f));
+                frame.sprite = FrameSprite;
+                frame.drawMode = SpriteDrawMode.Sliced;
+                frame.tileMode = SpriteTileMode.Continuous;
+                frame.size = size + new Vector2(0.75f, 0.75f);
+                frame.gameObject.layer = LayerExpansion.GetUILayer();
+            }
+
+            if (withBlackScreen)
+            {
+                var renderer = CreateObject<SpriteRenderer>("BlackScreen", window.transform, new Vector3(0, 0, 0.2f));
+                renderer.sprite = Light.UI.Window.VanillaAsset.FullScreenSprite;
+                renderer.drawMode = SpriteDrawMode.Sliced;
+                renderer.size = new Vector2(30f, 30f);
+                renderer.color = new UnityEngine.Color(0, 0, 0, 0.4226f);
+                renderer.gameObject.layer = LayerExpansion.GetUILayer();
+            }
+
+            if (withClickGuard)
+            {
+                var collider = CreateObject<BoxCollider2D>("ClickGuard", window.transform, new Vector3(0, 0, 0.2f));
+                collider.isTrigger = true;
+                collider.gameObject.layer = LayerExpansion.GetUILayer();
+                collider.size = new Vector2(100f, 100f);
+                collider.gameObject.SetUpButton(false, playSound: false);
+            }
+
+            var screen = CreateObject<MetaScreen>("Screen", window.transform, Vector3.zero);
+            screen.Border = size;
+            screen._combinedObject = window;
+
+            return screen;
         }
-        else if (backgroundSetting == BackgroundSetting.Modern)
+        catch (Exception ex)
         {
-            var inner = CreateObject<SpriteRenderer>("Inner", window.transform, new Vector3(0, 0, 0.1f));
-            inner.sprite = InnerSprite;
-            inner.drawMode = SpriteDrawMode.Sliced;
-            inner.tileMode = SpriteTileMode.Continuous;
-            inner.size = size + new Vector2(0.75f, 0.75f);
-            inner.gameObject.layer = LayerExpansion.GetUILayer();
-            inner.color = UnityEngine.Color.white.RGBMultiplied(0.55f);
-
-            var frame = CreateObject<SpriteRenderer>("Frame", window.transform, new Vector3(0, 0, -0.01f));
-            frame.sprite = FrameSprite;
-            frame.drawMode = SpriteDrawMode.Sliced;
-            frame.tileMode = SpriteTileMode.Continuous;
-            frame.size = size + new Vector2(0.75f, 0.75f);
-            frame.gameObject.layer = LayerExpansion.GetUILayer();
+            LightLogger.LogError("[HudUI.GenerateScreen]", ex); return default;
         }
-
-        if (withBlackScreen)
-        {
-            var renderer = CreateObject<SpriteRenderer>("BlackScreen", window.transform, new Vector3(0, 0, 0.2f));
-            renderer.sprite = Light.UI.Window.VanillaAsset.FullScreenSprite;
-            renderer.drawMode = SpriteDrawMode.Sliced;
-            renderer.size = new Vector2(30f, 30f);
-            renderer.color = new UnityEngine.Color(0, 0, 0, 0.4226f);
-            renderer.gameObject.layer = LayerExpansion.GetUILayer();
-        }
-
-        if (withClickGuard)
-        {
-            var collider = CreateObject<BoxCollider2D>("ClickGuard", window.transform, new Vector3(0, 0, 0.2f));
-            collider.isTrigger = true;
-            collider.gameObject.layer = LayerExpansion.GetUILayer();
-            collider.size = new Vector2(100f, 100f);
-            collider.gameObject.SetUpButton(false, playSound: false);
-        }
-
-        var screen = CreateObject<MetaScreen>("Screen", window.transform, Vector3.zero);
-        screen.Border = size;
-        screen._combinedObject = window;
-
-        return screen;
     }
 
     /// <summary>
@@ -342,59 +406,66 @@ public class MetaScreen : MonoBehaviour
         BackgroundSetting background = BackgroundSetting.Modern, bool withCloseButton = true,
         int sortingGroupOrder = 100)
     {
-        var screen = GenerateScreen(size, parent, localPos, background, withBlackScreen, true, sortingGroupOrder);
-        var obj = screen.transform.parent.gameObject;
-
-        if (withCloseButton)
+        try
         {
-            if (background == BackgroundSetting.Modern)
+            var screen = GenerateScreen(size, parent, localPos, background, withBlackScreen, true, sortingGroupOrder);
+            var obj = screen.transform.parent.gameObject;
+
+            if (withCloseButton)
             {
-                // Modern 风格关闭按钮 — 左上角外侧
-                var collider = CreateObject<BoxCollider2D>("CloseButton", obj.transform,
-                    new Vector3(-size.x / 2f - 0.3f, size.y / 2f + 0.2f, 0f));
-                collider.transform.localScale = new Vector3(0.57f, 0.57f, 1f);
-                collider.isTrigger = true;
-                collider.gameObject.layer = LayerExpansion.GetUILayer();
-                collider.size = new Vector2(0.85f, 0.85f);
+                if (background == BackgroundSetting.Modern)
+                {
+                    // Modern 风格关闭按钮 — 左上角外侧
+                    var collider = CreateObject<BoxCollider2D>("CloseButton", obj.transform,
+                        new Vector3(-size.x / 2f - 0.3f, size.y / 2f + 0.2f, 0f));
+                    collider.transform.localScale = new Vector3(0.57f, 0.57f, 1f);
+                    collider.isTrigger = true;
+                    collider.gameObject.layer = LayerExpansion.GetUILayer();
+                    collider.size = new Vector2(0.85f, 0.85f);
 
-                var renderer = collider.gameObject.AddComponent<SpriteRenderer>();
-                renderer.sprite = CloseButtonNormal;
+                    var renderer = collider.gameObject.AddComponent<SpriteRenderer>();
+                    renderer.sprite = CloseButtonNormal;
 
-                var button = collider.gameObject.SetUpButton(true, renderer, playSound: true);
-                button.OnClick.AddListener((UnityAction)(() => Object.Destroy(obj)));
-                button.OnMouseOver.AddListener((UnityAction)(() => renderer.sprite = CloseButtonHover));
-                button.OnMouseOut.AddListener((UnityAction)(() => renderer.sprite = CloseButtonNormal));
+                    var button = collider.gameObject.SetUpButton(true, renderer, playSound: true);
+                    button.OnClick.AddListener((UnityAction)(() => Object.Destroy(obj)));
+                    button.OnMouseOver.AddListener((UnityAction)(() => renderer.sprite = CloseButtonHover));
+                    button.OnMouseOut.AddListener((UnityAction)(() => renderer.sprite = CloseButtonNormal));
+                }
+                else
+                {
+                    // Old 风格关闭按钮
+                    var collider = CreateObject<BoxCollider2D>("CloseButton", obj.transform,
+                        new Vector3(-size.x / 2f - 0.3f, size.y / 2f + 0.2f, 0f));
+                    collider.transform.localScale = new Vector3(0.57f, 0.57f, 1f);
+                    collider.isTrigger = true;
+                    collider.gameObject.layer = LayerExpansion.GetUILayer();
+                    collider.size = new Vector2(0.85f, 0.85f);
+
+                    var renderer = collider.gameObject.AddComponent<SpriteRenderer>();
+                    renderer.sprite = CloseButtonNormal;
+
+                    var button = collider.gameObject.SetUpButton(true, renderer, playSound: true);
+                    button.OnClick.AddListener((UnityAction)(() => Object.Destroy(obj)));
+                    button.OnMouseOver.AddListener((UnityAction)(() => renderer.sprite = CloseButtonHover));
+                    button.OnMouseOut.AddListener((UnityAction)(() => renderer.sprite = CloseButtonNormal));
+                }
             }
-            else
+
+            if (closeOnClickOutside)
             {
-                // Old 风格关闭按钮
-                var collider = CreateObject<BoxCollider2D>("CloseButton", obj.transform,
-                    new Vector3(-size.x / 2f - 0.3f, size.y / 2f + 0.2f, 0f));
-                collider.transform.localScale = new Vector3(0.57f, 0.57f, 1f);
-                collider.isTrigger = true;
-                collider.gameObject.layer = LayerExpansion.GetUILayer();
-                collider.size = new Vector2(0.85f, 0.85f);
-
-                var renderer = collider.gameObject.AddComponent<SpriteRenderer>();
-                renderer.sprite = CloseButtonNormal;
-
-                var button = collider.gameObject.SetUpButton(true, renderer, playSound: true);
-                button.OnClick.AddListener((UnityAction)(() => Object.Destroy(obj)));
-                button.OnMouseOver.AddListener((UnityAction)(() => renderer.sprite = CloseButtonHover));
-                button.OnMouseOut.AddListener((UnityAction)(() => renderer.sprite = CloseButtonNormal));
+                var clickGuard = obj.transform.FindChild("ClickGuard");
+                if (clickGuard != null)
+                {
+                    clickGuard.GetComponent<PassiveButton>().OnClick.AddListener((UnityAction)(() => Object.Destroy(obj)));
+                }
             }
+
+            return screen;
         }
-
-        if (closeOnClickOutside)
+        catch (Exception ex)
         {
-            var clickGuard = obj.transform.FindChild("ClickGuard");
-            if (clickGuard != null)
-            {
-                clickGuard.GetComponent<PassiveButton>().OnClick.AddListener((UnityAction)(() => Object.Destroy(obj)));
-            }
+            LightLogger.LogError("[HudUI.GenerateWindow]", ex); return default;
         }
-
-        return screen;
     }
 
     /// <summary>
@@ -404,26 +475,33 @@ public class MetaScreen : MonoBehaviour
         Vector2 size, Transform? parent, Vector3 localPos,
         bool withBlackScreen = true, bool closeOnClickOutside = false, bool withCloseButton = true)
     {
-        var window = GenerateWindow(size, parent, localPos, withBlackScreen, closeOnClickOutside,
-            BackgroundSetting.Modern, withCloseButton);
-
-        SetUpNavButton(window, increment =>
+        try
         {
-            if (increment)
-            {
-                index++;
-                if (index >= range.max) index = range.min;
-            }
-            else
-            {
-                index--;
-                if (index < range.min) index = range.max - 1;
-            }
-            window.SetWidget(widgetGenerator.Invoke(index), out _);
-        });
+            var window = GenerateWindow(size, parent, localPos, withBlackScreen, closeOnClickOutside,
+                BackgroundSetting.Modern, withCloseButton);
 
-        window.SetWidget(widgetGenerator.Invoke(index), out _);
-        return window;
+            SetUpNavButton(window, increment =>
+            {
+                if (increment)
+                {
+                    index++;
+                    if (index >= range.max) index = range.min;
+                }
+                else
+                {
+                    index--;
+                    if (index < range.min) index = range.max - 1;
+                }
+                window.SetWidget(widgetGenerator.Invoke(index), out _);
+            });
+
+            window.SetWidget(widgetGenerator.Invoke(index), out _);
+            return window;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.GenerateWindow]", ex); return default;
+        }
     }
 
     /// <summary>
@@ -431,42 +509,56 @@ public class MetaScreen : MonoBehaviour
     /// </summary>
     public static void SetUpNavButton(MetaScreen screen, Action<bool> navFunc)
     {
-        var obj = screen.transform.parent.gameObject;
-
-        PassiveButton GenerateButton(float x, int img)
+        try
         {
-            var collider = CreateObject<BoxCollider2D>("NavButton", obj.transform,
-                new Vector3(screen.Border.x / 2f + 0.3f - x, screen.Border.y / 2f + 0.25f, 0f));
-            collider.transform.localScale = new Vector3(0.57f, 0.57f, 1f);
-            collider.isTrigger = true;
-            collider.gameObject.layer = LayerExpansion.GetUILayer();
-            collider.size = new Vector2(0.65f, 0.65f);
+            var obj = screen.transform.parent.gameObject;
 
-            var renderer = collider.gameObject.AddComponent<SpriteRenderer>();
-            renderer.sprite = img == 0 ? NavLeftNormal : NavRightNormal;
+            PassiveButton GenerateButton(float x, int img)
+            {
+                var collider = CreateObject<BoxCollider2D>("NavButton", obj.transform,
+                    new Vector3(screen.Border.x / 2f + 0.3f - x, screen.Border.y / 2f + 0.25f, 0f));
+                collider.transform.localScale = new Vector3(0.57f, 0.57f, 1f);
+                collider.isTrigger = true;
+                collider.gameObject.layer = LayerExpansion.GetUILayer();
+                collider.size = new Vector2(0.65f, 0.65f);
 
-            var button = collider.gameObject.SetUpButton(true, renderer, playSound: true);
-            button.OnMouseOver.AddListener((UnityAction)(() => renderer.sprite = img == 0 ? NavLeftHover : NavRightHover));
-            button.OnMouseOut.AddListener((UnityAction)(() => renderer.sprite = img == 0 ? NavLeftNormal : NavRightNormal));
-            return button;
+                var renderer = collider.gameObject.AddComponent<SpriteRenderer>();
+                renderer.sprite = img == 0 ? NavLeftNormal : NavRightNormal;
+
+                var button = collider.gameObject.SetUpButton(true, renderer, playSound: true);
+                button.OnMouseOver.AddListener((UnityAction)(() => renderer.sprite = img == 0 ? NavLeftHover : NavRightHover));
+                button.OnMouseOut.AddListener((UnityAction)(() => renderer.sprite = img == 0 ? NavLeftNormal : NavRightNormal));
+                return button;
+            }
+
+            // 左箭头（上一页）
+            GenerateButton(0.7f, 0).OnClick.AddListener((UnityAction)(() => navFunc.Invoke(false)));
+            // 右箭头（下一页）
+            GenerateButton(0.3f, 2).OnClick.AddListener((UnityAction)(() => navFunc.Invoke(true)));
         }
-
-        // 左箭头（上一页）
-        GenerateButton(0.7f, 0).OnClick.AddListener((UnityAction)(() => navFunc.Invoke(false)));
-        // 右箭头（下一页）
-        GenerateButton(0.3f, 2).OnClick.AddListener((UnityAction)(() => navFunc.Invoke(true)));
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.SetUpNavButton]", ex);
+        }
     }
 
     // ---- 辅助方法 ----
 
     private static GameObject CreateObject(string name, Transform? parent, Vector3 localPos)
     {
-        var obj = new GameObject(name);
-        obj.layer = LayerExpansion.GetUILayer();
-        if (parent != null) obj.transform.SetParent(parent, false);
-        obj.transform.localPosition = localPos;
-        obj.transform.localScale = Vector3.one;
-        return obj;
+        try
+        {
+            var obj = new GameObject(name);
+            obj.layer = LayerExpansion.GetUILayer();
+            if (parent != null) obj.transform.SetParent(parent, false);
+            obj.transform.localPosition = localPos;
+            obj.transform.localScale = Vector3.one;
+            return obj;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.CreateObject]", ex); return default;
+        }
     }
 
     private static T CreateObject<T>(string name, Transform? parent, Vector3 localPos) where T : Component
@@ -500,11 +592,18 @@ public class HudUIButton
 
     private HudUIButton(GameObject obj)
     {
-        GameObject = obj;
-        Renderer = obj.GetComponent<SpriteRenderer>();
-        Text = obj.GetComponentInChildren<TextMeshPro>();
-        Button = obj.GetComponent<PassiveButton>();
-        Collider = obj.GetComponent<BoxCollider2D>();
+        try
+        {
+            GameObject = obj;
+            Renderer = obj.GetComponent<SpriteRenderer>();
+            Text = obj.GetComponentInChildren<TextMeshPro>();
+            Button = obj.GetComponent<PassiveButton>();
+            Collider = obj.GetComponent<BoxCollider2D>();
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.HudUIButton]", ex);
+        }
     }
 
     /// <summary>
@@ -514,69 +613,76 @@ public class HudUIButton
     public static HudUIButton Create(Transform parent, string text = "",
         Vector2? size = null, Action? onClick = null)
     {
-        var obj = new GameObject("HudUIButton");
-        obj.layer = LayerExpansion.GetUILayer();
-        obj.transform.SetParent(parent, false);
-        obj.transform.localPosition = Vector3.zero;
-        obj.transform.localScale = Vector3.one;
-
-        var renderer = obj.AddComponent<SpriteRenderer>();
-        renderer.sprite = HudUIAssets.ButtonNormal;
-        renderer.drawMode = SpriteDrawMode.Sliced;
-        renderer.tileMode = SpriteTileMode.Continuous;
-
-        var collider = obj.AddComponent<BoxCollider2D>();
-        collider.isTrigger = true;
-
-        obj.AddComponent<SortingGroup>();
-
-        var tmp = HudUITextHelper.Create(obj.transform);
-        tmp.text = text;
-        tmp.fontSize = 2f;
-        tmp.fontSizeMax = 2f;
-        tmp.fontSizeMin = 1f;
-        tmp.m_fontSizeBase = 3f;
-        tmp.enableAutoSizing = true;
-        tmp.alignment = TextAlignmentOptions.Center;
-        tmp.color = UnityEngine.Color.white;
-        tmp.raycastTarget = false;
-        tmp.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-        tmp.rectTransform.localPosition = new Vector3(0f, 0f, -0.1f);
-        tmp.ForceMeshUpdate();
-
-        var hudButton = new HudUIButton(obj);
-        hudButton._normalSprite = HudUIAssets.ButtonNormal;
-        hudButton._hoverSprite = HudUIAssets.ButtonHover;
-        hudButton._selectedSprite = HudUIAssets.ButtonSelected;
-        hudButton._selectedHoverSprite = HudUIAssets.ButtonSelectedHover;
-
-        // 尺寸：指定了用指定的，没指定用文本 × 1.5
-        var btnSize = size ?? CalcAutoSize(tmp);
-        hudButton.ApplySize(btnSize);
-
-        var button = obj.AddComponent<PassiveButton>();
-        button.OnMouseOver = new UnityEvent();
-        button.OnMouseOut = new UnityEvent();
-        button.OnClick = new Button.ButtonClickedEvent();
-
-        button.OnMouseOver.AddListener((UnityAction)(() =>
+        try
         {
-            renderer.sprite = hudButton._isSelected ? hudButton._selectedHoverSprite : hudButton._hoverSprite;
-            try { SoundManager.Instance.PlaySound(Light.UI.Window.VanillaAsset.FindSoundClip("UI_Hover"), false, 0.8f); } catch { }
-        }));
-        button.OnMouseOut.AddListener((UnityAction)(() =>
-        {
-            renderer.sprite = hudButton._isSelected ? hudButton._selectedSprite : hudButton._normalSprite;
-        }));
+            var obj = new GameObject("HudUIButton");
+            obj.layer = LayerExpansion.GetUILayer();
+            obj.transform.SetParent(parent, false);
+            obj.transform.localPosition = Vector3.zero;
+            obj.transform.localScale = Vector3.one;
 
-        var localOnClick = onClick;
-        button.OnClick.AddListener((UnityAction)(() =>
-        {
-            try { SoundManager.Instance.PlaySound(Light.UI.Window.VanillaAsset.FindSoundClip("UI_Select"), false, 0.8f); } catch { }
-            localOnClick?.Invoke();
-        }));
+            var renderer = obj.AddComponent<SpriteRenderer>();
+            renderer.sprite = HudUIAssets.ButtonNormal;
+            renderer.drawMode = SpriteDrawMode.Sliced;
+            renderer.tileMode = SpriteTileMode.Continuous;
 
-        return hudButton;
+            var collider = obj.AddComponent<BoxCollider2D>();
+            collider.isTrigger = true;
+
+            obj.AddComponent<SortingGroup>();
+
+            var tmp = HudUITextHelper.Create(obj.transform);
+            tmp.text = text;
+            tmp.fontSize = 2f;
+            tmp.fontSizeMax = 2f;
+            tmp.fontSizeMin = 1f;
+            tmp.m_fontSizeBase = 3f;
+            tmp.enableAutoSizing = true;
+            tmp.alignment = TextAlignmentOptions.Center;
+            tmp.color = UnityEngine.Color.white;
+            tmp.raycastTarget = false;
+            tmp.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            tmp.rectTransform.localPosition = new Vector3(0f, 0f, -0.1f);
+            tmp.ForceMeshUpdate();
+
+            var hudButton = new HudUIButton(obj);
+            hudButton._normalSprite = HudUIAssets.ButtonNormal;
+            hudButton._hoverSprite = HudUIAssets.ButtonHover;
+            hudButton._selectedSprite = HudUIAssets.ButtonSelected;
+            hudButton._selectedHoverSprite = HudUIAssets.ButtonSelectedHover;
+
+            // 尺寸：指定了用指定的，没指定用文本 × 1.5
+            var btnSize = size ?? CalcAutoSize(tmp);
+            hudButton.ApplySize(btnSize);
+
+            var button = obj.AddComponent<PassiveButton>();
+            button.OnMouseOver = new UnityEvent();
+            button.OnMouseOut = new UnityEvent();
+            button.OnClick = new Button.ButtonClickedEvent();
+
+            button.OnMouseOver.AddListener((UnityAction)(() =>
+            {
+                renderer.sprite = hudButton._isSelected ? hudButton._selectedHoverSprite : hudButton._hoverSprite;
+                try { SoundManager.Instance.PlaySound(Light.UI.Window.VanillaAsset.FindSoundClip("UI_Hover"), false, 0.8f); } catch { }
+            }));
+            button.OnMouseOut.AddListener((UnityAction)(() =>
+            {
+                renderer.sprite = hudButton._isSelected ? hudButton._selectedSprite : hudButton._normalSprite;
+            }));
+
+            var localOnClick = onClick;
+            button.OnClick.AddListener((UnityAction)(() =>
+            {
+                try { SoundManager.Instance.PlaySound(Light.UI.Window.VanillaAsset.FindSoundClip("UI_Select"), false, 0.8f); } catch { }
+                localOnClick?.Invoke();
+            }));
+
+            return hudButton;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.Create]", ex); return default;
+        }
     }
 
     /// <summary>
@@ -586,79 +692,86 @@ public class HudUIButton
     public static HudUIButton CreateColorButton(Transform parent, string text = "",
         Vector2? size = null, Action? onClick = null, Color? color = null)
     {
-        var btnColor = color?.ToUnityColor() ?? UnityEngine.Color.white;
-
-        var obj = new GameObject("HudUIColorButton");
-        obj.layer = LayerExpansion.GetUILayer();
-        obj.transform.SetParent(parent, false);
-        obj.transform.localPosition = Vector3.zero;
-        obj.transform.localScale = Vector3.one;
-
-        var renderer = obj.AddComponent<SpriteRenderer>();
-        renderer.sprite = HudUIAssets.ColorButtonSprite;
-        renderer.drawMode = SpriteDrawMode.Sliced;
-        renderer.tileMode = SpriteTileMode.Continuous;
-        renderer.color = btnColor;
-
-        var collider = obj.AddComponent<BoxCollider2D>();
-        collider.isTrigger = true;
-
-        obj.AddComponent<SortingGroup>();
-
-        var tmp = HudUITextHelper.Create(obj.transform);
-        tmp.text = text;
-        tmp.fontSize = 2f;
-        tmp.fontSizeMax = 2f;
-        tmp.fontSizeMin = 1f;
-        tmp.m_fontSizeBase = 3f;
-        tmp.enableAutoSizing = true;
-        tmp.alignment = TextAlignmentOptions.Center;
-        tmp.color = UnityEngine.Color.white;
-        tmp.raycastTarget = false;
-        tmp.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-        tmp.rectTransform.localPosition = new Vector3(0f, 0f, -0.1f);
-        tmp.ForceMeshUpdate();
-
-        var hudButton = new HudUIButton(obj);
-        hudButton._normalSprite = HudUIAssets.ColorButtonSprite;
-        hudButton._hoverSprite = HudUIAssets.ColorButtonSelectedSprite;
-        hudButton._selectedSprite = HudUIAssets.ColorButtonSelectedSprite;
-        hudButton._selectedHoverSprite = HudUIAssets.ColorButtonSelectedSprite;
-
-        var btnSize = size ?? CalcAutoSize(tmp);
-        hudButton.ApplySize(btnSize);
-
-        var button = obj.AddComponent<PassiveButton>();
-        button.OnMouseOver = new UnityEvent();
-        button.OnMouseOut = new UnityEvent();
-        button.OnClick = new Button.ButtonClickedEvent();
-
-        var normalColor = btnColor;
-        var hoverColor = new UnityEngine.Color(
-            Mathf.Min(btnColor.r * 1.3f, 1f),
-            Mathf.Min(btnColor.g * 1.3f, 1f),
-            Mathf.Min(btnColor.b * 1.3f, 1f),
-            btnColor.a);
-
-        button.OnMouseOver.AddListener((UnityAction)(() =>
+        try
         {
-            renderer.sprite = hudButton._hoverSprite;
-            renderer.color = hoverColor;
-        }));
-        button.OnMouseOut.AddListener((UnityAction)(() =>
-        {
-            renderer.sprite = hudButton._normalSprite;
-            renderer.color = normalColor;
-        }));
+            var btnColor = color?.ToUnityColor() ?? UnityEngine.Color.white;
 
-        var localOnClick = onClick;
-        button.OnClick.AddListener((UnityAction)(() =>
-        {
-            try { SoundManager.Instance.PlaySound(Light.UI.Window.VanillaAsset.FindSoundClip("UI_Select"), false, 0.8f); } catch { }
-            localOnClick?.Invoke();
-        }));
+            var obj = new GameObject("HudUIColorButton");
+            obj.layer = LayerExpansion.GetUILayer();
+            obj.transform.SetParent(parent, false);
+            obj.transform.localPosition = Vector3.zero;
+            obj.transform.localScale = Vector3.one;
 
-        return hudButton;
+            var renderer = obj.AddComponent<SpriteRenderer>();
+            renderer.sprite = HudUIAssets.ColorButtonSprite;
+            renderer.drawMode = SpriteDrawMode.Sliced;
+            renderer.tileMode = SpriteTileMode.Continuous;
+            renderer.color = btnColor;
+
+            var collider = obj.AddComponent<BoxCollider2D>();
+            collider.isTrigger = true;
+
+            obj.AddComponent<SortingGroup>();
+
+            var tmp = HudUITextHelper.Create(obj.transform);
+            tmp.text = text;
+            tmp.fontSize = 2f;
+            tmp.fontSizeMax = 2f;
+            tmp.fontSizeMin = 1f;
+            tmp.m_fontSizeBase = 3f;
+            tmp.enableAutoSizing = true;
+            tmp.alignment = TextAlignmentOptions.Center;
+            tmp.color = UnityEngine.Color.white;
+            tmp.raycastTarget = false;
+            tmp.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            tmp.rectTransform.localPosition = new Vector3(0f, 0f, -0.1f);
+            tmp.ForceMeshUpdate();
+
+            var hudButton = new HudUIButton(obj);
+            hudButton._normalSprite = HudUIAssets.ColorButtonSprite;
+            hudButton._hoverSprite = HudUIAssets.ColorButtonSelectedSprite;
+            hudButton._selectedSprite = HudUIAssets.ColorButtonSelectedSprite;
+            hudButton._selectedHoverSprite = HudUIAssets.ColorButtonSelectedSprite;
+
+            var btnSize = size ?? CalcAutoSize(tmp);
+            hudButton.ApplySize(btnSize);
+
+            var button = obj.AddComponent<PassiveButton>();
+            button.OnMouseOver = new UnityEvent();
+            button.OnMouseOut = new UnityEvent();
+            button.OnClick = new Button.ButtonClickedEvent();
+
+            var normalColor = btnColor;
+            var hoverColor = new UnityEngine.Color(
+                Mathf.Min(btnColor.r * 1.3f, 1f),
+                Mathf.Min(btnColor.g * 1.3f, 1f),
+                Mathf.Min(btnColor.b * 1.3f, 1f),
+                btnColor.a);
+
+            button.OnMouseOver.AddListener((UnityAction)(() =>
+            {
+                renderer.sprite = hudButton._hoverSprite;
+                renderer.color = hoverColor;
+            }));
+            button.OnMouseOut.AddListener((UnityAction)(() =>
+            {
+                renderer.sprite = hudButton._normalSprite;
+                renderer.color = normalColor;
+            }));
+
+            var localOnClick = onClick;
+            button.OnClick.AddListener((UnityAction)(() =>
+            {
+                try { SoundManager.Instance.PlaySound(Light.UI.Window.VanillaAsset.FindSoundClip("UI_Select"), false, 0.8f); } catch { }
+                localOnClick?.Invoke();
+            }));
+
+            return hudButton;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.CreateColorButton]", ex); return default;
+        }
     }
 
     private const float DefaultMargin = 0.26f;
@@ -668,9 +781,16 @@ public class HudUIButton
     /// </summary>
     private static Vector2 CalcAutoSize(TextMeshPro tmp)
     {
-        float textW = tmp.preferredWidth;
-        float textH = tmp.preferredHeight;
-        return new Vector2(textW * 1.5f, textH * 1.5f);
+        try
+        {
+            float textW = tmp.preferredWidth;
+            float textH = tmp.preferredHeight;
+            return new Vector2(textW * 1.5f, textH * 1.5f);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.CalcAutoSize]", ex); return default;
+        }
     }
 
     /// <summary>
@@ -678,20 +798,34 @@ public class HudUIButton
     /// </summary>
     private void ApplySize(Vector2 size)
     {
-        _size = size;
-        Renderer.size = size;
-        Collider.size = size;
-        if (Text != null)
+        try
         {
-            Text.rectTransform.sizeDelta = size - new Vector2(DefaultMargin * 0.6f, DefaultMargin * 0.6f);
-            Text.ForceMeshUpdate();
+            _size = size;
+            Renderer.size = size;
+            Collider.size = size;
+            if (Text != null)
+            {
+                Text.rectTransform.sizeDelta = size - new Vector2(DefaultMargin * 0.6f, DefaultMargin * 0.6f);
+                Text.ForceMeshUpdate();
+            }
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.ApplySize]", ex);
         }
     }
 
     public void SetSelected(bool selected)
     {
-        _isSelected = selected;
-        Renderer.sprite = selected ? _selectedSprite : _normalSprite;
+        try
+        {
+            _isSelected = selected;
+            Renderer.sprite = selected ? _selectedSprite : _normalSprite;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.SetSelected]", ex);
+        }
     }
 
     /// <summary>
@@ -699,20 +833,34 @@ public class HudUIButton
     /// </summary>
     public void SetSize(Vector2? size)
     {
-        if (size.HasValue)
+        try
         {
-            ApplySize(size.Value);
+            if (size.HasValue)
+            {
+                ApplySize(size.Value);
+            }
+            else if (Text != null)
+            {
+                Text.ForceMeshUpdate();
+                ApplySize(CalcAutoSize(Text));
+            }
         }
-        else if (Text != null)
+        catch (Exception ex)
         {
-            Text.ForceMeshUpdate();
-            ApplySize(CalcAutoSize(Text));
+            LightLogger.LogError("[HudUI.SetSize]", ex);
         }
     }
 
     public void SetText(string text)
     {
-        if (Text != null) { Text.text = text; Text.ForceMeshUpdate(); }
+        try
+        {
+            if (Text != null) { Text.text = text; Text.ForceMeshUpdate(); }
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.SetText]", ex);
+        }
     }
 
     public void SetVisible(bool visible) => GameObject.SetActive(visible);
@@ -721,13 +869,20 @@ public class HudUIButton
 
     public void SetOnClick(Action onClick)
     {
-        Button.OnClick.RemoveAllListeners();
-        var localOnClick = onClick;
-        Button.OnClick.AddListener((UnityAction)(() =>
+        try
         {
-            try { SoundManager.Instance.PlaySound(Light.UI.Window.VanillaAsset.FindSoundClip("UI_Select"), false, 0.8f); } catch { }
-            localOnClick?.Invoke();
-        }));
+            Button.OnClick.RemoveAllListeners();
+            var localOnClick = onClick;
+            Button.OnClick.AddListener((UnityAction)(() =>
+            {
+                try { SoundManager.Instance.PlaySound(Light.UI.Window.VanillaAsset.FindSoundClip("UI_Select"), false, 0.8f); } catch { }
+                localOnClick?.Invoke();
+            }));
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.SetOnClick]", ex);
+        }
     }
 
     public void Destroy() => Object.Destroy(GameObject);
@@ -751,10 +906,17 @@ public class HudUIWindow
 
     private HudUIWindow(MetaScreen screen, Vector2 windowSize)
     {
-        Screen = screen;
-        GameObject = screen.gameObject;
-        _windowSize = windowSize;
-        _currentY = windowSize.y * 0.5f - 0.5f;
+        try
+        {
+            Screen = screen;
+            GameObject = screen.gameObject;
+            _windowSize = windowSize;
+            _currentY = windowSize.y * 0.5f - 0.5f;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.HudUIWindow]", ex);
+        }
     }
 
     /// <summary>
@@ -762,88 +924,123 @@ public class HudUIWindow
     /// </summary>
     public static HudUIWindow Create(string title = "", Vector2? size = null, Transform? parent = null)
     {
-        parent ??= HudManager.Instance?.transform;
-        if (parent == null) throw new InvalidOperationException("HudManager 未就绪");
+        try
+        {
+            parent ??= HudManager.Instance?.transform;
+            if (parent == null) throw new InvalidOperationException("HudManager 未就绪");
 
-        var windowSize = size ?? new Vector2(5f, 3f);
-        var screen = MetaScreen.GenerateWindow(windowSize, parent, new Vector3(0f, 0f, -50f),
-            withBlackScreen: true, closeOnClickOutside: false,
-            background: BackgroundSetting.Modern, withCloseButton: true);
+            var windowSize = size ?? new Vector2(5f, 3f);
+            var screen = MetaScreen.GenerateWindow(windowSize, parent, new Vector3(0f, 0f, -50f),
+                withBlackScreen: true, closeOnClickOutside: false,
+                background: BackgroundSetting.Modern, withCloseButton: true);
 
-        return new HudUIWindow(screen, windowSize);
+            return new HudUIWindow(screen, windowSize);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.Create]", ex); return default;
+        }
     }
 
     public void Close() => Screen.CloseScreen();
 
     public void ClearContent()
     {
-        foreach (var obj in _contentObjects)
+        try
         {
-            if (obj != null) Object.Destroy(obj);
+            foreach (var obj in _contentObjects)
+            {
+                if (obj != null) Object.Destroy(obj);
+            }
+            _contentObjects.Clear();
+            _currentY = _windowSize.y * 0.5f - 0.5f;
         }
-        _contentObjects.Clear();
-        _currentY = _windowSize.y * 0.5f - 0.5f;
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.ClearContent]", ex);
+        }
     }
 
     public TextMeshPro AddText(string text, float fontSize = 2f,
         TextAlignmentOptions alignment = TextAlignmentOptions.Center)
     {
-        var obj = new GameObject("Text");
-        obj.layer = LayerExpansion.GetUILayer();
-        obj.transform.SetParent(Screen.transform, false);
-        obj.transform.localPosition = new Vector3(0f, _currentY, -1f);
+        try
+        {
+            var obj = new GameObject("Text");
+            obj.layer = LayerExpansion.GetUILayer();
+            obj.transform.SetParent(Screen.transform, false);
+            obj.transform.localPosition = new Vector3(0f, _currentY, -1f);
 
-        var tmp = HudUITextHelper.Create(obj.transform);
-        tmp.text = text;
-        tmp.fontSize = fontSize;
-        tmp.fontSizeMax = fontSize;
-        tmp.fontSizeMin = fontSize * 0.5f;
-        tmp.m_fontSizeBase = 3f;
-        tmp.alignment = alignment;
-        tmp.color = UnityEngine.Color.white;
-        tmp.enableWordWrapping = alignment != TextAlignmentOptions.Center;
-        tmp.ForceMeshUpdate();
+            var tmp = HudUITextHelper.Create(obj.transform);
+            tmp.text = text;
+            tmp.fontSize = fontSize;
+            tmp.fontSizeMax = fontSize;
+            tmp.fontSizeMin = fontSize * 0.5f;
+            tmp.m_fontSizeBase = 3f;
+            tmp.alignment = alignment;
+            tmp.color = UnityEngine.Color.white;
+            tmp.enableWordWrapping = alignment != TextAlignmentOptions.Center;
+            tmp.ForceMeshUpdate();
 
-        float textWidth = _windowSize.x - 0.6f;
-        float textHeight = tmp.preferredHeight + 0.1f;
-        tmp.rectTransform.sizeDelta = new Vector2(textWidth, textHeight);
-        tmp.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-        tmp.ForceMeshUpdate();
+            float textWidth = _windowSize.x - 0.6f;
+            float textHeight = tmp.preferredHeight + 0.1f;
+            tmp.rectTransform.sizeDelta = new Vector2(textWidth, textHeight);
+            tmp.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            tmp.ForceMeshUpdate();
 
-        textHeight = tmp.preferredHeight + 0.1f;
-        tmp.rectTransform.sizeDelta = new Vector2(textWidth, textHeight);
-        tmp.ForceMeshUpdate();
+            textHeight = tmp.preferredHeight + 0.1f;
+            tmp.rectTransform.sizeDelta = new Vector2(textWidth, textHeight);
+            tmp.ForceMeshUpdate();
 
-        _currentY -= tmp.preferredHeight + 0.2f;
-        _contentObjects.Add(obj);
-        return tmp;
+            _currentY -= tmp.preferredHeight + 0.2f;
+            _contentObjects.Add(obj);
+            return tmp;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.AddText]", ex); return default;
+        }
     }
 
     public HudUIButton AddButton(string text, Action onClick, Vector2? size = null, Color? color = null)
     {
-        var btn = HudUIButton.Create(Screen.transform, text, size ?? ButtonSize.Rectangle,
-            () => { onClick?.Invoke(); });
-        btn.SetPosition(new Vector3(0f, _currentY, -1f));
+        try
+        {
+            var btn = HudUIButton.Create(Screen.transform, text, size ?? ButtonSize.Rectangle,
+                () => { onClick?.Invoke(); });
+            btn.SetPosition(new Vector3(0f, _currentY, -1f));
 
-        var btnHeight = (size ?? ButtonSize.Rectangle).y;
-        _currentY -= btnHeight + 0.15f;
+            var btnHeight = (size ?? ButtonSize.Rectangle).y;
+            _currentY -= btnHeight + 0.15f;
 
-        if (color != null) btn.SetColor(color.Value);
-        _contentObjects.Add(btn.GameObject);
-        return btn;
+            if (color != null) btn.SetColor(color.Value);
+            _contentObjects.Add(btn.GameObject);
+            return btn;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.AddButton]", ex); return default;
+        }
     }
 
     public HudUIButton AddColorButton(string text, Action onClick, Vector2? size = null, Color? color = null)
     {
-        var btn = HudUIButton.CreateColorButton(Screen.transform, text, size ?? ButtonSize.Rectangle,
-            () => { onClick?.Invoke(); }, color);
-        btn.SetPosition(new Vector3(0f, _currentY, -1f));
+        try
+        {
+            var btn = HudUIButton.CreateColorButton(Screen.transform, text, size ?? ButtonSize.Rectangle,
+                () => { onClick?.Invoke(); }, color);
+            btn.SetPosition(new Vector3(0f, _currentY, -1f));
 
-        var btnHeight = (size ?? ButtonSize.Rectangle).y;
-        _currentY -= btnHeight + 0.15f;
+            var btnHeight = (size ?? ButtonSize.Rectangle).y;
+            _currentY -= btnHeight + 0.15f;
 
-        _contentObjects.Add(btn.GameObject);
-        return btn;
+            _contentObjects.Add(btn.GameObject);
+            return btn;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUI.AddColorButton]", ex); return default;
+        }
     }
 
     public void AddMargin(float height) => _currentY -= height;

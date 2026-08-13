@@ -5,6 +5,7 @@ using Light.Utilities;
 using System.Collections;
 using TMPro;
 using UnityEngine;
+using System;
 
 namespace Light.Patches;
 
@@ -66,25 +67,39 @@ public static class LoadPatch
     {
         set
         {
-            if (loadText != null) loadText.text = value;
+            try
+            {
+                if (loadText != null) loadText.text = value;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("[LoadPatch.set]", ex);
+            }
         }
     }
 
     private static string GetNextLoadStage(float elapsed)
     {
-        return elapsed switch
+        try
         {
-            < 0.1f => "正在加载资源...",
-            < 0.3f => "正在解压资源包...",
-            < 0.5f => "正在初始化模组核心...",
-            < 0.7f => "正在注册组件...",
-            < 0.9f => "正在配置 Harmony 补丁...",
-            < 1.2f => "正在加载语言数据...",
-            < 1.5f => "正在准备游戏环境...",
-            < 1.8f => "正在校准模组参数...",
-            < 2.0f => "正在建立通信管道...",
-            _ => "准备就绪..."
-        };
+            return elapsed switch
+            {
+                < 0.1f => "正在加载资源...",
+                < 0.3f => "正在解压资源包...",
+                < 0.5f => "正在初始化模组核心...",
+                < 0.7f => "正在注册组件...",
+                < 0.9f => "正在配置 Harmony 补丁...",
+                < 1.2f => "正在加载语言数据...",
+                < 1.5f => "正在准备游戏环境...",
+                < 1.8f => "正在校准模组参数...",
+                < 2.0f => "正在建立通信管道...",
+                _ => "准备就绪..."
+            };
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[LoadPatch.GetNextLoadStage]", ex); return default;
+        }
     }
 
     private static IEnumerator CoLoadLight(SplashManager instance)

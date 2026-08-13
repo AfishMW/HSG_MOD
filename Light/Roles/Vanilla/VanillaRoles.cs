@@ -3,6 +3,8 @@ using LightInDark;
 using LightInDark.Configuration;
 using LightInDark.Game;
 using LightInDark.Roles;
+using LightInDark.Core;
+using System;
 using Color = LightInDark.Color;
 
 namespace Light.Roles.Vanilla;
@@ -27,8 +29,15 @@ public class VanillaImpostorRuntime : RuntimeRole
     public VanillaImpostorRuntime(DefinedRole definition, Player player, int[] arguments) : base(definition, player, arguments) { }
     protected override void OnActivated()
     {
-        if (MyPlayer.Control != null)
-            RoleManager.Instance.SetRole(MyPlayer.Control, RoleTypes.Impostor);
+        try
+        {
+            if (MyPlayer.Control != null)
+                RoleManager.Instance.SetRole(MyPlayer.Control, RoleTypes.Impostor);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[VanillaRoles.OnActivated]", ex);
+        }
     }
 }
 
@@ -52,7 +61,14 @@ public class VanillaCrewmateRuntime : RuntimeRole
     public VanillaCrewmateRuntime(DefinedRole definition, Player player, int[] arguments) : base(definition, player, arguments) { }
     protected override void OnActivated()
     {
-        if (MyPlayer.Control != null)
-            RoleManager.Instance.SetRole(MyPlayer.Control, RoleTypes.Crewmate);
+        try
+        {
+            if (MyPlayer.Control != null)
+                RoleManager.Instance.SetRole(MyPlayer.Control, RoleTypes.Crewmate);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[VanillaRoles.OnActivated]", ex);
+        }
     }
 }

@@ -23,16 +23,64 @@ namespace LightInDark.Events
 
         public static void ScanAndRegisterAll()
         {
-            _listeners.Clear();
-            var assemblies = new[] { Assembly.GetExecutingAssembly(), AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == "Light") }
-                .Where(a => a != null).Distinct();
-
-            foreach (var assembly in assemblies)
-            foreach (var type in assembly.GetTypes())
+            try
             {
-                if (type.IsAbstract || type.IsInterface || !type.IsClass)
-                    continue;
+                _listeners.Clear();
+                var assemblies = new[] { Assembly.GetExecutingAssembly(), AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == "Light") }
+                    .Where(a => a != null).Distinct();
 
+                foreach (var assembly in assemblies)
+                foreach (var type in assembly.GetTypes())
+                {
+                    if (type.IsAbstract || type.IsInterface || !type.IsClass)
+                        continue;
+
+                    foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+                    {
+                        var parameters = method.GetParameters();
+                        if (parameters.Length != 1)
+                            continue;
+
+                        var eventType = parameters[0].ParameterType;
+                        if (!typeof(IEvent).IsAssignableFrom(eventType))
+                            continue;
+
+                        var priority = method.GetCustomAttribute<EventPriorityAttribute>()?.Priority ?? 0;
+                        var onlyHost = method.GetCustomAttribute<OnlyHostAttribute>() != null;
+                        var onlyMyPlayer = method.GetCustomAttribute<OnlyMyPlayerAttribute>() != null;
+                        var local = method.GetCustomAttribute<LocalAttribute>() != null;
+
+                        if (!_listeners.ContainsKey(eventType))
+                            _listeners[eventType] = new List<ListenerEntry>();
+
+                        _listeners[eventType].Add(new ListenerEntry
+                        {
+                            Instance = null,
+                            Method = method,
+                            Priority = priority,
+                            OnlyHost = onlyHost,
+                            OnlyMyPlayer = onlyMyPlayer,
+                            Local = local
+                        });
+                    }
+                }
+
+                LightLogger.Log($"EventSystem scan complete. {_listeners.Sum(kv => kv.Value.Count)} listeners cached.");
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("EventSystem.ScanAndRegisterAll", ex);
+            }
+        }
+
+        public static void RegisterInstance(object instance)
+        {
+            try
+            {
+                if (instance == null || _registeredInstances.Contains(instance))
+                    return;
+
+                var type = instance.GetType();
                 foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
                 {
                     var parameters = method.GetParameters();
@@ -43,149 +91,130 @@ namespace LightInDark.Events
                     if (!typeof(IEvent).IsAssignableFrom(eventType))
                         continue;
 
-                    var priority = method.GetCustomAttribute<EventPriorityAttribute>()?.Priority ?? 0;
-                    var onlyHost = method.GetCustomAttribute<OnlyHostAttribute>() != null;
-                    var onlyMyPlayer = method.GetCustomAttribute<OnlyMyPlayerAttribute>() != null;
-                    var local = method.GetCustomAttribute<LocalAttribute>() != null;
-
-                    if (!_listeners.ContainsKey(eventType))
-                        _listeners[eventType] = new List<ListenerEntry>();
-
-                    _listeners[eventType].Add(new ListenerEntry
+                    if (_listeners.TryGetValue(eventType, out var list))
                     {
-                        Instance = null,
-                        Method = method,
-                        Priority = priority,
-                        OnlyHost = onlyHost,
-                        OnlyMyPlayer = onlyMyPlayer,
-                        Local = local
-                    });
+                        for (int i = 0; i < list.Count; i++)
+                        {
+                            if (list[i].Method.DeclaringType == type && list[i].Instance == null)
+                            {
+                                list[i] = new ListenerEntry
+                                {
+                                    Instance = instance,
+                                    Method = list[i].Method,
+                                    Priority = list[i].Priority,
+                                    OnlyHost = list[i].OnlyHost,
+                                    OnlyMyPlayer = list[i].OnlyMyPlayer,
+                                    Local = list[i].Local
+                                };
+                            }
+                        }
+                    }
                 }
-            }
 
-            LightLogger.Log($"EventSystem scan complete. {_listeners.Sum(kv => kv.Value.Count)} listeners cached.");
+                _registeredInstances.Add(instance);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("EventSystem.RegisterInstance", ex);
+            }
         }
 
-        public static void RegisterInstance(object instance)
+        public static void UnregisterInstance(object instance)
         {
-            if (instance == null || _registeredInstances.Contains(instance))
-                return;
-
-            var type = instance.GetType();
-            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+            try
             {
-                var parameters = method.GetParameters();
-                if (parameters.Length != 1)
-                    continue;
+                if (instance == null)
+                    return;
 
-                var eventType = parameters[0].ParameterType;
-                if (!typeof(IEvent).IsAssignableFrom(eventType))
-                    continue;
+                _registeredInstances.Remove(instance);
 
-                if (_listeners.TryGetValue(eventType, out var list))
+                foreach (var kv in _listeners)
                 {
-                    for (int i = 0; i < list.Count; i++)
+                    for (int i = kv.Value.Count - 1; i >= 0; i--)
                     {
-                        if (list[i].Method.DeclaringType == type && list[i].Instance == null)
+                        if (kv.Value[i].Instance == instance)
                         {
-                            list[i] = new ListenerEntry
+                            kv.Value[i] = new ListenerEntry
                             {
-                                Instance = instance,
-                                Method = list[i].Method,
-                                Priority = list[i].Priority,
-                                OnlyHost = list[i].OnlyHost,
-                                OnlyMyPlayer = list[i].OnlyMyPlayer,
-                                Local = list[i].Local
+                                Instance = null,
+                                Method = kv.Value[i].Method,
+                                Priority = kv.Value[i].Priority,
+                                OnlyHost = kv.Value[i].OnlyHost,
+                                OnlyMyPlayer = kv.Value[i].OnlyMyPlayer,
+                                Local = kv.Value[i].Local
                             };
                         }
                     }
                 }
             }
-
-            _registeredInstances.Add(instance);
-        }
-
-        public static void UnregisterInstance(object instance)
-        {
-            if (instance == null)
-                return;
-
-            _registeredInstances.Remove(instance);
-
-            foreach (var kv in _listeners)
+            catch (Exception ex)
             {
-                for (int i = kv.Value.Count - 1; i >= 0; i--)
-                {
-                    if (kv.Value[i].Instance == instance)
-                    {
-                        kv.Value[i] = new ListenerEntry
-                        {
-                            Instance = null,
-                            Method = kv.Value[i].Method,
-                            Priority = kv.Value[i].Priority,
-                            OnlyHost = kv.Value[i].OnlyHost,
-                            OnlyMyPlayer = kv.Value[i].OnlyMyPlayer,
-                            Local = kv.Value[i].Local
-                        };
-                    }
-                }
+                LightLogger.LogError("EventSystem.UnregisterInstance", ex);
             }
         }
 
         public static T RunEvent<T>(T ev) where T : IEvent
         {
-            var type = typeof(T);
-            if (!_listeners.TryGetValue(type, out var candidates))
-                return ev;
-
-            var sorted = candidates
-                .Where(c => c.Instance != null)
-                .OrderByDescending(c => c.Priority)
-                .ToList();
-
-            foreach (var entry in sorted)
+            try
             {
-                if (entry.OnlyHost && !AmongUsClient.Instance.AmHost)
-                    continue;
+                var type = typeof(T);
+                if (!_listeners.TryGetValue(type, out var candidates))
+                    return ev;
 
-                if (entry.Local && !AmongUsClient.Instance.AmClient)
-                    continue;
+                var sorted = candidates
+                    .Where(c => c.Instance != null)
+                    .OrderByDescending(c => c.Priority)
+                    .ToList();
 
-                if (entry.OnlyMyPlayer)
+                foreach (var entry in sorted)
                 {
-                    var localPlayer = PlayerControl.LocalPlayer;
-                    if (localPlayer == null)
+                    if (entry.OnlyHost && !AmongUsClient.Instance.AmHost)
                         continue;
 
-                    var playerMember = type.GetProperty("Player") ?? (MemberInfo)type.GetField("Player");
-                    if (playerMember != null)
-                    {
-                        PlayerControl eventPlayer = null;
-                        if (playerMember is PropertyInfo prop)
-                            eventPlayer = prop.GetValue(ev) as PlayerControl;
-                        else if (playerMember is FieldInfo field)
-                            eventPlayer = field.GetValue(ev) as PlayerControl;
+                    if (entry.Local && !AmongUsClient.Instance.AmClient)
+                        continue;
 
-                        if (eventPlayer != localPlayer)
+                    if (entry.OnlyMyPlayer)
+                    {
+                        var localPlayer = PlayerControl.LocalPlayer;
+                        if (localPlayer == null)
                             continue;
+
+                        var playerMember = type.GetProperty("Player") ?? (MemberInfo)type.GetField("Player");
+                        if (playerMember != null)
+                        {
+                            PlayerControl eventPlayer = null;
+                            if (playerMember is PropertyInfo prop)
+                                eventPlayer = prop.GetValue(ev) as PlayerControl;
+                            else if (playerMember is FieldInfo field)
+                                eventPlayer = field.GetValue(ev) as PlayerControl;
+
+                            if (eventPlayer != localPlayer)
+                                continue;
+                        }
+                        else
+                        {
+                            LightLogger.LogWarning($"Event {type.Name} has no 'Player' field, OnlyMyPlayer ignored.");
+                        }
                     }
-                    else
+
+                    try
                     {
-                        LightLogger.LogWarning($"Event {type.Name} has no 'Player' field, OnlyMyPlayer ignored.");
+                        entry.Method.Invoke(entry.Instance, new object[] { ev });
+                    }
+                    catch (Exception ex)
+                    {
+                        LightLogger.LogError($"Event execution error in {entry.Method.Name}: {ex}");
                     }
                 }
 
-                try
-                {
-                    entry.Method.Invoke(entry.Instance, new object[] { ev });
-                }
-                catch (Exception ex)
-                {
-                    LightLogger.LogError($"Event execution error in {entry.Method.Name}: {ex}");
-                }
+                return ev;
             }
-
-            return ev;
+            catch (Exception ex)
+            {
+                LightLogger.LogError("EventSystem.RunEvent", ex);
+                return default;
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using LightInDark.Configuration;
+using LightInDark.Core;
 
 namespace LightInDark.Roles
 {
@@ -22,43 +23,109 @@ namespace LightInDark.Roles
         /// 注册角色。在 LIDPlugin.Load() 中调用。
         /// </summary>
         public static T Register<T>() where T : DefinedRole, new()
-            => Register(new T());
+        {
+            try
+            {
+                return Register(new T());
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RoleRegistry.Register", ex);
+                return default;
+            }
+        }
 
         /// <summary>
         /// 注册角色实例。
         /// </summary>
         public static T Register<T>(T role) where T : DefinedRole
         {
-            if (role == null) throw new ArgumentNullException(nameof(role));
-            role.Id = _nextId++;
-            _roles[role.Name] = role;
-            _rolesByType[typeof(T)] = role;
-            _rolesById[role.Id] = role;
-            return role;
+            try
+            {
+                if (role == null) throw new ArgumentNullException(nameof(role));
+                role.Id = _nextId++;
+                _roles[role.Name] = role;
+                _rolesByType[typeof(T)] = role;
+                _rolesById[role.Id] = role;
+                return role;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RoleRegistry.Register<T>", ex);
+                return default;
+            }
         }
 
         /// <summary>按名称获取角色定义</summary>
         public static DefinedRole GetByName(string name)
-            => _roles.TryGetValue(name, out var role) ? role : null;
+        {
+            try
+            {
+                return _roles.TryGetValue(name, out var role) ? role : null;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RoleRegistry.GetByName", ex);
+                return null;
+            }
+        }
 
         /// <summary>按类型获取角色定义</summary>
         public static T Get<T>() where T : DefinedRole
-            => _rolesByType.TryGetValue(typeof(T), out var role) ? role as T : null;
+        {
+            try
+            {
+                return _rolesByType.TryGetValue(typeof(T), out var role) ? role as T : null;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RoleRegistry.Get", ex);
+                return default;
+            }
+        }
 
         /// <summary>按注册序号获取角色定义</summary>
         public static DefinedRole GetById(int id)
-            => _rolesById.TryGetValue(id, out var role) ? role : null;
+        {
+            try
+            {
+                return _rolesById.TryGetValue(id, out var role) ? role : null;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RoleRegistry.GetById", ex);
+                return null;
+            }
+        }
 
         /// <summary>角色是否已注册</summary>
-        public static bool IsRegistered(string name) => _roles.ContainsKey(name);
+        public static bool IsRegistered(string name)
+        {
+            try
+            {
+                return _roles.ContainsKey(name);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RoleRegistry.IsRegistered", ex);
+                return default;
+            }
+        }
 
         /// <summary>清空所有注册（游戏结束时调用）</summary>
         public static void Clear()
         {
-            _roles.Clear();
-            _rolesByType.Clear();
-            _rolesById.Clear();
-            _nextId = 0;
+            try
+            {
+                _roles.Clear();
+                _rolesByType.Clear();
+                _rolesById.Clear();
+                _nextId = 0;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RoleRegistry.Clear", ex);
+            }
         }
     }
 
@@ -70,36 +137,116 @@ namespace LightInDark.Roles
     {
         /// <summary>检查玩家是否拥有指定类型的角色</summary>
         public static bool HasRole<T>(this Game.Player player) where T : RuntimeRole
-            => player.Role is T;
+        {
+            try
+            {
+                return player.Role is T;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RoleTypeChecker.HasRole", ex);
+                return default;
+            }
+        }
 
         /// <summary>获取玩家的指定类型角色实例（如果存在）</summary>
         public static T GetRole<T>(this Game.Player player) where T : RuntimeRole
-            => player.Role as T;
+        {
+            try
+            {
+                return player.Role as T;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RoleTypeChecker.GetRole", ex);
+                return default;
+            }
+        }
 
         /// <summary>检查玩家是否为指定角色定义</summary>
         public static bool Is<TDef, TRuntime>(this Game.Player player)
             where TDef : DefinedRole
             where TRuntime : RuntimeRole
-            => player.Role is TRuntime && player.Role?.Definition is TDef;
+        {
+            try
+            {
+                return player.Role is TRuntime && player.Role?.Definition is TDef;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RoleTypeChecker.Is", ex);
+                return default;
+            }
+        }
 
         /// <summary>检查玩家是否为指定类别</summary>
         public static bool IsCategory(this Game.Player player, RoleCategory category)
-            => player.Role?.Definition?.Category == category;
+        {
+            try
+            {
+                return player.Role?.Definition?.Category == category;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RoleTypeChecker.IsCategory", ex);
+                return default;
+            }
+        }
 
         /// <summary>检查玩家是否为船员</summary>
         public static bool IsCrewmate(this Game.Player player)
-            => player.IsCategory(RoleCategory.Crewmate);
+        {
+            try
+            {
+                return player.IsCategory(RoleCategory.Crewmate);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RoleTypeChecker.IsCrewmate", ex);
+                return default;
+            }
+        }
 
         /// <summary>检查玩家是否为内鬼</summary>
         public static bool IsImpostor(this Game.Player player)
-            => player.IsCategory(RoleCategory.Impostor);
+        {
+            try
+            {
+                return player.IsCategory(RoleCategory.Impostor);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RoleTypeChecker.IsImpostor", ex);
+                return default;
+            }
+        }
 
         /// <summary>检查玩家是否为中立</summary>
         public static bool IsNeutral(this Game.Player player)
-            => player.IsCategory(RoleCategory.Neutral);
+        {
+            try
+            {
+                return player.IsCategory(RoleCategory.Neutral);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RoleTypeChecker.IsNeutral", ex);
+                return default;
+            }
+        }
 
         /// <summary>检查玩家是否存活且有角色</summary>
         public static bool IsAliveWithRole(this Game.Player player)
-            => !player.IsDead && player.HasRole;
+        {
+            try
+            {
+                return !player.IsDead && player.HasRole;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("RoleTypeChecker.IsAliveWithRole", ex);
+                return default;
+            }
+        }
     }
 }
