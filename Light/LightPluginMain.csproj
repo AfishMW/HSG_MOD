@@ -42,7 +42,7 @@
 
 	<Target Name="CustomCopyToOutput" AfterTargets="Build">
 		<PropertyGroup>
-			<CustomOutDir>$(ProjectDir)Output\</CustomOutDir>
+			<CustomOutDir>$(ProjectDir)..\Output\</CustomOutDir>
 		</PropertyGroup>
 		<MakeDir Directories="$(CustomOutDir)" Condition="!Exists('$(CustomOutDir)')" />
 		<Copy SourceFiles="$(TargetPath)" DestinationFolder="$(CustomOutDir)" />

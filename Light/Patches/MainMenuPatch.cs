@@ -332,7 +332,7 @@ public static class MainMenuPatch
                 else tmp.text = "LIGHT";
             } 
             var trans = fp.GetChild(0).GetComponent<TextTranslatorTMP>();
-            trans?.enabled = false;
+            if (trans != null) trans.enabled = false;
         }
 
         // 注册到 scalerList
