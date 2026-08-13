@@ -6,6 +6,7 @@ using LightInDark.Roles;
 using LightInDark.RPCs;
 using Light.UI.Ability;
 using UnityEngine;
+using System;
 using Color = LightInDark.Color;
 
 namespace Light.Roles.Crewmates;
@@ -34,8 +35,15 @@ public class CallerRuntime : RuntimeRole
 
     protected override void OnActivated()
     {
-        if (!AmOwner) return;
-        AddAbility(new CallerAbility(this));
+        try
+        {
+            if (!AmOwner) return;
+            AddAbility(new CallerAbility(this));
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[Caller.OnActivated]", ex);
+        }
     }
 }
 
@@ -85,15 +93,29 @@ public class CallerAbility : AbstractPlayerAbility
 
     private void OnClick()
     {
-        if (!AmOwner) return;
-        if (MyPlayer?.Control == null) return;
-        RpcDefinitions.RpcStartMeeting();
-        LightLogger.Log("[Ability]Caller ability used.");
+        try
+        {
+            if (!AmOwner) return;
+            if (MyPlayer?.Control == null) return;
+            RpcDefinitions.RpcStartMeeting();
+            LightLogger.Log("[Ability]Caller ability used.");
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[Caller.OnClick]", ex);
+        }
     }
 
     public override void Release()
     {
-        _button?.Release();
-        base.Release();
+        try
+        {
+            _button?.Release();
+            base.Release();
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[Caller.Release]", ex);
+        }
     }
 }

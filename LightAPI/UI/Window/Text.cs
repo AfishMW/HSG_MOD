@@ -1,4 +1,5 @@
 using System;
+using LightInDark.Core;
 using TMPro;
 using UnityEngine;
 
@@ -37,10 +38,17 @@ public class FontSize
 
     public FontSize(float fontSize, float fontSizeMin, float fontSizeMax, bool allowAutoSizing = true)
     {
-        FontSizeDefault = fontSize;
-        FontSizeMin = fontSizeMin;
-        FontSizeMax = fontSizeMax;
-        AllowAutoSizing = allowAutoSizing;
+        try
+        {
+            FontSizeDefault = fontSize;
+            FontSizeMin = fontSizeMin;
+            FontSizeMax = fontSizeMax;
+            AllowAutoSizing = allowAutoSizing;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("FontSize.FontSize", ex);
+        }
     }
 
     public FontSize(float fontSize, bool allowAutoSizing = true)
@@ -89,27 +97,41 @@ public class TextAttribute
 
     public TextAttribute(TextAlignment alignment, Font font, FontStyle style, FontSize fontSize, Size size, Color color, bool isFlexible, float? outlineWidth = null)
     {
-        Alignment = alignment;
-        Font = font;
-        Style = style;
-        FontSize = fontSize;
-        Size = size;
-        Color = color;
-        IsFlexible = isFlexible;
-        OutlineWidth = outlineWidth;
+        try
+        {
+            Alignment = alignment;
+            Font = font;
+            Style = style;
+            FontSize = fontSize;
+            Size = size;
+            Color = color;
+            IsFlexible = isFlexible;
+            OutlineWidth = outlineWidth;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("TextAttribute.TextAttribute", ex);
+        }
     }
 
     public TextAttribute(TextAttribute other)
     {
-        Alignment = other.Alignment;
-        Font = other.Font;
-        Style = other.Style;
-        FontSize = other.FontSize;
-        Size = other.Size;
-        Color = other.Color;
-        IsFlexible = other.IsFlexible;
-        Wrapping = other.Wrapping;
-        OutlineWidth = other.OutlineWidth;
+        try
+        {
+            Alignment = other.Alignment;
+            Font = other.Font;
+            Style = other.Style;
+            FontSize = other.FontSize;
+            Size = other.Size;
+            Color = other.Color;
+            IsFlexible = other.IsFlexible;
+            Wrapping = other.Wrapping;
+            OutlineWidth = other.OutlineWidth;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("TextAttribute.TextAttribute(copy)", ex);
+        }
     }
 }
 
@@ -213,8 +235,29 @@ public interface TextComponent
 public class RawTextComponent : TextComponent
 {
     private readonly string _text;
-    public RawTextComponent(string text) => _text = text;
-    public string GetString() => _text;
+    public RawTextComponent(string text)
+    {
+        try
+        {
+            _text = text;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("RawTextComponent.RawTextComponent", ex);
+        }
+    }
+    public string GetString()
+    {
+        try
+        {
+            return _text;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("RawTextComponent.GetString", ex);
+            return default;
+        }
+    }
 }
 
 /// <summary>
@@ -223,8 +266,29 @@ public class RawTextComponent : TextComponent
 public class TranslateTextComponent : TextComponent
 {
     private readonly string _key;
-    public TranslateTextComponent(string key) => _key = key;
-    public string GetString() => Language.Language.Translate(_key, _key);
+    public TranslateTextComponent(string key)
+    {
+        try
+        {
+            _key = key;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("TranslateTextComponent.TranslateTextComponent", ex);
+        }
+    }
+    public string GetString()
+    {
+        try
+        {
+            return Language.Language.Translate(_key, _key);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("TranslateTextComponent.GetString", ex);
+            return default;
+        }
+    }
 }
 
 /// <summary>
@@ -237,18 +301,33 @@ public class ColorTextComponent : TextComponent
 
     public ColorTextComponent(Color color, TextComponent inner)
     {
-        _color = color;
-        _inner = inner;
+        try
+        {
+            _color = color;
+            _inner = inner;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("ColorTextComponent.ColorTextComponent", ex);
+        }
     }
 
     public string GetString()
     {
-        var c = _color;
-        byte r = (byte)(c.R * 255f);
-        byte g = (byte)(c.G * 255f);
-        byte b = (byte)(c.B * 255f);
-        byte a = (byte)(c.A * 255f);
-        return $"<color=#{r:X2}{g:X2}{b:X2}{a:X2}>{_inner.GetString()}</color>";
+        try
+        {
+            var c = _color;
+            byte r = (byte)(c.R * 255f);
+            byte g = (byte)(c.G * 255f);
+            byte b = (byte)(c.B * 255f);
+            byte a = (byte)(c.A * 255f);
+            return $"<color=#{r:X2}{g:X2}{b:X2}{a:X2}>{_inner.GetString()}</color>";
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("ColorTextComponent.GetString", ex);
+            return default;
+        }
     }
 }
 
@@ -261,9 +340,41 @@ public class LazyTextComponent : TextComponent
     private readonly string? _textForCompare;
     public LazyTextComponent(Func<string> supplier, string? textForCompare = null)
     {
-        _supplier = supplier;
-        _textForCompare = textForCompare;
+        try
+        {
+            _supplier = supplier;
+            _textForCompare = textForCompare;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("LazyTextComponent.LazyTextComponent", ex);
+        }
     }
-    public string GetString() => _supplier();
-    public string TextForCompare => _textForCompare ?? GetString();
+    public string GetString()
+    {
+        try
+        {
+            return _supplier();
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("LazyTextComponent.GetString", ex);
+            return default;
+        }
+    }
+    public string TextForCompare
+    {
+        get
+        {
+            try
+            {
+                return _textForCompare ?? GetString();
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("LazyTextComponent.TextForCompare", ex);
+                return default;
+            }
+        }
+    }
 }

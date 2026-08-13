@@ -2,6 +2,7 @@ using HarmonyLib;
 using LightInDark.Core;
 using LightInDark.Utilities;
 using Light.UI;
+using System;
 
 namespace Light.Patches;
 

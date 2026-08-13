@@ -1,5 +1,6 @@
 using LightInDark.Core;
 using Light.UI.Help;
+using System;
 
 namespace Light.Patches;
 
@@ -27,15 +28,22 @@ public static class HelpKeyPatch
     /// <summary>是否可以打开帮助（防重复 / 聊天输入 / 占用状态）</summary>
     private static bool CanOpenHelp()
     {
-        if (HelpScreen.OpenedAnyHelpScreen) return false;
-        // 聊天输入框聚焦时屏蔽
-        var chat = HudManager.Instance?.Chat;
-        if (chat != null && chat.freeChatField != null && chat.freeChatField.textArea != null && chat.freeChatField.textArea.hasFocus)
-            return false;
-        if (Minigame.Instance != null) return false;
-        if (IntroCutscene.Instance != null) return false;
-        if (ExileController.Instance != null) return false;
-        return true;
+        try
+        {
+            if (HelpScreen.OpenedAnyHelpScreen) return false;
+            // 聊天输入框聚焦时屏蔽
+            var chat = HudManager.Instance?.Chat;
+            if (chat != null && chat.freeChatField != null && chat.freeChatField.textArea != null && chat.freeChatField.textArea.hasFocus)
+                return false;
+            if (Minigame.Instance != null) return false;
+            if (IntroCutscene.Instance != null) return false;
+            if (ExileController.Instance != null) return false;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HelpKeyPatch.CanOpenHelp]", ex); return default;
+        }
     }
 }
 

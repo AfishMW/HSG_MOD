@@ -2,6 +2,7 @@ using HarmonyLib;
 using Light;
 using LightInDark.Core;
 using TMPro;
+using System;
 namespace Light.Patches;
 
 [HarmonyPatch(typeof(VersionShower), nameof(VersionShower.Start))]

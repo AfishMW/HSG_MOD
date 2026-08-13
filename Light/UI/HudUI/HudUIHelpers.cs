@@ -1,6 +1,7 @@
 using System;
 using TMPro;
 using UnityEngine;
+using LightInDark.Core;
 using Color = LightInDark.Color;
 
 namespace Light.UI.HudUI;
@@ -19,10 +20,17 @@ public static class HudUI
 
         public ButtonOption(string label, Action onClick, Color? color = null, Vector2? size = null)
         {
-            Label = label;
-            OnClick = onClick;
-            Color = color;
-            Size = size;
+            try
+            {
+                Label = label;
+                OnClick = onClick;
+                Color = color;
+                Size = size;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("[HudUIHelpers.ButtonOption]", ex);
+            }
         }
     }
 
@@ -31,22 +39,29 @@ public static class HudUI
     /// </summary>
     public static HudUIWindow OpenButtonWindow(string title, params ButtonOption[] options)
     {
-        var window = HudUIWindow.Create(title, new Vector2(4.5f, 1.5f + options.Length * 0.65f));
-
-        window.AddText(title, 2.2f, TextAlignmentOptions.Center);
-        window.AddMargin(0.2f);
-
-        foreach (var opt in options)
+        try
         {
-            var localOpt = opt;
-            window.AddButton(localOpt.Label, () =>
-            {
-                localOpt.OnClick?.Invoke();
-                window.Close();
-            }, localOpt.Size ?? ButtonSize.Rectangle, localOpt.Color);
-        }
+            var window = HudUIWindow.Create(title, new Vector2(4.5f, 1.5f + options.Length * 0.65f));
 
-        return window;
+            window.AddText(title, 2.2f, TextAlignmentOptions.Center);
+            window.AddMargin(0.2f);
+
+            foreach (var opt in options)
+            {
+                var localOpt = opt;
+                window.AddButton(localOpt.Label, () =>
+                {
+                    localOpt.OnClick?.Invoke();
+                    window.Close();
+                }, localOpt.Size ?? ButtonSize.Rectangle, localOpt.Color);
+            }
+
+            return window;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUIHelpers.OpenButtonWindow]", ex); return default;
+        }
     }
 
     /// <summary>
@@ -54,27 +69,34 @@ public static class HudUI
     /// </summary>
     public static HudUIWindow OpenConfirmDialog(string message, Action onConfirm, Action? onCancel = null)
     {
-        var window = HudUIWindow.Create("", WindowSize.Confirm);
-
-        window.AddText(message, 1.5f, TextAlignmentOptions.Center);
-        window.AddMargin(0.2f);
-
-        var localOnConfirm = onConfirm;
-        var localOnCancel = onCancel;
-
-        window.AddButton("是", () =>
+        try
         {
-            localOnConfirm?.Invoke();
-            window.Close();
-        }, ButtonSize.Rectangle, Color.Green);
+            var window = HudUIWindow.Create("", WindowSize.Confirm);
 
-        window.AddButton("否", () =>
+            window.AddText(message, 1.5f, TextAlignmentOptions.Center);
+            window.AddMargin(0.2f);
+
+            var localOnConfirm = onConfirm;
+            var localOnCancel = onCancel;
+
+            window.AddButton("是", () =>
+            {
+                localOnConfirm?.Invoke();
+                window.Close();
+            }, ButtonSize.Rectangle, Color.Green);
+
+            window.AddButton("否", () =>
+            {
+                localOnCancel?.Invoke();
+                window.Close();
+            }, ButtonSize.Rectangle, Color.Red);
+
+            return window;
+        }
+        catch (Exception ex)
         {
-            localOnCancel?.Invoke();
-            window.Close();
-        }, ButtonSize.Rectangle, Color.Red);
-
-        return window;
+            LightLogger.LogError("[HudUIHelpers.OpenConfirmDialog]", ex); return default;
+        }
     }
 
     /// <summary>
@@ -82,19 +104,26 @@ public static class HudUI
     /// </summary>
     public static HudUIWindow OpenMessageDialog(string message, Action? onClose = null)
     {
-        var window = HudUIWindow.Create("", WindowSize.Small);
-
-        window.AddText(message, 1.5f, TextAlignmentOptions.Center);
-        window.AddMargin(0.2f);
-
-        var localOnClose = onClose;
-        window.AddButton("确定", () =>
+        try
         {
-            localOnClose?.Invoke();
-            window.Close();
-        }, ButtonSize.Rectangle);
+            var window = HudUIWindow.Create("", WindowSize.Small);
 
-        return window;
+            window.AddText(message, 1.5f, TextAlignmentOptions.Center);
+            window.AddMargin(0.2f);
+
+            var localOnClose = onClose;
+            window.AddButton("确定", () =>
+            {
+                localOnClose?.Invoke();
+                window.Close();
+            }, ButtonSize.Rectangle);
+
+            return window;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUIHelpers.OpenMessageDialog]", ex); return default;
+        }
     }
 
     /// <summary>
@@ -102,13 +131,20 @@ public static class HudUI
     /// </summary>
     public static HudUIWindow OpenTextWindow(string title, string text)
     {
-        var window = HudUIWindow.Create(title, new Vector2(5f, 3.5f));
+        try
+        {
+            var window = HudUIWindow.Create(title, new Vector2(5f, 3.5f));
 
-        window.AddText(title, 2.2f, TextAlignmentOptions.Center);
-        window.AddMargin(0.2f);
-        window.AddText(text, 1.2f, TextAlignmentOptions.Left);
+            window.AddText(title, 2.2f, TextAlignmentOptions.Center);
+            window.AddMargin(0.2f);
+            window.AddText(text, 1.2f, TextAlignmentOptions.Left);
 
-        return window;
+            return window;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUIHelpers.OpenTextWindow]", ex); return default;
+        }
     }
 
     /// <summary>
@@ -116,15 +152,22 @@ public static class HudUI
     /// </summary>
     public static HudUIWindow OpenCustomWindow(string title, Action<HudUIWindow> builder, Vector2? windowSize = null)
     {
-        var window = HudUIWindow.Create(title, windowSize ?? WindowSize.Standard);
-
-        if (!string.IsNullOrEmpty(title))
+        try
         {
-            window.AddText(title, 2.2f, TextAlignmentOptions.Center);
-            window.AddMargin(0.2f);
-        }
+            var window = HudUIWindow.Create(title, windowSize ?? WindowSize.Standard);
 
-        builder?.Invoke(window);
-        return window;
+            if (!string.IsNullOrEmpty(title))
+            {
+                window.AddText(title, 2.2f, TextAlignmentOptions.Center);
+                window.AddMargin(0.2f);
+            }
+
+            builder?.Invoke(window);
+            return window;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HudUIHelpers.OpenCustomWindow]", ex); return default;
+        }
     }
 }

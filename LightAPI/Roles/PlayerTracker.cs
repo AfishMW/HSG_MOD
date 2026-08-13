@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
+using LightInDark.Core;
 using LightInDark.Game;
 using UnityEngine;
 
@@ -31,9 +32,16 @@ namespace LightInDark.Roles
         /// <param name="predicate">额外过滤条件</param>
         public PlayerTracker(Player source, float? maxDistance = null, Func<Player, bool>? predicate = null)
         {
-            _source = source;
-            _maxDistance = maxDistance ?? 2f; // 默认击杀距离
-            _predicate = predicate ?? (_ => true);
+            try
+            {
+                _source = source;
+                _maxDistance = maxDistance ?? 2f; // 默认击杀距离
+                _predicate = predicate ?? (_ => true);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("PlayerTracker.PlayerTracker", ex);
+            }
         }
 
         /// <summary>
@@ -41,94 +49,123 @@ namespace LightInDark.Roles
         /// </summary>
         public void Update()
         {
-            if (IsLocked)
+            try
             {
-                HighlightTarget(CurrentTarget);
-                return;
-            }
+                if (IsLocked)
+                {
+                    HighlightTarget(CurrentTarget);
+                    return;
+                }
 
-            CurrentTarget = FindClosestTarget();
-            HighlightTarget(CurrentTarget);
+                CurrentTarget = FindClosestTarget();
+                HighlightTarget(CurrentTarget);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("PlayerTracker.Update", ex);
+            }
         }
 
         private Player FindClosestTarget()
         {
-            if (_source?.Control == null) return null;
-
-            var sourcePos = _source.Position;
-            Player closest = null;
-            float closestDist = float.MaxValue;
-
-            var game = LightInDark.Game.GameManager.Instance;
-            if (game == null) return null;
-
-            foreach (var player in game.AllPlayers)
+            try
             {
-                if (player == null || player.Control == null) continue;
-                if (player.Control == _source.Control) continue;
-                if (player.IsDead) continue;
-                if (!_predicate(player)) continue;
+                if (_source?.Control == null) return null;
 
-                float dist = Vector2.Distance(sourcePos, player.Position);
-                if (dist > _maxDistance) continue;
+                var sourcePos = _source.Position;
+                Player closest = null;
+                float closestDist = float.MaxValue;
 
-                var source = _source.Control.transform.position;
-                var target = player.Control.transform.position;
-                Vector2 dir = (target - source);
-                float mag = dir.magnitude;
-                if (mag > 0.01f)
+                var game = LightInDark.Game.GameManager.Instance;
+                if (game == null) return null;
+
+                foreach (var player in game.AllPlayers)
                 {
-                    Vector2 dirNorm = dir / mag;
-                    if (PhysicsHelpers.AnyNonTriggersBetween(
-                            (Vector2)source, dirNorm, mag, Constants.ShipAndObjectsMask))
-                        continue;
+                    if (player == null || player.Control == null) continue;
+                    if (player.Control == _source.Control) continue;
+                    if (player.IsDead) continue;
+                    if (!_predicate(player)) continue;
+
+                    float dist = Vector2.Distance(sourcePos, player.Position);
+                    if (dist > _maxDistance) continue;
+
+                    var source = _source.Control.transform.position;
+                    var target = player.Control.transform.position;
+                    Vector2 dir = (target - source);
+                    float mag = dir.magnitude;
+                    if (mag > 0.01f)
+                    {
+                        Vector2 dirNorm = dir / mag;
+                        if (PhysicsHelpers.AnyNonTriggersBetween(
+                                (Vector2)source, dirNorm, mag, Constants.ShipAndObjectsMask))
+                            continue;
+                    }
+
+                    if (dist < closestDist)
+                    {
+                        closestDist = dist;
+                        closest = player;
+                    }
                 }
 
-                if (dist < closestDist)
-                {
-                    closestDist = dist;
-                    closest = player;
-                }
+                return closest;
             }
-
-            return closest;
+            catch (Exception ex)
+            {
+                LightLogger.LogError("PlayerTracker.FindClosestTarget", ex);
+                return null;
+            }
         }
 
         private void HighlightTarget(Player target)
         {
-            var game = LightInDark.Game.GameManager.Instance;
-            if (game == null) return;
-
-            foreach (var player in game.AllPlayers)
+            try
             {
-                if (player?.Control == null) continue;
-                if (player != target)
+                var game = LightInDark.Game.GameManager.Instance;
+                if (game == null) return;
+
+                foreach (var player in game.AllPlayers)
                 {
-                    var rend = player.Control.cosmetics.currentBodySprite.BodySprite;
-                    if (rend != null) rend.material.SetFloat("_Outline", 0f);
+                    if (player?.Control == null) continue;
+                    if (player != target)
+                    {
+                        var rend = player.Control.cosmetics.currentBodySprite.BodySprite;
+                        if (rend != null) rend.material.SetFloat("_Outline", 0f);
+                    }
+                }
+
+                if (target?.Control != null)
+                {
+                    var rend = target.Control.cosmetics.currentBodySprite.BodySprite;
+                    if (rend != null)
+                    {
+                        rend.material.SetFloat("_Outline", 1f);
+                        rend.material.SetColor("_OutlineColor", HighlightColor.ToUnityColor());
+                    }
                 }
             }
-
-            if (target?.Control != null)
+            catch (Exception ex)
             {
-                var rend = target.Control.cosmetics.currentBodySprite.BodySprite;
-                if (rend != null)
-                {
-                    rend.material.SetFloat("_Outline", 1f);
-                    rend.material.SetColor("_OutlineColor", HighlightColor.ToUnityColor());
-                }
+                LightLogger.LogError("PlayerTracker.HighlightTarget", ex);
             }
         }
 
         /// <summary>停止追踪并清除高亮</summary>
         public void Stop()
         {
-            if (CurrentTarget?.Control != null)
+            try
             {
-                var rend = CurrentTarget.Control.cosmetics.currentBodySprite.BodySprite;
-                if (rend != null) rend.material.SetFloat("_Outline", 0f);
+                if (CurrentTarget?.Control != null)
+                {
+                    var rend = CurrentTarget.Control.cosmetics.currentBodySprite.BodySprite;
+                    if (rend != null) rend.material.SetFloat("_Outline", 0f);
+                }
+                CurrentTarget = null;
             }
-            CurrentTarget = null;
+            catch (Exception ex)
+            {
+                LightLogger.LogError("PlayerTracker.Stop", ex);
+            }
         }
     }
 
@@ -139,14 +176,44 @@ namespace LightInDark.Roles
     {
         /// <summary>标准过滤：非自己、非死亡</summary>
         public static Func<Player, bool> Standard(Player source)
-            => p => p.Control != source.Control && !p.IsDead;
+        {
+            try
+            {
+                return p => p.Control != source.Control && !p.IsDead;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("TrackerPredicates.Standard", ex);
+                return default;
+            }
+        }
 
         /// <summary>可击杀过滤：标准 + 非内鬼</summary>
         public static Func<Player, bool> Killable(Player source)
-            => p => p.Control != source.Control && !p.IsDead && !p.IsImpostor();
+        {
+            try
+            {
+                return p => p.Control != source.Control && !p.IsDead && !p.IsImpostor();
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("TrackerPredicates.Killable", ex);
+                return default;
+            }
+        }
 
         /// <summary>仅内鬼目标过滤：标准 + 非内鬼</summary>
         public static Func<Player, bool> ImpostorTarget(Player source)
-            => p => p.Control != source.Control && !p.IsDead && !p.IsImpostor();
+        {
+            try
+            {
+                return p => p.Control != source.Control && !p.IsDead && !p.IsImpostor();
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("TrackerPredicates.ImpostorTarget", ex);
+                return default;
+            }
+        }
     }
 }

@@ -7,6 +7,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
+using LightInDark.Core;
 using Object = UnityEngine.Object;
 using Button = UnityEngine.UI.Button;
 using Color = LightInDark.Color;
@@ -24,7 +25,14 @@ public abstract class AbstractGUIWidget : GUIWidget
 
     protected AbstractGUIWidget(GUIAlignment alignment)
     {
-        _alignment = alignment;
+        try
+        {
+            _alignment = alignment;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[Widgets.AbstractGUIWidget]", ex);
+        }
     }
 
     protected static float CalcWidth(GUIAlignment alignment, float myWidth, float maxWidth)
@@ -35,9 +43,16 @@ public abstract class AbstractGUIWidget : GUIWidget
 
     private static float Calc(GUIAlignment alignment, float myParam, float maxParam, GUIAlignment lower, GUIAlignment higher)
     {
-        if ((alignment & lower) != 0) return (myParam - maxParam) * 0.5f;
-        if ((alignment & higher) != 0) return (maxParam - myParam) * 0.5f;
-        return 0f;
+        try
+        {
+            if ((alignment & lower) != 0) return (myParam - maxParam) * 0.5f;
+            if ((alignment & higher) != 0) return (maxParam - myParam) * 0.5f;
+            return 0f;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[Widgets.Calc]", ex); return default;
+        }
     }
 }
 
@@ -53,8 +68,15 @@ public class GUIEmptyWidget : AbstractGUIWidget
 
     public override GameObject? Instantiate(Size size, out Size actualSize)
     {
-        actualSize = Size.Zero;
-        return null;
+        try
+        {
+            actualSize = Size.Zero;
+            return null;
+        }
+        catch (Exception ex)
+        {
+            actualSize = default; LightLogger.LogError("[Widgets.Instantiate]", ex); return default;
+        }
     }
 }
 
@@ -73,8 +95,15 @@ public class NoSGUIMargin : AbstractGUIWidget
 
     public override GameObject? Instantiate(Size size, out Size actualSize)
     {
-        actualSize = new Size(_margin);
-        return null;
+        try
+        {
+            actualSize = new Size(_margin);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            actualSize = default; LightLogger.LogError("[Widgets.Instantiate]", ex); return default;
+        }
     }
 }
 
@@ -89,24 +118,45 @@ public class LogicGUIWidget : GUIWidget
 
     public LogicGUIWidget(GUIWidget inner, Action<GameObject?, Size> logic)
     {
-        _inner = inner;
-        _logic = logic;
+        try
+        {
+            _inner = inner;
+            _logic = logic;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[Widgets.LogicGUIWidget]", ex);
+        }
     }
 
     public override GUIAlignment Alignment => _inner.Alignment;
 
     public override GameObject? Instantiate(Size size, out Size actualSize)
     {
-        var obj = _inner.Instantiate(size, out actualSize);
-        _logic.Invoke(obj, actualSize);
-        return obj;
+        try
+        {
+            var obj = _inner.Instantiate(size, out actualSize);
+            _logic.Invoke(obj, actualSize);
+            return obj;
+        }
+        catch (Exception ex)
+        {
+            actualSize = default; LightLogger.LogError("[Widgets.Instantiate]", ex); return default;
+        }
     }
 
     public override GameObject? Instantiate(Anchor anchor, Size size, out Size actualSize)
     {
-        var obj = _inner.Instantiate(anchor, size, out actualSize);
-        _logic.Invoke(obj, actualSize);
-        return obj;
+        try
+        {
+            var obj = _inner.Instantiate(anchor, size, out actualSize);
+            _logic.Invoke(obj, actualSize);
+            return obj;
+        }
+        catch (Exception ex)
+        {
+            actualSize = default; LightLogger.LogError("[Widgets.Instantiate]", ex); return default;
+        }
     }
 
     public override bool PostponesConsideringSize
@@ -133,8 +183,15 @@ public class GUISizeFixer : AbstractGUIWidget
 
     public override GameObject? Instantiate(Size size, out Size actualSize)
     {
-        actualSize = _size;
-        return _inner.Instantiate(size, out _);
+        try
+        {
+            actualSize = _size;
+            return _inner.Instantiate(size, out _);
+        }
+        catch (Exception ex)
+        {
+            actualSize = default; LightLogger.LogError("[Widgets.Instantiate]", ex); return default;
+        }
     }
 }
 
@@ -156,69 +213,83 @@ public class NoSGUIText : AbstractGUIWidget
 
     protected static void ReflectAttribute(TextAttribute attr, TextMeshPro text, float width)
     {
-        text.color = attr.Color.ToUnityColor();
-        text.alignment = (TextAlignmentOptions)attr.Alignment;
-        text.fontStyle = (FontStyles)attr.Style;
-        text.fontSize = attr.FontSize.FontSizeDefault;
-        text.fontSizeMin = attr.FontSize.FontSizeMin;
-        text.fontSizeMax = attr.FontSize.FontSizeMax;
-        text.enableAutoSizing = attr.FontSize.AllowAutoSizing;
-        text.enableWordWrapping = attr.Wrapping;
-        text.rectTransform.sizeDelta = new Vector2(Mathf.Min(width, attr.Size.Width), attr.Size.Height);
-        text.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
-        text.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-        text.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-
-        if (attr.Font?.FontAsset != null)
+        try
         {
-            text.font = attr.Font.FontAsset;
-            if (attr.Font.FontMaterial != null)
-                text.fontMaterial = attr.Font.FontMaterial;
+            text.color = attr.Color.ToUnityColor();
+            text.alignment = (TextAlignmentOptions)attr.Alignment;
+            text.fontStyle = (FontStyles)attr.Style;
+            text.fontSize = attr.FontSize.FontSizeDefault;
+            text.fontSizeMin = attr.FontSize.FontSizeMin;
+            text.fontSizeMax = attr.FontSize.FontSizeMax;
+            text.enableAutoSizing = attr.FontSize.AllowAutoSizing;
+            text.enableWordWrapping = attr.Wrapping;
+            text.rectTransform.sizeDelta = new Vector2(Mathf.Min(width, attr.Size.Width), attr.Size.Height);
+            text.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+            text.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            text.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+
+            if (attr.Font?.FontAsset != null)
+            {
+                text.font = attr.Font.FontAsset;
+                if (attr.Font.FontMaterial != null)
+                    text.fontMaterial = attr.Font.FontMaterial;
+            }
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[Widgets.ReflectAttribute]", ex);
         }
     }
 
     public override GameObject? Instantiate(Size size, out Size actualSize)
     {
-        if (Text == null)
+        try
         {
-            actualSize = Size.Zero;
-            return null;
-        }
-
-        var sourcePrefab = VanillaAsset.GetStandardTextPrefab();
-        if (sourcePrefab == null)
-        {
-            actualSize = Size.Zero;
-            return null;
-        }
-        var text = Object.Instantiate(sourcePrefab, null);
-        text.transform.localPosition = Vector3.zero;
-
-        ReflectAttribute(Attr, text, size.Width);
-        text.text = Text.GetString();
-        text.ForceMeshUpdate();
-
-        if (Attr.IsFlexible)
-        {
-            if (text.enableWordWrapping)
+            if (Text == null)
             {
-                float w = Mathf.Min(text.rectTransform.sizeDelta.x, text.textBounds.size.x);
-                float h = text.textBounds.size.y;
-                text.rectTransform.sizeDelta = new Vector2(w, h);
+                actualSize = Size.Zero;
+                return null;
             }
-            else
+
+            var sourcePrefab = VanillaAsset.GetStandardTextPrefab();
+            if (sourcePrefab == null)
             {
-                float pw = Mathf.Min(text.rectTransform.sizeDelta.x, text.preferredWidth);
-                float ph = Mathf.Min(text.rectTransform.sizeDelta.y, text.preferredHeight);
-                text.rectTransform.sizeDelta = new Vector2(pw, ph);
+                actualSize = Size.Zero;
+                return null;
             }
+            var text = Object.Instantiate(sourcePrefab, null);
+            text.transform.localPosition = Vector3.zero;
+
+            ReflectAttribute(Attr, text, size.Width);
+            text.text = Text.GetString();
             text.ForceMeshUpdate();
+
+            if (Attr.IsFlexible)
+            {
+                if (text.enableWordWrapping)
+                {
+                    float w = Mathf.Min(text.rectTransform.sizeDelta.x, text.textBounds.size.x);
+                    float h = text.textBounds.size.y;
+                    text.rectTransform.sizeDelta = new Vector2(w, h);
+                }
+                else
+                {
+                    float pw = Mathf.Min(text.rectTransform.sizeDelta.x, text.preferredWidth);
+                    float ph = Mathf.Min(text.rectTransform.sizeDelta.y, text.preferredHeight);
+                    text.rectTransform.sizeDelta = new Vector2(pw, ph);
+                }
+                text.ForceMeshUpdate();
+            }
+
+            PostBuilder?.Invoke(text);
+
+            actualSize = new Size(text.rectTransform.sizeDelta);
+            return text.gameObject;
         }
-
-        PostBuilder?.Invoke(text);
-
-        actualSize = new Size(text.rectTransform.sizeDelta);
-        return text.gameObject;
+        catch (Exception ex)
+        {
+            actualSize = default; LightLogger.LogError("[Widgets.Instantiate]", ex); return default;
+        }
     }
 }
 
@@ -245,43 +316,50 @@ public class GUIButton : NoSGUIText
 
     public override GameObject? Instantiate(Size size, out Size actualSize)
     {
-        var inner = base.Instantiate(size, out actualSize)!;
+        try
+        {
+            var inner = base.Instantiate(size, out actualSize)!;
 
-        var margin = GetTextMargin();
+            var margin = GetTextMargin();
 
-        // 按钮背景 SpriteRenderer（原版资源缺失时用嵌入按钮图兜底）
-        var button = UnityHelper.CreateObject<SpriteRenderer>("Button", null, Vector3.zero, LayerExpansion.GetUILayer());
-        button.sprite = VanillaAsset.TextButtonSprite;
-        if (button.sprite == null) button.sprite = Light.UI.HudUI.HudUIAssets.ButtonNormal;
-        button.drawMode = SpriteDrawMode.Sliced;
-        button.tileMode = SpriteTileMode.Continuous;
-        button.size = actualSize.ToUnityVector() + new Vector2(margin * 0.84f, margin * 0.84f);
+            // 按钮背景 SpriteRenderer（原版资源缺失时用嵌入按钮图兜底）
+            var button = UnityHelper.CreateObject<SpriteRenderer>("Button", null, Vector3.zero, LayerExpansion.GetUILayer());
+            button.sprite = VanillaAsset.TextButtonSprite;
+            if (button.sprite == null) button.sprite = Light.UI.HudUI.HudUIAssets.ButtonNormal;
+            button.drawMode = SpriteDrawMode.Sliced;
+            button.tileMode = SpriteTileMode.Continuous;
+            button.size = actualSize.ToUnityVector() + new Vector2(margin * 0.84f, margin * 0.84f);
 
-        // 文本放在按钮之上
-        inner.transform.SetParent(button.transform);
-        inner.transform.localPosition += new Vector3(0, 0, -0.05f);
+            // 文本放在按钮之上
+            inner.transform.SetParent(button.transform);
+            inner.transform.localPosition += new Vector3(0, 0, -0.05f);
 
-        // 碰撞体
-        var collider = button.gameObject.AddComponent<BoxCollider2D>();
-        collider.size = actualSize.ToUnityVector() + new Vector2(margin * 0.6f, margin * 0.6f);
-        collider.isTrigger = true;
+            // 碰撞体
+            var collider = button.gameObject.AddComponent<BoxCollider2D>();
+            collider.size = actualSize.ToUnityVector() + new Vector2(margin * 0.6f, margin * 0.6f);
+            collider.isTrigger = true;
 
-        // PassiveButton（默认灰色底，悬浮亮白）
-        var normalColor = ButtonColor ?? new Color(0.72f, 0.72f, 0.72f, 1f);
-        var passiveButton = button.gameObject.SetUpButton(true, button, normalColor, SelectedColor);
-        var clickable = new GUIClickable(passiveButton);
+            // PassiveButton（默认灰色底，悬浮亮白）
+            var normalColor = ButtonColor ?? new Color(0.72f, 0.72f, 0.72f, 1f);
+            var passiveButton = button.gameObject.SetUpButton(true, button, normalColor, SelectedColor);
+            var clickable = new GUIClickable(passiveButton);
 
-        if (OnClick != null)
-            passiveButton.OnClick.AddListener((UnityAction)(() => OnClick(clickable)));
-        if (OnMouseOver != null)
-            passiveButton.OnMouseOver.AddListener((UnityAction)(() => OnMouseOver(clickable)));
-        if (OnMouseOut != null)
-            passiveButton.OnMouseOut.AddListener((UnityAction)(() => OnMouseOut(clickable)));
+            if (OnClick != null)
+                passiveButton.OnClick.AddListener((UnityAction)(() => OnClick(clickable)));
+            if (OnMouseOver != null)
+                passiveButton.OnMouseOver.AddListener((UnityAction)(() => OnMouseOver(clickable)));
+            if (OnMouseOut != null)
+                passiveButton.OnMouseOut.AddListener((UnityAction)(() => OnMouseOut(clickable)));
 
-        actualSize.Width += margin + 0.1f;
-        actualSize.Height += margin + 0.1f;
+            actualSize.Width += margin + 0.1f;
+            actualSize.Height += margin + 0.1f;
 
-        return button.gameObject;
+            return button.gameObject;
+        }
+        catch (Exception ex)
+        {
+            actualSize = default; LightLogger.LogError("[Widgets.Instantiate]", ex); return default;
+        }
     }
 }
 
@@ -309,39 +387,46 @@ public class NoSGUIImage : AbstractGUIWidget
 
     public override GameObject? Instantiate(Size size, out Size actualSize)
     {
-        if (_sprite == null)
+        try
         {
-            actualSize = Size.Zero;
-            return null;
+            if (_sprite == null)
+            {
+                actualSize = Size.Zero;
+                return null;
+            }
+
+            var renderer = UnityHelper.CreateObject<SpriteRenderer>("Image", null, Vector3.zero, LayerExpansion.GetUILayer());
+            renderer.sprite = _sprite;
+            if (IsMasked) renderer.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
+
+            var spriteSize = renderer.sprite.bounds.size;
+            float scale = Mathf.Min(
+                _size.Width.HasValue ? (_size.Width.Value / spriteSize.x) : float.MaxValue,
+                _size.Height.HasValue ? (_size.Height.Value / spriteSize.y) : float.MaxValue
+            );
+            renderer.transform.localScale = Vector3.one * scale;
+
+            if (TintColor != null) renderer.color = TintColor.Value.ToUnityColor();
+
+            actualSize = new Size(spriteSize.x * scale, spriteSize.y * scale);
+
+            if (OnClick != null)
+            {
+                var button = renderer.gameObject.SetUpButton(true, renderer, TintColor ?? Color.White);
+                var collider = renderer.gameObject.AddComponent<BoxCollider2D>();
+                collider.size = renderer.sprite.bounds.size;
+                collider.isTrigger = true;
+
+                var clickable = new GUIClickable(button);
+                button.OnClick.AddListener((UnityAction)(() => { OnClick.Invoke(clickable); }));
+            }
+
+            return renderer.gameObject;
         }
-
-        var renderer = UnityHelper.CreateObject<SpriteRenderer>("Image", null, Vector3.zero, LayerExpansion.GetUILayer());
-        renderer.sprite = _sprite;
-        if (IsMasked) renderer.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
-
-        var spriteSize = renderer.sprite.bounds.size;
-        float scale = Mathf.Min(
-            _size.Width.HasValue ? (_size.Width.Value / spriteSize.x) : float.MaxValue,
-            _size.Height.HasValue ? (_size.Height.Value / spriteSize.y) : float.MaxValue
-        );
-        renderer.transform.localScale = Vector3.one * scale;
-
-        if (TintColor != null) renderer.color = TintColor.Value.ToUnityColor();
-
-        actualSize = new Size(spriteSize.x * scale, spriteSize.y * scale);
-
-        if (OnClick != null)
+        catch (Exception ex)
         {
-            var button = renderer.gameObject.SetUpButton(true, renderer, TintColor ?? Color.White);
-            var collider = renderer.gameObject.AddComponent<BoxCollider2D>();
-            collider.size = renderer.sprite.bounds.size;
-            collider.isTrigger = true;
-
-            var clickable = new GUIClickable(button);
-            button.OnClick.AddListener((UnityAction)(() => { OnClick.Invoke(clickable); }));
+            actualSize = default; LightLogger.LogError("[Widgets.Instantiate]", ex); return default;
         }
-
-        return renderer.gameObject;
     }
 }
 
@@ -368,57 +453,64 @@ public class VerticalWidgetsHolder : WidgetsHolder
 
     public override GameObject? Instantiate(Size size, out Size actualSize)
     {
-        var results = Widgets.Select(c => (c.Instantiate(size, out var acSize), acSize, c)).ToArray();
-
-        float maxWidth = 0f;
-        float sumHeight = 0f;
-        float? tempHeight = null;
-
-        foreach (var r in results)
+        try
         {
-            maxWidth = Mathf.Max(maxWidth, r.acSize.Width);
-            if (r.c.PostponesConsideringSize)
+            var results = Widgets.Select(c => (c.Instantiate(size, out var acSize), acSize, c)).ToArray();
+
+            float maxWidth = 0f;
+            float sumHeight = 0f;
+            float? tempHeight = null;
+
+            foreach (var r in results)
             {
-                tempHeight = Mathf.Max(tempHeight ?? r.acSize.Height, r.acSize.Height);
+                maxWidth = Mathf.Max(maxWidth, r.acSize.Width);
+                if (r.c.PostponesConsideringSize)
+                {
+                    tempHeight = Mathf.Max(tempHeight ?? r.acSize.Height, r.acSize.Height);
+                }
+                else
+                {
+                    sumHeight += Mathf.Max(r.acSize.Height, tempHeight ?? r.acSize.Height);
+                    tempHeight = 0f;
+                }
             }
-            else
+
+            if (FixedWidth != null) maxWidth = FixedWidth.Value;
+
+            var myObj = UnityHelper.CreateObject("WidgetsHolder", null, Vector3.zero, LayerExpansion.GetUILayer());
+
+            float height = sumHeight * 0.5f;
+            float? maxHeight = null;
+
+            foreach (var r in results)
             {
-                sumHeight += Mathf.Max(r.acSize.Height, tempHeight ?? r.acSize.Height);
-                tempHeight = 0f;
+                if (r.Item1 != null)
+                {
+                    r.Item1.transform.SetParent(myObj.transform);
+                    r.Item1.transform.localPosition = new Vector3(
+                        CalcWidth(r.c.Alignment, r.acSize.Width, maxWidth),
+                        height - r.acSize.Height * 0.5f,
+                        0f);
+                }
+
+                if (r.c.PostponesConsideringSize)
+                {
+                    maxHeight = Mathf.Max(maxHeight ?? r.acSize.Height, r.acSize.Height);
+                }
+                else
+                {
+                    height -= Mathf.Max(maxHeight ?? r.acSize.Height, r.acSize.Height);
+                    maxHeight = null;
+                }
             }
+
+            actualSize = new Size(maxWidth, sumHeight);
+            return myObj;
         }
-
-        if (FixedWidth != null) maxWidth = FixedWidth.Value;
-
-        var myObj = UnityHelper.CreateObject("WidgetsHolder", null, Vector3.zero, LayerExpansion.GetUILayer());
-
-        float height = sumHeight * 0.5f;
-        float? maxHeight = null;
-
-        foreach (var r in results)
+        catch (Exception ex)
         {
-            if (r.Item1 != null)
-            {
-                r.Item1.transform.SetParent(myObj.transform);
-                r.Item1.transform.localPosition = new Vector3(
-                    CalcWidth(r.c.Alignment, r.acSize.Width, maxWidth),
-                    height - r.acSize.Height * 0.5f,
-                    0f);
-            }
-
-            if (r.c.PostponesConsideringSize)
-            {
-                maxHeight = Mathf.Max(maxHeight ?? r.acSize.Height, r.acSize.Height);
-            }
-            else
-            {
-                height -= Mathf.Max(maxHeight ?? r.acSize.Height, r.acSize.Height);
-                maxHeight = null;
-            }
+            actualSize = default; LightLogger.LogError("[Widgets.Instantiate]", ex); return default;
         }
-
-        actualSize = new Size(maxWidth, sumHeight);
-        return myObj;
     }
 }
 
@@ -431,57 +523,64 @@ public class HorizontalWidgetsHolder : WidgetsHolder
 
     public override GameObject? Instantiate(Size size, out Size actualSize)
     {
-        var results = Widgets.Select(c => (c.Instantiate(size, out var acSize), acSize, c)).ToArray();
-
-        float sumWidth = 0f;
-        float maxHeight = 0f;
-        float? tempWidth = null;
-
-        foreach (var r in results)
+        try
         {
-            maxHeight = Mathf.Max(maxHeight, r.acSize.Height);
-            if (r.c.PostponesConsideringSize)
+            var results = Widgets.Select(c => (c.Instantiate(size, out var acSize), acSize, c)).ToArray();
+
+            float sumWidth = 0f;
+            float maxHeight = 0f;
+            float? tempWidth = null;
+
+            foreach (var r in results)
             {
-                tempWidth = Mathf.Max(tempWidth ?? r.acSize.Width, r.acSize.Width);
+                maxHeight = Mathf.Max(maxHeight, r.acSize.Height);
+                if (r.c.PostponesConsideringSize)
+                {
+                    tempWidth = Mathf.Max(tempWidth ?? r.acSize.Width, r.acSize.Width);
+                }
+                else
+                {
+                    sumWidth += Mathf.Max(r.acSize.Width, tempWidth ?? r.acSize.Width);
+                    tempWidth = 0f;
+                }
             }
-            else
+
+            if (FixedHeight != null) maxHeight = FixedHeight.Value;
+
+            var myObj = UnityHelper.CreateObject("WidgetsHolder", null, Vector3.zero, LayerExpansion.GetUILayer());
+
+            float width = -sumWidth * 0.5f;
+            float? maxWidth = null;
+
+            foreach (var r in results)
             {
-                sumWidth += Mathf.Max(r.acSize.Width, tempWidth ?? r.acSize.Width);
-                tempWidth = 0f;
+                if (r.Item1 != null)
+                {
+                    r.Item1.transform.SetParent(myObj.transform);
+                    r.Item1.transform.localPosition = new Vector3(
+                        width + r.acSize.Width * 0.5f,
+                        CalcHeight(r.c.Alignment, r.acSize.Height, maxHeight),
+                        0f);
+                }
+
+                if (r.c.PostponesConsideringSize)
+                {
+                    maxWidth = Mathf.Max(maxWidth ?? r.acSize.Width, r.acSize.Width);
+                }
+                else
+                {
+                    width += Mathf.Max(maxWidth ?? r.acSize.Width, r.acSize.Width);
+                    maxWidth = null;
+                }
             }
+
+            actualSize = new Size(sumWidth, maxHeight);
+            return myObj;
         }
-
-        if (FixedHeight != null) maxHeight = FixedHeight.Value;
-
-        var myObj = UnityHelper.CreateObject("WidgetsHolder", null, Vector3.zero, LayerExpansion.GetUILayer());
-
-        float width = -sumWidth * 0.5f;
-        float? maxWidth = null;
-
-        foreach (var r in results)
+        catch (Exception ex)
         {
-            if (r.Item1 != null)
-            {
-                r.Item1.transform.SetParent(myObj.transform);
-                r.Item1.transform.localPosition = new Vector3(
-                    width + r.acSize.Width * 0.5f,
-                    CalcHeight(r.c.Alignment, r.acSize.Height, maxHeight),
-                    0f);
-            }
-
-            if (r.c.PostponesConsideringSize)
-            {
-                maxWidth = Mathf.Max(maxWidth ?? r.acSize.Width, r.acSize.Width);
-            }
-            else
-            {
-                width += Mathf.Max(maxWidth ?? r.acSize.Width, r.acSize.Width);
-                maxWidth = null;
-            }
+            actualSize = default; LightLogger.LogError("[Widgets.Instantiate]", ex); return default;
         }
-
-        actualSize = new Size(sumWidth, maxHeight);
-        return myObj;
     }
 }
 
@@ -496,32 +595,39 @@ public class GUIOverlapHolder : WidgetsHolder
 
     public override GameObject? Instantiate(Size size, out Size actualSize)
     {
-        var results = Widgets.Select(c => (c.Instantiate(size, out var acSize), acSize)).ToArray();
-
-        // 计算最大宽高作为容器实际尺寸
-        float maxWidth = 0f;
-        float maxHeight = 0f;
-        foreach (var r in results)
+        try
         {
-            maxWidth = Mathf.Max(maxWidth, r.acSize.Width);
-            maxHeight = Mathf.Max(maxHeight, r.acSize.Height);
-        }
+            var results = Widgets.Select(c => (c.Instantiate(size, out var acSize), acSize)).ToArray();
 
-        var myObj = UnityHelper.CreateObject("WidgetsHolder", null, Vector3.zero, LayerExpansion.GetUILayer());
-
-        // 子元素原地叠放，z 依次递减保证后加入的渲染在前面
-        float z = 0f;
-        foreach (var r in results)
-        {
-            if (r.Item1 != null)
+            // 计算最大宽高作为容器实际尺寸
+            float maxWidth = 0f;
+            float maxHeight = 0f;
+            foreach (var r in results)
             {
-                r.Item1.transform.SetParent(myObj.transform);
-                r.Item1.transform.localPosition = new Vector3(0f, 0f, z);
+                maxWidth = Mathf.Max(maxWidth, r.acSize.Width);
+                maxHeight = Mathf.Max(maxHeight, r.acSize.Height);
             }
-            z -= 0.01f;
-        }
 
-        actualSize = new Size(maxWidth, maxHeight);
-        return myObj;
+            var myObj = UnityHelper.CreateObject("WidgetsHolder", null, Vector3.zero, LayerExpansion.GetUILayer());
+
+            // 子元素原地叠放，z 依次递减保证后加入的渲染在前面
+            float z = 0f;
+            foreach (var r in results)
+            {
+                if (r.Item1 != null)
+                {
+                    r.Item1.transform.SetParent(myObj.transform);
+                    r.Item1.transform.localPosition = new Vector3(0f, 0f, z);
+                }
+                z -= 0.01f;
+            }
+
+            actualSize = new Size(maxWidth, maxHeight);
+            return myObj;
+        }
+        catch (Exception ex)
+        {
+            actualSize = default; LightLogger.LogError("[Widgets.Instantiate]", ex); return default;
+        }
     }
 }

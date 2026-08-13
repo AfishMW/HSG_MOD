@@ -13,6 +13,7 @@ using LightInDark.RPCs;
 using Reactor;
 using Reactor.Networking;
 using Reactor.Networking.Attributes;
+using System;
 using System.Collections;
 using UnityEngine;
 using Reactor.Utilities;
@@ -33,11 +34,18 @@ public partial class LIDPlugin : BasePlugin
     public static string AUVersion;
     public override void Load()
     {
-        Harmony.PatchAll();
-        LidRpcRegistry.ScanAndPatch(Harmony);
-        EventSystem.ScanAndRegisterAll();
-        Language.Language.Load();
-        LightLogger.Log("API加载成功");
+        try
+        {
+            Harmony.PatchAll();
+            LidRpcRegistry.ScanAndPatch(Harmony);
+            EventSystem.ScanAndRegisterAll();
+            Language.Language.Load();
+            LightLogger.Log("API加载成功");
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("LIDPlugin.Load", ex);
+        }
     }
 
 }
@@ -48,9 +56,16 @@ public static class ShowChatPatch
     [HarmonyPostfix]
     public static void Postfix()
     {
-        if (HudManager.Instance?.Chat == null) return;
-        //if (!NeedShowFreeChat) return;
-        HudManager.Instance.Chat.gameObject.SetActive(true);
+        try
+        {
+            if (HudManager.Instance?.Chat == null) return;
+            //if (!NeedShowFreeChat) return;
+            HudManager.Instance.Chat.gameObject.SetActive(true);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("ShowChatPatch.Postfix", ex);
+        }
     }
 }
 [HarmonyPatch(typeof(GameManager), nameof(GameManager.StartGame))]
@@ -58,9 +73,15 @@ public static class GameManager_StartGame_Patch
 {
     public static void Postfix()
     {
-        LightLogger.Log("[游戏] 游戏开始，初始化 GameManager");
-        Game.GameManager.Instance.Initialize();
-        EventTriggers.OnGameStart(PlayerControl.AllPlayerControls.Count);
+        try
+        {
+            LightLogger.Log("[游戏] 游戏开始，初始化 GameManager");
+            Game.GameManager.Instance.Initialize();
+            EventTriggers.OnGameStart(PlayerControl.AllPlayerControls.Count);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("GameManager_StartGame_Patch.Postfix", ex);
+        }
     }
 }
-

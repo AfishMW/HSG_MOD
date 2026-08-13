@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using LightInDark.Core;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
@@ -35,13 +36,32 @@ public struct Size
 
     public Size(float width, float height)
     {
-        Width = width;
-        Height = height;
+        try
+        {
+            Width = width;
+            Height = height;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("Size.Size", ex);
+        }
     }
 
     public Size(Vector2 v) : this(v.x, v.y) { }
 
-    public Vector2 ToUnityVector() => new(Width, Height);
+    public Vector2 ToUnityVector()
+    {
+        try
+        {
+            return new(Width, Height);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("Size.ToUnityVector", ex);
+            return default;
+        }
+    }
+
     public static Size Zero => new(0f, 0f);
 }
 
@@ -55,8 +75,15 @@ public struct FuzzySize
 
     public FuzzySize(float? width, float? height)
     {
-        Width = width;
-        Height = height;
+        try
+        {
+            Width = width;
+            Height = height;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("FuzzySize.FuzzySize", ex);
+        }
     }
 }
 
@@ -67,7 +94,19 @@ public struct FuzzySize
 /// <param name="anchoredPosition">空间上的偏移位置</param>
 public record Anchor(Vector2 pivot, Vector3 anchoredPosition)
 {
-    public static Anchor At(Vector2 pivot) => new(pivot, Vector3.zero);
+    public static Anchor At(Vector2 pivot)
+    {
+        try
+        {
+            return new(pivot, Vector3.zero);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("Anchor.At", ex);
+            return default;
+        }
+    }
+
     public static Anchor Center => new(new(0.5f, 0.5f), Vector3.zero);
 }
 
@@ -90,17 +129,26 @@ public abstract class GUIWidget
     /// </summary>
     public virtual GameObject? Instantiate(Anchor anchor, Size size, out Size actualSize)
     {
-        var obj = Instantiate(size, out actualSize);
-        if (obj != null)
+        try
         {
-            var localPos = anchor.anchoredPosition -
-                new Vector3(
-                    actualSize.Width * (anchor.pivot.x - 0.5f),
-                    actualSize.Height * (anchor.pivot.y - 0.5f),
-                    0f);
-            obj.transform.localPosition = localPos;
+            var obj = Instantiate(size, out actualSize);
+            if (obj != null)
+            {
+                var localPos = anchor.anchoredPosition -
+                    new Vector3(
+                        actualSize.Width * (anchor.pivot.x - 0.5f),
+                        actualSize.Height * (anchor.pivot.y - 0.5f),
+                        0f);
+                obj.transform.localPosition = localPos;
+            }
+            return obj;
         }
-        return obj;
+        catch (Exception ex)
+        {
+            LightLogger.LogError("GUIWidget.Instantiate", ex);
+            actualSize = Size.Zero;
+            return null;
+        }
     }
 
     /// <summary>
@@ -133,7 +181,17 @@ public delegate void GUIClickAction(GUIClickable clickable);
 public class GUIClickable
 {
     public PassiveButton? Button { get; init; }
-    public GUIClickable(PassiveButton? button = null) => Button = button;
+    public GUIClickable(PassiveButton? button = null)
+    {
+        try
+        {
+            Button = button;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("GUIClickable.GUIClickable", ex);
+        }
+    }
 }
 
 /// <summary>
@@ -144,10 +202,30 @@ public interface IGUI
     GUIWidget EmptyWidget { get; }
 
     GUIWidget RawText(GUIAlignment alignment, TextAttribute attribute, string rawText)
-        => Text(alignment, attribute, new RawTextComponent(rawText));
+    {
+        try
+        {
+            return Text(alignment, attribute, new RawTextComponent(rawText));
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("IGUI.RawText", ex);
+            return null;
+        }
+    }
 
     GUIWidget LocalizedText(GUIAlignment alignment, TextAttribute attribute, string translationKey)
-        => Text(alignment, attribute, new TranslateTextComponent(translationKey));
+    {
+        try
+        {
+            return Text(alignment, attribute, new TranslateTextComponent(translationKey));
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("IGUI.LocalizedText", ex);
+            return null;
+        }
+    }
 
     GUIWidget Text(GUIAlignment alignment, TextAttribute attribute, TextComponent text);
 
@@ -156,12 +234,32 @@ public interface IGUI
     GUIWidget LocalizedButton(GUIAlignment alignment, TextAttribute attribute, string translationKey, GUIClickAction onClick,
         GUIClickAction? onMouseOver = null, GUIClickAction? onMouseOut = null, GUIClickAction? onRightClick = null,
         Color? color = null, Color? selectedColor = null, float? margin = null)
-        => Button(alignment, attribute, new TranslateTextComponent(translationKey), onClick, onMouseOver, onMouseOut, onRightClick, color, selectedColor, margin);
+    {
+        try
+        {
+            return Button(alignment, attribute, new TranslateTextComponent(translationKey), onClick, onMouseOver, onMouseOut, onRightClick, color, selectedColor, margin);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("IGUI.LocalizedButton", ex);
+            return null;
+        }
+    }
 
     GUIWidget RawButton(GUIAlignment alignment, TextAttribute attribute, string rawText, GUIClickAction onClick,
         GUIClickAction? onMouseOver = null, GUIClickAction? onMouseOut = null, GUIClickAction? onRightClick = null,
         Color? color = null, Color? selectedColor = null, float? margin = null)
-        => Button(alignment, attribute, new RawTextComponent(rawText), onClick, onMouseOver, onMouseOut, onRightClick, color, selectedColor, margin);
+    {
+        try
+        {
+            return Button(alignment, attribute, new RawTextComponent(rawText), onClick, onMouseOver, onMouseOut, onRightClick, color, selectedColor, margin);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("IGUI.RawButton", ex);
+            return null;
+        }
+    }
 
     GUIWidget Button(GUIAlignment alignment, TextAttribute attribute, TextComponent text, GUIClickAction onClick,
         GUIClickAction? onMouseOver = null, GUIClickAction? onMouseOut = null, GUIClickAction? onRightClick = null,
@@ -176,10 +274,30 @@ public interface IGUI
     GUIWidget HorizontalHolder(GUIAlignment alignment, IEnumerable<GUIWidget?> widgets, float? fixedHeight = null);
 
     GUIWidget VerticalHolder(GUIAlignment alignment, params GUIWidget?[] widgets)
-        => VerticalHolder(alignment, (IEnumerable<GUIWidget?>)widgets, null);
+    {
+        try
+        {
+            return VerticalHolder(alignment, (IEnumerable<GUIWidget?>)widgets, null);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("IGUI.VerticalHolder", ex);
+            return null;
+        }
+    }
 
     GUIWidget HorizontalHolder(GUIAlignment alignment, params GUIWidget?[] widgets)
-        => HorizontalHolder(alignment, (IEnumerable<GUIWidget?>)widgets, null);
+    {
+        try
+        {
+            return HorizontalHolder(alignment, (IEnumerable<GUIWidget?>)widgets, null);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("IGUI.HorizontalHolder", ex);
+            return null;
+        }
+    }
 
     GUIWidget Arrange(GUIAlignment alignment, IEnumerable<GUIWidget?> widgets, int perLine);
 

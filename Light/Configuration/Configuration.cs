@@ -1,3 +1,6 @@
+using LightInDark.Core;
+using System;
+
 namespace Light.Configuration;
 
 public class RoleOption<T>

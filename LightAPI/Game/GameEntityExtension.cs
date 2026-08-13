@@ -1,4 +1,5 @@
 using LightInDark.Core;
+using System;
 
 namespace LightInDark.Game
 {
@@ -9,12 +10,20 @@ namespace LightInDark.Game
         /// </summary>
         public static T Register<T>(this T entity, ILifespan lifespan) where T : IGameOperator
         {
-            var game = GameManager.Instance;
-            if (game != null && !game.IsDeadObject)
+            try
             {
-                game.RegisterEntity(entity, lifespan);
+                var game = GameManager.Instance;
+                if (game != null && !game.IsDeadObject)
+                {
+                    game.RegisterEntity(entity, lifespan);
+                }
+                return entity;
             }
-            return entity;
+            catch (Exception ex)
+            {
+                LightLogger.LogError("GameEntityExtension.Register", ex);
+                return default;
+            }
         }
 
         /// <summary>
@@ -22,7 +31,15 @@ namespace LightInDark.Game
         /// </summary>
         public static T RegisterSelf<T>(this T entity) where T : IGameOperator, ILifespan
         {
-            return entity.Register(entity);
+            try
+            {
+                return entity.Register(entity);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("GameEntityExtension.RegisterSelf", ex);
+                return default;
+            }
         }
     }
 }

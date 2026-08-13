@@ -1,5 +1,6 @@
 ﻿using BepInEx.Unity.IL2CPP.Utils;
 using InnerNet;
+using LightInDark.Core;
 using LightInDark.Game;
 using LightInDark.RPCs;
 using System;
@@ -15,7 +16,7 @@ using Object = UnityEngine.Object;
 namespace LightInDark.Utilities;
 
 
-public static class AmongUsEdited
+public static class Utils
 {
     #region FlashScreen
     private static GameObject _flashObject;
@@ -31,37 +32,58 @@ public static class AmongUsEdited
     class CoroutineHost : MonoBehaviour { }
     public static void PlayFlash(Color color,float fadeIn,float hold,float fadeOut)
     {
-        if (_coroutineHost == null)
+        try
         {
-            var go = new GameObject("ScreenFlashCoroutineHost");
-            Object.DontDestroyOnLoad(go);
-            _coroutineHost = go.AddComponent<CoroutineHost>();
-        }
-        if (_currentCoroutine != null)
-            _coroutineHost.StopCoroutine(_currentCoroutine);
-        if (_flashObject == null)
-        {
-            _flashObject = new GameObject("ScreenFlash");
-            Object.DontDestroyOnLoad(_flashObject);
-            _flashObject.transform.SetParent(null);
+            if (_coroutineHost == null)
+            {
+                var go = new GameObject("ScreenFlashCoroutineHost");
+                Object.DontDestroyOnLoad(go);
+                _coroutineHost = go.AddComponent<CoroutineHost>();
+            }
+            if (_currentCoroutine != null)
+                _coroutineHost.StopCoroutine(_currentCoroutine);
+            if (_flashObject == null)
+            {
+                _flashObject = new GameObject("ScreenFlash");
+                Object.DontDestroyOnLoad(_flashObject);
+                _flashObject.transform.SetParent(null);
 
-            _renderer = _flashObject.AddComponent<SpriteRenderer>();
-            var texture = Texture2D.whiteTexture;
-            _renderer.sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
-            _renderer.sortingOrder = 999999999;
-            _renderer.gameObject.layer = LayerMask.NameToLayer("UI");
+                _renderer = _flashObject.AddComponent<SpriteRenderer>();
+                var texture = Texture2D.whiteTexture;
+                _renderer.sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
+                _renderer.sortingOrder = 999999999;
+                _renderer.gameObject.layer = LayerMask.NameToLayer("UI");
+            }
+            _currentCoroutine = _coroutineHost.StartCoroutine(FlashCoroutine(color, fadeIn, hold, fadeOut));
         }
-        _currentCoroutine = _coroutineHost.StartCoroutine(FlashCoroutine(color, fadeIn, hold, fadeOut));
+        catch (Exception ex)
+        {
+            LightLogger.LogError("AmongUsEdited.PlayFlash", ex);
+        }
     }
 
     public static void PlayFlash()
     {
-        PlayFlash(DefaultColor, DefaultFadeIn, DefaultHold, DefaultFadeOut);
+        try
+        {
+            PlayFlash(DefaultColor, DefaultFadeIn, DefaultHold, DefaultFadeOut);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("AmongUsEdited.PlayFlash", ex);
+        }
     }
 
     public static void PlayFlash(Color color)
     {
-        PlayFlash(color, DefaultFadeIn, DefaultHold, DefaultFadeOut);
+        try
+        {
+            PlayFlash(color, DefaultFadeIn, DefaultHold, DefaultFadeOut);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("AmongUsEdited.PlayFlash", ex);
+        }
     }
 
     static IEnumerator FlashCoroutine(Color color, float fadeIn, float hold, float fadeOut)
@@ -111,16 +133,23 @@ public static class AmongUsEdited
     }
     public static void KickPlayer(Player p, string kickerName,string reason = null)
     {
-        int i = AmongUsClient.Instance.GameId;
-        string code = GameCode.IntToGameNameV2(i);
+        try
+        {
+            int i = AmongUsClient.Instance.GameId;
+            string code = GameCode.IntToGameNameV2(i);
 
-        foreach(var player in PlayerControl.AllPlayerControls)
-            player.RpcSendChat($"<color=red>玩家 {p.Control.Data.PlayerName} 被踢出房间，原因：{reason ?? "无"}</color>");
+            foreach(var player in PlayerControl.AllPlayerControls)
+                player.RpcSendChat($"<color=red>玩家 {p.Control.Data.PlayerName} 被踢出房间，原因：{reason ?? "无"}</color>");
 
-        string realReason = reason ?? "无";
-        string kickerDisplay = string.IsNullOrEmpty(kickerName) ? "" : $"<b>{kickerName}</b>";
-        string prefix = $"你被{kickerDisplay}踢出了 {code} 。\n原因：{realReason}";
-        RpcDefinitions.KickPlayerWithReason(p.Control.PlayerId, prefix);
+            string realReason = reason ?? "无";
+            string kickerDisplay = string.IsNullOrEmpty(kickerName) ? "" : $"<b>{kickerName}</b>";
+            string prefix = $"你被{kickerDisplay}踢出了 {code} 。\n原因：{realReason}";
+            RpcDefinitions.KickPlayerWithReason(p.Control.PlayerId, prefix);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("AmongUsEdited.KickPlayer", ex);
+        }
     }
     public static class KickManager
     {
@@ -130,9 +159,16 @@ public static class AmongUsEdited
 
         public static void Clear()
         {
-            kickReason = string.Empty;
-            kickReasonWaitUntil = 0f;
-            kickReasonConsumeUntil = 0f;
+            try
+            {
+                kickReason = string.Empty;
+                kickReasonWaitUntil = 0f;
+                kickReasonConsumeUntil = 0f;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("KickManager.Clear", ex);
+            }
         }
     }
     /// <summary>
@@ -141,8 +177,16 @@ public static class AmongUsEdited
     /// <returns></returns>
     public static Player ToLIDPlayer(this PlayerControl pc)
     {
-        if (pc == null) return null;
-        return Game.GameManager.Instance?.GetPlayer(pc.PlayerId);
+        try
+        {
+            if (pc == null) return null;
+            return Game.GameManager.Instance?.GetPlayer(pc.PlayerId);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("AmongUsEdited.ToLIDPlayer", ex);
+            return null;
+        }
     }
 
 
@@ -152,12 +196,19 @@ public static class AmongUsEdited
     /// <param name="text">要显示的文本</param>
     public static void ShowCustomDisconnectWindow(string text)
     {
-        var popup = DestroyableSingleton<DisconnectPopup>.Instance;
-        if (popup != null)
+        try
         {
-            popup._textArea.text = text;
-            popup.OnTextChanged();
-            popup.gameObject.SetActive(true);
+            var popup = DestroyableSingleton<DisconnectPopup>.Instance;
+            if (popup != null)
+            {
+                popup._textArea.text = text;
+                popup.OnTextChanged();
+                popup.gameObject.SetActive(true);
+            }
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("AmongUsEdited.ShowCustomDisconnectWindow", ex);
         }
     }
     /// <summary>
@@ -165,19 +216,48 @@ public static class AmongUsEdited
     /// </summary>
     public static void CloseCustomDisconnectWindow()
     {
-        var popup = DestroyableSingleton<DisconnectPopup>.Instance;
-        popup?.gameObject.SetActive(false);
+        try
+        {
+            var popup = DestroyableSingleton<DisconnectPopup>.Instance;
+            popup?.gameObject.SetActive(false);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("AmongUsEdited.CloseCustomDisconnectWindow", ex);
+        }
     }
 
     /// <summary>
     /// 检查当前是否为自定义服务器。
     /// </summary>
     /// <returns>如果是自定义服务器，返回true；否则，返回false</returns>
-    public static bool IsCustomServer() => ServerManager.Instance?.CurrentRegion.TranslateName is StringNames.NoTranslation or null;
+    public static bool IsCustomServer()
+    {
+        try
+        {
+            return ServerManager.Instance?.CurrentRegion.TranslateName is StringNames.NoTranslation or null;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("AmongUsEdited.IsCustomServer", ex);
+            return default;
+        }
+    }
     /// <summary>
     /// 检查当前是否在大厅中。
     /// </summary>
     /// <returns>在大厅中时，返回true；否则，返回false</returns>
-    public static bool IsInLobby() => LobbyBehaviour.Instance != null;
+    public static bool IsInLobby()
+    {
+        try
+        {
+            return LobbyBehaviour.Instance != null;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("AmongUsEdited.IsInLobby", ex);
+            return default;
+        }
+    }
 
 }

@@ -43,51 +43,58 @@ namespace LightInDark.RPCs
 
         public static void ScanAndPatch(Harmony harmony)
         {
-            if (_initialized) return;
-            _initialized = true;
-
-            var assembly = Assembly.GetExecutingAssembly();
-
-            foreach (var type in assembly.GetTypes())
+            try
             {
-                foreach (var method in type.GetMethods(
-                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+                if (_initialized) return;
+                _initialized = true;
+
+                var assembly = Assembly.GetExecutingAssembly();
+
+                foreach (var type in assembly.GetTypes())
                 {
-                    var attr = method.GetCustomAttribute<LidRPCAttribute>();
-                    if (attr == null) continue;
-
-                    var hashStr = $"{type.FullName}.{method.Name}";
-                    var hash = hashStr.ComputeConstantHash();
-
-                    var entry = new RpcEntry
+                    foreach (var method in type.GetMethods(
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
                     {
-                        HashStr = hashStr,
-                        Hash = hash,
-                        Method = method,
-                        Parameters = method.GetParameters(),
-                        OnlyHost = attr.OnlyHost,
-                        Reliable = attr.Reliable,
-                        LocalExecute = attr.LocalExecute,
-                    };
-                    _entries[hash] = entry;
+                        var attr = method.GetCustomAttribute<LidRPCAttribute>();
+                        if (attr == null) continue;
 
-                    // 注册接收处理器（接收端执行）
-                    var localEntry = entry;
-                    CustomRPC.Register(hashStr, reader =>
-                    {
-                        var args = DeserializeArgs(reader, localEntry.Parameters);
-                        localEntry.Method.Invoke(null, args);
-                    });
+                        var hashStr = $"{type.FullName}.{method.Name}";
+                        var hash = hashStr.ComputeConstantHash();
 
-                    // Harmony Prefix：拦截调用，发送 RPC
-                    var prefix = new HarmonyMethod(typeof(LidRpcRegistry), nameof(RpcPrefix));
-                    harmony.Patch(method, prefix: prefix);
+                        var entry = new RpcEntry
+                        {
+                            HashStr = hashStr,
+                            Hash = hash,
+                            Method = method,
+                            Parameters = method.GetParameters(),
+                            OnlyHost = attr.OnlyHost,
+                            Reliable = attr.Reliable,
+                            LocalExecute = attr.LocalExecute,
+                        };
+                        _entries[hash] = entry;
 
-                    LightLogger.Log($"[LidRPC] 注册: {hashStr} (hash={hash}, {entry.Parameters.Length} params, local={entry.LocalExecute})");
+                        // 注册接收处理器（接收端执行）
+                        var localEntry = entry;
+                        CustomRPC.Register(hashStr, reader =>
+                        {
+                            var args = DeserializeArgs(reader, localEntry.Parameters);
+                            localEntry.Method.Invoke(null, args);
+                        });
+
+                        // Harmony Prefix：拦截调用，发送 RPC
+                        var prefix = new HarmonyMethod(typeof(LidRpcRegistry), nameof(RpcPrefix));
+                        harmony.Patch(method, prefix: prefix);
+
+                        LightLogger.Log($"[LidRPC] 注册: {hashStr} (hash={hash}, {entry.Parameters.Length} params, local={entry.LocalExecute})");
+                    }
                 }
-            }
 
-            LightLogger.Log($"[LidRPC] 扫描完成，共 {_entries.Count} 个 RPC");
+                LightLogger.Log($"[LidRPC] 扫描完成，共 {_entries.Count} 个 RPC");
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("LidRpcRegistry.ScanAndPatch", ex);
+            }
         }
 
         // 防止无限递归的标志
@@ -99,97 +106,135 @@ namespace LightInDark.RPCs
         /// </summary>
         internal static bool RpcPrefix(MethodBase __originalMethod, object[] __args)
         {
-            // 本地执行中：放行，执行方法体
-            if (_isLocalExecuting)
-                return true;
+            try
+            {
+                // 本地执行中：放行，执行方法体
+                if (_isLocalExecuting)
+                    return true;
 
-            var hashStr = $"{__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name}";
-            var hash = hashStr.ComputeConstantHash();
+                var hashStr = $"{__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name}";
+                var hash = hashStr.ComputeConstantHash();
 
-            if (!_entries.TryGetValue(hash, out var entry))
-                return true;
+                if (!_entries.TryGetValue(hash, out var entry))
+                    return true;
 
-            // 房主检查
-            if (entry.OnlyHost && !AmongUsClient.Instance.AmHost)
+                // 房主检查
+                if (entry.OnlyHost && !AmongUsClient.Instance.AmHost)
+                    return false;
+
+                // 序列化参数用于网络发送
+                var payloadWriter = MessageWriter.Get(SendOption.Reliable);
+                SerializeArgs(payloadWriter, __args, entry.Parameters);
+                var payloadBytes = payloadWriter.ToByteArray(false);
+
+                // 发送到网络
+                CustomRPC.SendOnly(entry.HashStr, writer =>
+                {
+                    writer.Write(payloadBytes, 0, payloadBytes.Length);
+                }, entry.Reliable);
+
+                // 本地执行
+                if (entry.LocalExecute)
+                {
+                    try
+                    {
+                        _isLocalExecuting = true;
+                        entry.Method.Invoke(null, __args);
+                    }
+                    catch (Exception ex)
+                    {
+                        LightLogger.LogWarning($"[LidRPC] 本地执行失败: {hashStr}: {ex.Message}");
+                    }
+                    finally
+                    {
+                        _isLocalExecuting = false;
+                    }
+                }
+
+                // 跳过原方法体（发送端不重复执行）
                 return false;
-
-            // 序列化参数用于网络发送
-            var payloadWriter = MessageWriter.Get(SendOption.Reliable);
-            SerializeArgs(payloadWriter, __args, entry.Parameters);
-            var payloadBytes = payloadWriter.ToByteArray(false);
-
-            // 发送到网络
-            CustomRPC.SendOnly(entry.HashStr, writer =>
-            {
-                writer.Write(payloadBytes, 0, payloadBytes.Length);
-            }, entry.Reliable);
-
-            // 本地执行
-            if (entry.LocalExecute)
-            {
-                try
-                {
-                    _isLocalExecuting = true;
-                    entry.Method.Invoke(null, __args);
-                }
-                catch (Exception ex)
-                {
-                    LightLogger.LogWarning($"[LidRPC] 本地执行失败: {hashStr}: {ex.Message}");
-                }
-                finally
-                {
-                    _isLocalExecuting = false;
-                }
             }
-
-            // 跳过原方法体（发送端不重复执行）
-            return false;
+            catch (Exception ex)
+            {
+                LightLogger.LogError("LidRpcRegistry.RpcPrefix", ex);
+                return true;
+            }
         }
 
         // ---- 序列化 ----
 
         private static void SerializeArgs(MessageWriter writer, object[] args, ParameterInfo[] parameters)
         {
-            for (int i = 0; i < parameters.Length; i++)
+            try
             {
-                SerializeArg(writer, args[i], parameters[i].ParameterType);
+                for (int i = 0; i < parameters.Length; i++)
+                {
+                    SerializeArg(writer, args[i], parameters[i].ParameterType);
+                }
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("LidRpcRegistry.SerializeArgs", ex);
             }
         }
 
         private static void SerializeArg(MessageWriter writer, object value, Type type)
         {
-            if (type == typeof(byte)) writer.Write((byte)value);
-            else if (type == typeof(int)) writer.Write((int)value);
-            else if (type == typeof(float)) writer.Write((float)value);
-            else if (type == typeof(bool)) writer.Write((bool)value);
-            else if (type == typeof(string)) writer.Write((string?)value ?? "");
-            else if (type == typeof(PlayerControl)) writer.WritePlayer((PlayerControl?)value);
-            else if (type == typeof(Vector2)) writer.WriteVector2((Vector2)value);
-            else if (type == typeof(Vector3)) writer.WriteVector3((Vector3)value);
-            else throw new NotSupportedException($"[LidRPC] 不支持的类型: {type.Name}");
+            try
+            {
+                if (type == typeof(byte)) writer.Write((byte)value);
+                else if (type == typeof(int)) writer.Write((int)value);
+                else if (type == typeof(float)) writer.Write((float)value);
+                else if (type == typeof(bool)) writer.Write((bool)value);
+                else if (type == typeof(string)) writer.Write((string?)value ?? "");
+                else if (type == typeof(PlayerControl)) writer.WritePlayer((PlayerControl?)value);
+                else if (type == typeof(Vector2)) writer.WriteVector2((Vector2)value);
+                else if (type == typeof(Vector3)) writer.WriteVector3((Vector3)value);
+                else throw new NotSupportedException($"[LidRPC] 不支持的类型: {type.Name}");
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("LidRpcRegistry.SerializeArg", ex);
+            }
         }
 
         private static object?[] DeserializeArgs(MessageReader reader, ParameterInfo[] parameters)
         {
-            var args = new object?[parameters.Length];
-            for (int i = 0; i < parameters.Length; i++)
+            try
             {
-                args[i] = DeserializeArg(reader, parameters[i].ParameterType);
+                var args = new object?[parameters.Length];
+                for (int i = 0; i < parameters.Length; i++)
+                {
+                    args[i] = DeserializeArg(reader, parameters[i].ParameterType);
+                }
+                return args;
             }
-            return args;
+            catch (Exception ex)
+            {
+                LightLogger.LogError("LidRpcRegistry.DeserializeArgs", ex);
+                return default;
+            }
         }
 
         private static object? DeserializeArg(MessageReader reader, Type type)
         {
-            if (type == typeof(byte)) return reader.ReadByte();
-            if (type == typeof(int)) return reader.ReadInt32();
-            if (type == typeof(float)) return reader.ReadSingle();
-            if (type == typeof(bool)) return reader.ReadBoolean();
-            if (type == typeof(string)) return reader.ReadString();
-            if (type == typeof(PlayerControl)) return reader.ReadPlayer();
-            if (type == typeof(Vector2)) return reader.ReadVector2();
-            if (type == typeof(Vector3)) return reader.ReadVector3();
-            throw new NotSupportedException($"[LidRPC] 不支持的类型: {type.Name}");
+            try
+            {
+                if (type == typeof(byte)) return reader.ReadByte();
+                if (type == typeof(int)) return reader.ReadInt32();
+                if (type == typeof(float)) return reader.ReadSingle();
+                if (type == typeof(bool)) return reader.ReadBoolean();
+                if (type == typeof(string)) return reader.ReadString();
+                if (type == typeof(PlayerControl)) return reader.ReadPlayer();
+                if (type == typeof(Vector2)) return reader.ReadVector2();
+                if (type == typeof(Vector3)) return reader.ReadVector3();
+                throw new NotSupportedException($"[LidRPC] 不支持的类型: {type.Name}");
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("LidRpcRegistry.DeserializeArg", ex);
+                return default;
+            }
         }
     }
 }

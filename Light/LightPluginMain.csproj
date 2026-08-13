@@ -29,7 +29,6 @@
       <Folder Include="Systems\" />
     </ItemGroup>
 
-    <!-- 从 Libs 目录引用所有依赖程序集 -->
     <Target Name="AddGameReferences" BeforeTargets="ResolveAssemblyReferences">
         <ItemGroup>
             <_LibDlls Include="..\Libs\*.dll" Exclude="..\Libs\netstandard.dll" />
@@ -39,7 +38,9 @@
             </Reference>
         </ItemGroup>
     </Target>
-
+	<PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+		<DefineConstants>WINDOWS</DefineConstants>
+	</PropertyGroup>
 	<Target Name="CustomCopyToOutput" AfterTargets="Build">
 		<PropertyGroup>
 			<CustomOutDir>$(ProjectDir)..\Output\</CustomOutDir>

@@ -4,6 +4,7 @@ using LightInDark.Events;
 using LightInDark.Roles;
 using LightInDark.RPCs;
 using UnityEngine;
+using System;
 using System.Linq;
 
 namespace LightInDark.Game
@@ -49,15 +50,23 @@ namespace LightInDark.Game
             {
                 try
                 {
-                    if (Control?.Data != null)
+                    try
                     {
-                        var colorId = Control.Data.DefaultOutfit.ColorId;
-                        if (colorId >= 0 && colorId < Palette.PlayerColors.Length)
-                            return ((UnityEngine.Color)Palette.PlayerColors[colorId]).ToLIDColor();
+                        if (Control?.Data != null)
+                        {
+                            var colorId = Control.Data.DefaultOutfit.ColorId;
+                            if (colorId >= 0 && colorId < Palette.PlayerColors.Length)
+                                return ((UnityEngine.Color)Palette.PlayerColors[colorId]).ToLIDColor();
+                        }
                     }
+                    catch { }
+                    return Color.White;
                 }
-                catch { }
-                return Color.White;
+                catch (Exception ex)
+                {
+                    LightLogger.LogError("Player.PlayerColor", ex);
+                    return default;
+                }
             }
         }
 
@@ -66,8 +75,15 @@ namespace LightInDark.Game
 
         public Player(PlayerControl control)
         {
-            Control = control;
-            EventSystem.RegisterInstance(this);
+            try
+            {
+                Control = control;
+                EventSystem.RegisterInstance(this);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("Player.Player", ex);
+            }
         }
 
         /// <summary>
@@ -75,19 +91,26 @@ namespace LightInDark.Game
         /// </summary>
         public void SetRole(DefinedRole newRole, int[] arguments = null)
         {
-            if (newRole == null) return;
-            arguments ??= newRole.DefaultArguments;
+            try
+            {
+                if (newRole == null) return;
+                arguments ??= newRole.DefaultArguments;
 
-            var ev = new PlayerTryToChangeRoleEvent(Control, Role, newRole);
-            EventSystem.RunEvent(ev);
-            if (ev.IsCanceled) return;
+                var ev = new PlayerTryToChangeRoleEvent(Control, Role, newRole);
+                EventSystem.RunEvent(ev);
+                if (ev.IsCanceled) return;
 
-            Role?.Inactivate();
-            Role = newRole.CreateInstance(this, arguments);
-            EventTriggers.OnRoleAssigned(Control, newRole, arguments);
-            RpcDefinitions.SetRole(Control.PlayerId, newRole.Id, arguments);
+                Role?.Inactivate();
+                Role = newRole.CreateInstance(this, arguments);
+                EventTriggers.OnRoleAssigned(Control, newRole, arguments);
+                RpcDefinitions.SetRole(Control.PlayerId, newRole.Id, arguments);
 
-            Core.LightLogger.Log($"[Player] {Name} → {newRole.Name}");
+                Core.LightLogger.Log($"[Player] {Name} → {newRole.Name}");
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("Player.SetRole", ex);
+            }
         }
 
         /// <summary>
@@ -95,33 +118,101 @@ namespace LightInDark.Game
         /// </summary>
         internal void SetRoleLocal(DefinedRole newRole, int[] arguments = null)
         {
-            if (newRole == null) return;
-            arguments ??= newRole.DefaultArguments;
+            try
+            {
+                if (newRole == null) return;
+                arguments ??= newRole.DefaultArguments;
 
-            Role?.Inactivate();
-            Role = newRole.CreateInstance(this, arguments);
+                Role?.Inactivate();
+                Role = newRole.CreateInstance(this, arguments);
 
-            Core.LightLogger.Log($"[Player] {Name} (本地) → {newRole.Name}");
+                Core.LightLogger.Log($"[Player] {Name} (本地) → {newRole.Name}");
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("Player.SetRoleLocal", ex);
+            }
         }
 
         // ---- 操作 ----
-        public void Suicide(PlayerState state = PlayerState.Suicide) => RpcDefinitions.Suicide(Control, playerState: state);
-        public void MurderPlayer(PlayerControl victim, PlayerState state = PlayerState.BeKilled) => RpcDefinitions.MurderPlayer(Control, victim, state);
+        public void Suicide(PlayerState state = PlayerState.Suicide)
+        {
+            try
+            {
+                RpcDefinitions.Suicide(Control, playerState: state);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("Player.Suicide", ex);
+            }
+        }
+
+        public void MurderPlayer(PlayerControl victim, PlayerState state = PlayerState.BeKilled)
+        {
+            try
+            {
+                RpcDefinitions.MurderPlayer(Control, victim, state);
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("Player.MurderPlayer", ex);
+            }
+        }
 
         // ---- 判断 ----
-        public bool IsRole(string roleName) => Role?.Definition?.Name == roleName;
-        public bool Is<T>() where T : RuntimeRole => Role is T;
+        public bool IsRole(string roleName)
+        {
+            try
+            {
+                return Role?.Definition?.Name == roleName;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("Player.IsRole", ex);
+                return default;
+            }
+        }
+
+        public bool Is<T>() where T : RuntimeRole
+        {
+            try
+            {
+                return Role is T;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("Player.Is", ex);
+                return default;
+            }
+        }
+
         public bool HasRole => Role != null;
 
         // ---- 清理 ----
         public void Release()
         {
-            EventSystem.UnregisterInstance(this);
-            Role?.Release();
-            Role = null;
+            try
+            {
+                EventSystem.UnregisterInstance(this);
+                Role?.Release();
+                Role = null;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("Player.Release", ex);
+            }
         }
 
-        void IGameOperator.OnReleased() { }
+        void IGameOperator.OnReleased()
+        {
+            try
+            {
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("Player.OnReleased", ex);
+            }
+        }
     }
     public enum PlayerState : uint
     {
@@ -138,7 +229,7 @@ namespace LightInDark.Game
         /// </summary>
         BeGuessed = 2,
         /// <summary>
-        /// 更精确的指向“被击杀”的死因。事实上，更建议使用PlayerState.Dead。凶手被记录为击杀者。
+        /// 更精确的指向"被击杀"的死因。事实上，更建议使用PlayerState.Dead。凶手被记录为击杀者。
         /// </summary>
         BeKilled = 3,
         /// <summary>

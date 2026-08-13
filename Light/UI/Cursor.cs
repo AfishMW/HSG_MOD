@@ -20,8 +20,15 @@ public static class Cursor
     /// <summary>初始化光标（在 LightPlugin.Load 中调用，替代原 AddComponent）</summary>
     public static void Initialize()
     {
-        Index = LoadIndexFromJson();
-        ChangeCursorFromIndex(Index);
+        try
+        {
+            Index = LoadIndexFromJson();
+            ChangeCursorFromIndex(Index);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[Cursor.Initialize]", ex);
+        }
     }
     /// <summary>
     /// 

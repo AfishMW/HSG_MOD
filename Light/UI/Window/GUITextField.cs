@@ -5,6 +5,7 @@ using LightInDark.UI.Window;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
+using LightInDark.Core;
 using Color = LightInDark.Color;
 using Object = UnityEngine.Object;
 
@@ -31,9 +32,16 @@ public class TextFieldWidget : AbstractGUIWidget
 
     public override GameObject? Instantiate(Size size, out Size actualSize)
     {
-        Field = GUITextField.Create(null, _size, _hint, _onEnter);
-        actualSize = new Size(_size);
-        return Field.GameObject;
+        try
+        {
+            Field = GUITextField.Create(null, _size, _hint, _onEnter);
+            actualSize = new Size(_size);
+            return Field.GameObject;
+        }
+        catch (Exception ex)
+        {
+            actualSize = default; LightLogger.LogError("[GUITextField.Instantiate]", ex); return default;
+        }
     }
 }
 
@@ -57,9 +65,16 @@ public class GUITextField
 
     private GUITextField(GameObject obj, TextFieldBehaviour behaviour)
     {
-        GameObject = obj;
-        _behaviour = behaviour;
-        _fields[behaviour] = this;
+        try
+        {
+            GameObject = obj;
+            _behaviour = behaviour;
+            _fields[behaviour] = this;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[GUITextField.GUITextField]", ex);
+        }
     }
 
     /// <summary>
@@ -67,63 +82,84 @@ public class GUITextField
     /// </summary>
     public static GUITextField Create(Transform parent, Vector2 size, string hint = "", Action<string>? onEnter = null)
     {
-        var obj = new GameObject("GUITextField");
-        obj.layer = LayerExpansion.GetUILayer();
-        obj.transform.SetParent(parent, false);
-        obj.transform.localPosition = Vector3.zero;
+        try
+        {
+            var obj = new GameObject("GUITextField");
+            obj.layer = LayerExpansion.GetUILayer();
+            obj.transform.SetParent(parent, false);
+            obj.transform.localPosition = Vector3.zero;
 
-        // 背景
-        var renderer = obj.AddComponent<SpriteRenderer>();
-        renderer.sprite = VanillaAsset.PopUpBackSprite;
-        renderer.drawMode = SpriteDrawMode.Sliced;
-        renderer.tileMode = SpriteTileMode.Continuous;
-        renderer.size = size;
+            // 背景
+            var renderer = obj.AddComponent<SpriteRenderer>();
+            renderer.sprite = VanillaAsset.PopUpBackSprite;
+            renderer.drawMode = SpriteDrawMode.Sliced;
+            renderer.tileMode = SpriteTileMode.Continuous;
+            renderer.size = size;
 
-        // 碰撞体
-        var collider = obj.AddComponent<BoxCollider2D>();
-        collider.size = size;
-        collider.isTrigger = true;
+            // 碰撞体
+            var collider = obj.AddComponent<BoxCollider2D>();
+            collider.size = size;
+            collider.isTrigger = true;
 
-        // 行为组件（聚焦后每帧处理输入）
-        var behaviour = obj.AddComponent<TextFieldBehaviour>();
-        behaviour.Hint = hint;
+            // 行为组件（聚焦后每帧处理输入）
+            var behaviour = obj.AddComponent<TextFieldBehaviour>();
+            behaviour.Hint = hint;
 
-        // 文本
-        var tmp = Object.Instantiate(VanillaAsset.StandardTextPrefab, obj.transform);
-        tmp.transform.localPosition = new Vector3(-size.x * 0.5f + 0.15f, 0f, -0.1f);
-        tmp.rectTransform.pivot = new Vector2(0f, 0.5f);
-        tmp.rectTransform.sizeDelta = new Vector2(size.x - 0.3f, size.y - 0.06f);
-        tmp.fontSize = 1.35f;
-        tmp.fontSizeMin = 1f;
-        tmp.fontSizeMax = 1.6f;
-        tmp.enableAutoSizing = true;
-        tmp.alignment = TextAlignmentOptions.Left;
-        tmp.raycastTarget = false;
-        tmp.text = hint;
-        tmp.color = UnityEngine.Color.gray;
-        tmp.ForceMeshUpdate();
-        behaviour.TMP = tmp;
+            // 文本
+            var tmp = Object.Instantiate(VanillaAsset.StandardTextPrefab, obj.transform);
+            tmp.transform.localPosition = new Vector3(-size.x * 0.5f + 0.15f, 0f, -0.1f);
+            tmp.rectTransform.pivot = new Vector2(0f, 0.5f);
+            tmp.rectTransform.sizeDelta = new Vector2(size.x - 0.3f, size.y - 0.06f);
+            tmp.fontSize = 1.35f;
+            tmp.fontSizeMin = 1f;
+            tmp.fontSizeMax = 1.6f;
+            tmp.enableAutoSizing = true;
+            tmp.alignment = TextAlignmentOptions.Left;
+            tmp.raycastTarget = false;
+            tmp.text = hint;
+            tmp.color = UnityEngine.Color.gray;
+            tmp.ForceMeshUpdate();
+            behaviour.TMP = tmp;
 
-        // 点击聚焦
-        var backColor = new Color(0.16f, 0.16f, 0.16f, 0.85f);
-        var hoverColor = new Color(0.3f, 0.3f, 0.3f, 0.9f);
-        var button = obj.SetUpButton(true, renderer, backColor, hoverColor, playSound: false);
-        button.OnClick.AddListener((UnityAction)(() => behaviour.Focused = true));
+            // 点击聚焦
+            var backColor = new Color(0.16f, 0.16f, 0.16f, 0.85f);
+            var hoverColor = new Color(0.3f, 0.3f, 0.3f, 0.9f);
+            var button = obj.SetUpButton(true, renderer, backColor, hoverColor, playSound: false);
+            button.OnClick.AddListener((UnityAction)(() => behaviour.Focused = true));
 
-        var field = new GUITextField(obj, behaviour);
-        field.EnterAction = onEnter;
-        return field;
+            var field = new GUITextField(obj, behaviour);
+            field.EnterAction = onEnter;
+            return field;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[GUITextField.Create]", ex); return default;
+        }
     }
 
     internal static void NotifyEnter(TextFieldBehaviour behaviour)
     {
-        if (_fields.TryGetValue(behaviour, out var field))
-            field.EnterAction?.Invoke(field.Text);
+        try
+        {
+            if (_fields.TryGetValue(behaviour, out var field))
+                field.EnterAction?.Invoke(field.Text);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[GUITextField.NotifyEnter]", ex);
+        }
     }
 
     internal static void RemoveField(TextFieldBehaviour behaviour)
     {
-        _fields.Remove(behaviour);
+        try
+        {
+            _fields.Remove(behaviour);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[GUITextField.RemoveField]", ex);
+        }
     }
 }
 
@@ -134,7 +170,14 @@ public class TextFieldBehaviour : MonoBehaviour
 {
     static TextFieldBehaviour()
     {
-        ClassInjector.RegisterTypeInIl2Cpp<TextFieldBehaviour>();
+        try
+        {
+            ClassInjector.RegisterTypeInIl2Cpp<TextFieldBehaviour>();
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[GUITextField.TextFieldBehaviour]", ex);
+        }
     }
 
     public TextMeshPro? TMP;
@@ -144,41 +187,55 @@ public class TextFieldBehaviour : MonoBehaviour
 
     public void Update()
     {
-        if (!Focused) return;
-
-        foreach (char c in Input.inputString)
+        try
         {
-            if (c == '\r' || c == '\n')
+            if (!Focused) return;
+
+            foreach (char c in Input.inputString)
             {
-                Focused = false;
-                GUITextField.NotifyEnter(this);
+                if (c == '\r' || c == '\n')
+                {
+                    Focused = false;
+                    GUITextField.NotifyEnter(this);
+                }
+                else if (c == '\b')
+                {
+                    if (Value.Length > 0)
+                        Value = Value.Substring(0, Value.Length - 1);
+                }
+                else if (c == '\u001b')
+                {
+                    Focused = false;
+                }
+                else if (!char.IsControl(c))
+                {
+                    Value += c;
+                }
             }
-            else if (c == '\b')
+
+            if (TMP != null)
             {
-                if (Value.Length > 0)
-                    Value = Value.Substring(0, Value.Length - 1);
-            }
-            else if (c == '\u001b')
-            {
-                Focused = false;
-            }
-            else if (!char.IsControl(c))
-            {
-                Value += c;
+                bool empty = Value.Length == 0;
+                TMP.text = empty ? Hint : Value;
+                TMP.color = empty ? UnityEngine.Color.gray : UnityEngine.Color.white;
+                TMP.ForceMeshUpdate();
             }
         }
-
-        if (TMP != null)
+        catch (Exception ex)
         {
-            bool empty = Value.Length == 0;
-            TMP.text = empty ? Hint : Value;
-            TMP.color = empty ? UnityEngine.Color.gray : UnityEngine.Color.white;
-            TMP.ForceMeshUpdate();
+            LightLogger.LogError("[GUITextField.Update]", ex);
         }
     }
 
     public void OnDestroy()
     {
-        GUITextField.RemoveField(this);
+        try
+        {
+            GUITextField.RemoveField(this);
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[GUITextField.OnDestroy]", ex);
+        }
     }
 }
