@@ -1,4 +1,4 @@
-﻿using BepInEx.Unity.IL2CPP.Utils;
+using BepInEx.Unity.IL2CPP.Utils;
 using InnerNet;
 using LightInDark.Core;
 using LightInDark.Game;
@@ -16,7 +16,7 @@ using Object = UnityEngine.Object;
 namespace LightInDark.Utilities;
 
 
-public static class Utils
+public static class AmongUsEdited
 {
     #region FlashScreen
     private static GameObject _flashObject;

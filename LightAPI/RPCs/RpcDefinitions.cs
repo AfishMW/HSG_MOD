@@ -259,7 +259,7 @@ namespace LightInDark.RPCs
                 foreach (var pc in PlayerControl.AllPlayerControls)
                     if (pc.PlayerId == playerId)
                     {
-                        var client = Utilities.Utils.GetClient(pc);
+                        var client = Utilities.AmongUsEdited.GetClient(pc);
                         if (client != null) AmongUsClient.Instance.KickPlayer(client.Id, false);
                         break;
                     }
@@ -277,9 +277,9 @@ namespace LightInDark.RPCs
             {
                 if (PlayerControl.LocalPlayer?.PlayerId == targetPlayerId)
                 {
-                    Utilities.Utils.KickManager.kickReason = reason;
-                    Utilities.Utils.KickManager.kickReasonWaitUntil = Time.realtimeSinceStartup + 30f;
-                    Utilities.Utils.KickManager.kickReasonConsumeUntil = 0f;
+                    Utilities.AmongUsEdited.KickManager.kickReason = reason;
+                    Utilities.AmongUsEdited.KickManager.kickReasonWaitUntil = Time.realtimeSinceStartup + 30f;
+                    Utilities.AmongUsEdited.KickManager.kickReasonConsumeUntil = 0f;
                 }
             }
             catch (Exception ex)
@@ -298,10 +298,10 @@ namespace LightInDark.RPCs
                     {
                         if (PlayerControl.LocalPlayer.PlayerId == playerId)
                         {
-                            Utilities.Utils.KickManager.kickReason = reason;
-                            Utilities.Utils.KickManager.kickReasonConsumeUntil = Time.realtimeSinceStartup + 5f;
+                            Utilities.AmongUsEdited.KickManager.kickReason = reason;
+                            Utilities.AmongUsEdited.KickManager.kickReasonConsumeUntil = Time.realtimeSinceStartup + 5f;
                         }
-                        var client = Utilities.Utils.GetClient(pc);
+                        var client = Utilities.AmongUsEdited.GetClient(pc);
                         if (client != null) AmongUsClient.Instance.KickPlayer(client.Id, false);
                         break;
                     }
