@@ -66,7 +66,6 @@
 		<Reference Include="..\Libs\MonoMod.Utils.dll" />
 		<Reference Include="..\Libs\Newtonsoft.Json.dll" />
 		<Reference Include="..\Libs\QRCoder.dll" />
-		<Reference Include="..\Libs\Reactor.dll" />
 		<Reference Include="..\Libs\Rewired_Core.dll" />
 		<Reference Include="..\Libs\Rewired_Windows.dll" />
 		<Reference Include="..\Libs\Rewired_Windows_Functions.dll" />

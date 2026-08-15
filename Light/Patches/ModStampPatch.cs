@@ -1,7 +1,6 @@
 using HarmonyLib;
 using LightInDark.Core;
 using Light.Utilities;
-using Reactor.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -28,8 +27,7 @@ public static class ModStampPatch
                 }
                 modStamp.transform.localScale = Vector3.one * 0.06f;
                 var sr = modStamp.GetComponent<SpriteRenderer>();
-                if (sr != null)
-                    sr.sprite = ResourceHelper.LoadSpriteFromResource("Light.Resources.ModStamp.png");
+                sr?.sprite = ResourceHelper.LoadSpriteFromResource("Light.Resources.ModStamp.png");
             });
         }
         catch (System.Exception ex)

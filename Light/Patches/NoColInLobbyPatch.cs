@@ -9,8 +9,8 @@ public static class NoColInLobbyPatch
     [HarmonyPatch(nameof(PlayerControl.FixedUpdate))]
     public static void Postfix(PlayerControl __instance)
     {
-            if(!__instance.AmOwner) return; ;
-            if (!AmongUsEdited.IsInLobby() || !AmongUsEdited.IsCustomServer()) return;
+            if(!__instance.AmOwner) return; 
+            if (!LightUtils.IsInLobby() || !LightUtils.IsCustomServer()) return;
             bool pressShift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
             if(__instance.Collider.enabled == pressShift)
             {

@@ -144,7 +144,7 @@ public class PatchManager
                             return false;
                         }
                         string reason = parts.Length >= 3 ? string.Join(' ', parts.Skip(2)) : "无";
-                        AmongUsEdited.KickPlayer(target.ToLIDPlayer(), PlayerControl.LocalPlayer.name, reason);
+                        LightUtils.KickPlayer(target.ToLIDPlayer(), PlayerControl.LocalPlayer.name, reason);
                         __instance.freeChatField.Clear();
                         return false;
                     }

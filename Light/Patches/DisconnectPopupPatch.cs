@@ -1,7 +1,7 @@
 using HarmonyLib;
 using LightInDark.Core;
 using UnityEngine;
-using static LightInDark.Utilities.AmongUsEdited;
+using static LightInDark.Utilities.LightUtils;
 
 namespace Light.Patches
 {
