@@ -24,7 +24,7 @@ public class ServerSelectPatch
             __instance.levelButtons[0].transform.parent.gameObject.SetActive(false);
             __instance.serverButton.transform.parent.SetLocalY(-1.84f);
             __instance.serverDropdown.transform.SetLocalY(-2.63f);
-            __instance.capacityOption.ValidRange.max = AmongUsEdited.IsCustomServer() ? 24 : 15;
+            __instance.capacityOption.ValidRange.max = LightUtils.IsCustomServer() ? 24 : 15;
             __instance.capacityOption.ValidRange.min = 4;
         }
         catch (System.Exception ex)

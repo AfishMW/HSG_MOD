@@ -14,6 +14,7 @@ internal static class UnityHelper
         if (layer.HasValue) obj.layer = layer.Value;
         else if (parent != null) obj.layer = parent.gameObject.layer;
         return obj.AddComponent<T>();
+        
     }
 
     public static GameObject CreateObject(string objName, Transform? parent, Vector3 localPosition, int? layer = null)

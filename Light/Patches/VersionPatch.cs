@@ -46,7 +46,7 @@ public static class VersionPatch
             apClone.DistanceFromEdge = new Vector3(2.369f,-0.45f);
             apClone.updateAlways = true;
 
-            ModManager.Instance.ShowModStamp();
+            
         }
         catch (Exception ex)
         {

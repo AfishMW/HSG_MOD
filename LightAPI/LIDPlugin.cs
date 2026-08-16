@@ -10,21 +10,15 @@ using LightInDark.UI;
 using LightInDark.UI.Window;
 using LightInDark.Roles;
 using LightInDark.RPCs;
-using Reactor;
-using Reactor.Networking;
-using Reactor.Networking.Attributes;
 using System;
 using System.Collections;
 using UnityEngine;
-using Reactor.Utilities;
 
 
 namespace LightInDark;
 
 [BepInPlugin("com.hvtxsvcmaomao.lid","Light in Dark","1.0.0")]
 [BepInProcess("Among Us.exe")]
-[BepInDependency(ReactorPlugin.Id)]
-[ReactorModFlags(ModFlags.RequireOnAllClients)]
 public partial class LIDPlugin : BasePlugin
 {
     public Harmony Harmony { get; } = new("LightAPI.harmony");
@@ -59,7 +53,9 @@ public static class ShowChatPatch
         try
         {
             if (HudManager.Instance?.Chat == null) return;
-            //if (!NeedShowFreeChat) return;
+#if !DEBUG
+            if (!NeedShowFreeChat) return;
+#endif
             HudManager.Instance.Chat.gameObject.SetActive(true);
         }
         catch (Exception ex)

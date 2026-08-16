@@ -1,4 +1,5 @@
 using BepInEx.Unity.IL2CPP.Utils;
+using Il2CppInterop.Runtime.Injection;
 using InnerNet;
 using LightInDark.Core;
 using LightInDark.Game;
@@ -15,9 +16,53 @@ using Object = UnityEngine.Object;
 
 namespace LightInDark.Utilities;
 
-
-public static class AmongUsEdited
+/// <summary>
+/// 静态工具类。
+/// </summary>
+public static class LightUtils
 {
+    #region AttachComponent
+    /// <summary>
+    /// 将任意组件类挂到 GameObject 上。
+    /// 未指定目标对象时默认新建一个空对象（以组件类型名命名），也可指定挂到其他对象上。
+    /// 返回附加组件完毕的 GameObject。创建失败时输出警告并重试，直到成功。
+    /// </summary>
+    /// <typeparam name="T">要附加的组件类型（MonoBehaviour / Component）</typeparam>
+    /// <param name="target">目标 GameObject；为 null 时自动创建一个空对象</param>
+    /// <param name="objectName">自动创建对象时的名称；为 null 时使用组件类型名</param>
+    /// <returns>附加组件完毕的 GameObject</returns>
+    public static GameObject AttachComponent<T>(GameObject target = null, string objectName = null) where T : Component
+    {
+        while (true)
+        {
+            try
+            {
+                if (target == null)
+                    target = new GameObject(objectName ?? typeof(T).Name);
+
+                if (target.GetComponent<T>() == null)
+                    target.AddComponent<T>();
+
+                return target;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogWarning($"[LightUtils.AttachComponent] 挂载 {typeof(T).Name} 失败：{ex.Message}，正在重试...");
+                try
+                {
+                    // 托管 MonoBehaviour 需先注册才能 AddComponent，尝试补注册后重试
+                    ClassInjector.RegisterTypeInIl2Cpp<T>();
+                }
+                catch
+                {
+                    // 已是 IL2CPP 类型或已注册，忽略
+                }
+                System.Threading.Thread.Sleep(50);
+            }
+        }
+    }
+    #endregion
+
     #region FlashScreen
     private static GameObject _flashObject;
     private static SpriteRenderer _renderer;
@@ -58,7 +103,7 @@ public static class AmongUsEdited
         }
         catch (Exception ex)
         {
-            LightLogger.LogError("AmongUsEdited.PlayFlash", ex);
+            LightLogger.LogError("LightUtils.PlayFlash", ex);
         }
     }
 
@@ -70,7 +115,7 @@ public static class AmongUsEdited
         }
         catch (Exception ex)
         {
-            LightLogger.LogError("AmongUsEdited.PlayFlash", ex);
+            LightLogger.LogError("LightUtils.PlayFlash", ex);
         }
     }
 
@@ -82,7 +127,7 @@ public static class AmongUsEdited
         }
         catch (Exception ex)
         {
-            LightLogger.LogError("AmongUsEdited.PlayFlash", ex);
+            LightLogger.LogError("LightUtils.PlayFlash", ex);
         }
     }
 
@@ -148,7 +193,7 @@ public static class AmongUsEdited
         }
         catch (Exception ex)
         {
-            LightLogger.LogError("AmongUsEdited.KickPlayer", ex);
+            LightLogger.LogError("LightUtils.KickPlayer", ex);
         }
     }
     public static class KickManager
@@ -184,7 +229,7 @@ public static class AmongUsEdited
         }
         catch (Exception ex)
         {
-            LightLogger.LogError("AmongUsEdited.ToLIDPlayer", ex);
+            LightLogger.LogError("LightUtils.ToLIDPlayer", ex);
             return null;
         }
     }
@@ -208,7 +253,7 @@ public static class AmongUsEdited
         }
         catch (Exception ex)
         {
-            LightLogger.LogError("AmongUsEdited.ShowCustomDisconnectWindow", ex);
+            LightLogger.LogError("LightUtils.ShowCustomDisconnectWindow", ex);
         }
     }
     /// <summary>
@@ -223,7 +268,7 @@ public static class AmongUsEdited
         }
         catch (Exception ex)
         {
-            LightLogger.LogError("AmongUsEdited.CloseCustomDisconnectWindow", ex);
+            LightLogger.LogError("LightUtils.CloseCustomDisconnectWindow", ex);
         }
     }
 
@@ -239,7 +284,7 @@ public static class AmongUsEdited
         }
         catch (Exception ex)
         {
-            LightLogger.LogError("AmongUsEdited.IsCustomServer", ex);
+            LightLogger.LogError("LightUtils.IsCustomServer", ex);
             return default;
         }
     }
@@ -255,7 +300,7 @@ public static class AmongUsEdited
         }
         catch (Exception ex)
         {
-            LightLogger.LogError("AmongUsEdited.IsInLobby", ex);
+            LightLogger.LogError("LightUtils.IsInLobby", ex);
             return default;
         }
     }

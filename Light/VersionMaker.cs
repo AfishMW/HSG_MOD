@@ -1,4 +1,4 @@
-﻿using BepInEx;
+using BepInEx;
 using LightInDark;
 using LightInDark.Core;
 using LightInDark.Utilities;
@@ -88,11 +88,11 @@ public class VersionMaker
             try
             {
                 Process.Start(startInfo);
-                AmongUsEdited.ShowCustomDisconnectWindow("更新器已在后台启动，等待游戏退出后自动更新。");
+                LightUtils.ShowCustomDisconnectWindow("更新器已在后台启动，等待游戏退出后自动更新。");
             }
             catch (Exception ex)
             {
-                AmongUsEdited.ShowCustomDisconnectWindow($"启动更新器失败。\n请将游戏目录下的Light.log发送给开发者或者QQ群中。\n不要直接将此界面截图/拍照给其他人。");
+                LightUtils.ShowCustomDisconnectWindow($"启动更新器失败。\n请将游戏目录下的Light.log发送给开发者或者QQ群中。\n不要直接将此界面截图/拍照给其他人。");
                 LightLogger.LogError($"启动更新器失败：{ex.Message}");
             }
         }

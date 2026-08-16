@@ -10,19 +10,17 @@ using LightInDark.Roles;
 using LightInDark.RPCs;
 using Light.ChatCommands;
 using Light.Patches;
+using Light.Utilities;
 using Light.Roles.Crewmates;
 using Light.Roles.Vanilla;
-using Reactor;
-using Light.UI;
-using System.Text.Json.Nodes;
 using LightInDark.Core;
 using System;
+using UnityEngine.SceneManagement;
 
 namespace Light;
 
 [BepInPlugin(Id, Name, Version)]
 [BepInProcess("Among Us.exe")]
-[BepInDependency(ReactorPlugin.Id)]
 public partial class LightPlugin : BasePlugin
 {
     public const string Id = "com.light.inthedark";
@@ -31,14 +29,12 @@ public partial class LightPlugin : BasePlugin
 
     public const string VisualVersion = "v1.0.0.0";
 
-    /// <summary>彩色版本号（标题栏显示用）</summary>
     public const string RichVersion = "<color=#4FD1C5>ver</color> <color=#38B2AC>1.0.0</color>";
-    /// <summary>原版 AU 版本号（由 VersionPatch 写入）</summary>
     public static string AUVersion;
     public static string CursurDataPath = Application.persistentDataPath;
+    public static MainColor.ModColorData ColorData;
     public Harmony Harmony { get; } = new(Id);
 
-    // 静态日志引用，供 Patch 类使用
     internal static ManualLogSource StaticLog { get; private set; } = null!;
 
     public override void Load()
@@ -50,23 +46,54 @@ public partial class LightPlugin : BasePlugin
             Harmony.PatchAll();
             bool vM =VersionMaker.MakeVersion();
             if (!vM)
-                Log.LogError($"json 加载失败。具体异常请查看Light.log。");
+                Log.LogError($"VM json 加载失败。具体异常请查看Light.log。");
             LoadCommand();
             EventSystem.ScanAndRegisterAll();
             ExtractLanguageFiles();
             Language.Load();
             LidRpcRegistry.ScanAndPatch(Harmony);
+            ColorData = MainColor.LoadChatColor();
             LoadRole();
+            Dispatcher.Initialize();
 #if !DEBUG
             LightLogger.ClearLog();
 #endif
             RpcDefinitions.OnFreeChatStateChanged += show => ShowChatPatch.NeedShowFreeChat = show;
             AddCursorComponent();
+            RegisterShowModStampOnMainMenu();
             Log.LogInfo($"模组 {Name} v{Version} 已加载！");
         }
         catch (Exception ex)
         {
             LightLogger.LogError("[LightPlugin.Load]", ex);
+        }
+    }
+
+    /// <summary>
+    /// 在 MainMenu 场景加载完成后再调用 ShowModStamp。
+    /// 不能在 Load() 中直接调用：此时 ModManager 的 ModStamp/ModStampText 字段尚未初始化，
+    /// 原版 ShowModStamp 内部会抛 NullReferenceException。
+    /// </summary>
+    private static void RegisterShowModStampOnMainMenu()
+    {
+        try
+        {
+            SceneManager.add_sceneLoaded((Action<UnityEngine.SceneManagement.Scene, LoadSceneMode>)((scene, mode) =>
+            {
+                try
+                {
+                    if (scene.name == "MainMenu")
+                        ModManager.Instance.ShowModStamp();
+                }
+                catch (Exception ex)
+                {
+                    LightLogger.LogError("[LightPlugin.ShowModStampOnMainMenu]", ex);
+                }
+            }));
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[LightPlugin.RegisterShowModStampOnMainMenu]", ex);
         }
     }
 
@@ -167,4 +194,18 @@ public partial class LightPlugin : BasePlugin
             }
         }
     }
+    public static int GetChatBunColorFromIndex()
+    {
+        return 1;
+    }
 }
+
+/// <summary>
+/// 当颜色配置无效时抛出。
+/// </summary>
+public class InvalidColorTypeException : Exception
+{
+    public InvalidColorTypeException(string message) : base(message) { }
+    public InvalidColorTypeException(string message, Exception innerException) : base(message, innerException) { }
+}
+

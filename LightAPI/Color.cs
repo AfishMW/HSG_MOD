@@ -32,6 +32,10 @@ public struct Color
     static public Color White { get;  set; } = new(1f, 1f, 1f, 1f);
     static public Color Black { get; set; } = new(0f, 0f, 0f, 1f);
     static public Color Gray { get;  set; } = new(0.5f, 0.5f, 0.5f, 1f);
+    static public Color ModLightGolden { get; set; } = new(1f, 0.9f, 0.2f,1);
+    static public Color ModDarkBlack { get; set; } = new(0.2f, 0.2f, 0.2f,1);
+    static public Color ModLightGoldenL { get; set; } = new(1f, 0.9f, 0.2f, 0.8F);
+    static public Color ModDarkBlackD { get; set; } = new(0.2f, 0.2f, 0.2f, 0.8F);
     static public Color Clear { get; internal set; } = new(0f, 0f, 0f, 0f);
 
 }
