@@ -46,7 +46,8 @@ public static class VersionPatch
             apClone.DistanceFromEdge = new Vector3(2.369f,-0.45f);
             apClone.updateAlways = true;
 
-            
+            var modDes = UnityEngine.Object.Instantiate(__instance.text, __instance.transform.parent);
+
         }
         catch (Exception ex)
         {
@@ -69,5 +70,48 @@ public static class VersionPatch
 //            popup.gameObject.SetActive(true);
 //        }
 //        return false;
+//    }
+//}
+
+
+//public static class ModVersionShow
+//{
+//    static TextMeshPro _verText;
+//    static AspectPosition _verAspect;
+//    public static string VersionTextContent = "我是测试。\n我是测试二号。";
+
+//    [HarmonyPatch(typeof(PingTracker),nameof(PingTracker.Update))]
+//    public static class PingTrackerUpdatePatch
+//    {
+//        [HarmonyPostfix]
+//        public static void PingTracker_ModVersionPostfix(PingTracker __instance)
+//        {
+//            if (_verText == null)
+//            {
+//                var tmp = __instance.text;
+//                var newText = UnityEngine.Object.Instantiate(tmp,tmp.transform.parent);
+//                newText.name = "LIDModVersion";
+//                newText.alignment = TextAlignmentOptions.TopRight;
+//                newText.fontSize = 2.5f;
+//                newText.text = VersionTextContent;
+
+//                _verAspect = newText.gameObject.AddComponent<AspectPosition>();
+//                _verAspect.Alignment = AspectPosition.EdgeAlignments.RightTop;
+//                _verAspect.DistanceFromEdge =
+//                    HudManager.InstanceExists && HudManager.Instance.Chat.chatButton.gameObject.active? new Vector3(2.5f, 0f, -800f): new Vector3(1.8f, 0f, -800f);
+//                _verAspect.updateAlways = true;
+//                _verText = newText;
+//            }
+//            if (_verAspect != null)
+//            {
+//                float offsetY = 0f;
+//                if (HudManager.InstanceExists && HudManager.Instance.Chat.chatButton.gameObject.active)
+//                    offsetY = -0.5f;
+//                _verAspect.DistanceFromEdge = new Vector3(1.8f, offsetY, -800f);
+//            }
+
+//            bool shouldHide = GameSettingMenu.Instance?.gameObject.active ?? false;
+//            _verText?.gameObject.SetActive(!shouldHide);
+//        }
 //    }
 //}

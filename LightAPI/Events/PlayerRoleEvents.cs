@@ -83,20 +83,4 @@ namespace LightInDark.Events
         public PlayerBlockWinEvent() { }
         public PlayerBlockWinEvent(PlayerControl player, bool isWin, string gameEnd = "") : base(player) { IsWin = isWin; GameEnd = gameEnd; }
     }
-
-    /// <summary>修饰器被添加到玩家时触发。</summary>
-    public class PlayerModifierSetEvent : BasePlayerEvent
-    {
-        public string ModifierName { get; init; } = "";
-        public PlayerModifierSetEvent() { }
-        public PlayerModifierSetEvent(PlayerControl player, string modifierName) : base(player) { ModifierName = modifierName; }
-    }
-
-    /// <summary>修饰器从玩家移除时触发。</summary>
-    public class PlayerModifierRemoveEvent : BasePlayerEvent
-    {
-        public string ModifierName { get; init; } = "";
-        public PlayerModifierRemoveEvent() { }
-        public PlayerModifierRemoveEvent(PlayerControl player, string modifierName) : base(player) { ModifierName = modifierName; }
-    }
 }

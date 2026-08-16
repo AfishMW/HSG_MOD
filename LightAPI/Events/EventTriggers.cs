@@ -10,8 +10,21 @@ namespace LightInDark.Events
     /// </summary>
     public static class EventTriggers
     {
+        // ── 大厅（Lobby）──
+        public static bool OnLobbyStartGame(int playerCount) { var ev = new LobbyStartGameEvent { PlayerCount = playerCount }; EventSystem.RunEvent(ev); return !ev.IsCanceled; }
+        public static void OnLobbyCountdownStart(int playerCount, int duration) => EventSystem.RunEvent(new LobbyCountdownStartEvent { PlayerCount = playerCount, CountdownDuration = duration });
+        public static void OnLobbySkipCountdown(int playerCount) => EventSystem.RunEvent(new LobbySkipCountdownEvent { PlayerCount = playerCount });
+        public static void OnLobbyCancelStart(int remainingSeconds) => EventSystem.RunEvent(new LobbyCancelStartEvent { RemainingSeconds = remainingSeconds });
+
         // ── 游戏流程 ──
         public static void OnGameStart(int playerCount) => EventSystem.RunEvent(new GameStartEvent { PlayerCount = playerCount });
+        public static void OnGameLoadingStart(int mapId) => EventSystem.RunEvent(new GameLoadingStartEvent { MapId = mapId });
+        public static void OnIntroBegin() => EventSystem.RunEvent(new IntroBeginEvent());
+        public static void OnIntroEnd() => EventSystem.RunEvent(new IntroEndEvent());
+        public static void OnRoleSelectionBegin(int playerCount) => EventSystem.RunEvent(new RoleSelectionBeginEvent { PlayerCount = playerCount });
+        public static void OnShipBegin() => EventSystem.RunEvent(new ShipBeginEvent());
+        public static void OnPlayersSpawned() => EventSystem.RunEvent(new PlayersSpawnedEvent());
+        public static void OnGamePreEnd(bool crewWin, bool impWin, string reason) => EventSystem.RunEvent(new GamePreEndEvent { CrewmatesWin = crewWin, ImpostorsWin = impWin, Reason = reason });
         public static void OnGameEnd(bool crewWin, bool impWin, string reason) => EventSystem.RunEvent(new GameEndEvent { CrewmatesWin = crewWin, ImpostorsWin = impWin, WinReason = reason });
         public static bool OnGameTryEnd(bool crewWin, string reason) { var ev = new GameTryEndEvent { CrewmatesWin = crewWin, Reason = reason }; EventSystem.RunEvent(ev); return !ev.IsCanceled; }
         public static void OnGameUpdate(float dt) => EventSystem.RunEvent(new GameUpdateEvent { DeltaTime = dt });
@@ -35,9 +48,6 @@ namespace LightInDark.Events
 
         // ── 玩家移动 / 交互 ──
         public static void OnPlayerMove(PlayerControl player, Vector2 pos) => EventSystem.RunEvent(new PlayerMoveEvent { Player = player, Position = pos });
-        public static void OnPlayerClimbLadder(PlayerControl player, bool up, Vector2 from, Vector2 to) => EventSystem.RunEvent(new PlayerClimbLadderEvent { Player = player, IsClimbingUp = up, From = from, To = to });
-        public static void OnPlayerUseMovingPlatform(PlayerControl player, Vector2 from, Vector2 to) => EventSystem.RunEvent(new PlayerUseMovingPlatformEvent { Player = player, From = from, To = to });
-        public static void OnPlayerUseZipline(PlayerControl player, bool top, Vector2 from, Vector2 to) => EventSystem.RunEvent(new PlayerUseZiplineEvent { Player = player, GoesToTop = top, From = from, To = to });
         public static void OnPlayerBeginMinigameByConsole(PlayerControl player, Console console) => EventSystem.RunEvent(new PlayerBeginMinigameByConsoleEvent { Player = player, Console = console });
         public static void OnPlayerBeginMinigameByDoor(PlayerControl player, DoorConsole door) => EventSystem.RunEvent(new PlayerBeginMinigameByDoorEvent { Player = player, Door = door });
 
@@ -70,8 +80,7 @@ namespace LightInDark.Events
         public static PlayerCheckWinEvent OnPlayerCheckWin(PlayerControl player, string gameEnd = "") { var ev = new PlayerCheckWinEvent { Player = player, GameEnd = gameEnd }; EventSystem.RunEvent(ev); return ev; }
         public static PlayerCheckExtraWinEvent OnPlayerCheckExtraWin(PlayerControl player, string gameEnd = "") { var ev = new PlayerCheckExtraWinEvent { Player = player, GameEnd = gameEnd }; EventSystem.RunEvent(ev); return ev; }
         public static PlayerBlockWinEvent OnPlayerBlockWin(PlayerControl player, bool isWin, string gameEnd = "") { var ev = new PlayerBlockWinEvent { Player = player, IsWin = isWin, GameEnd = gameEnd }; EventSystem.RunEvent(ev); return ev; }
-        public static void OnPlayerModifierSet(PlayerControl player, string name) => EventSystem.RunEvent(new PlayerModifierSetEvent { Player = player, ModifierName = name });
-        public static void OnPlayerModifierRemove(PlayerControl player, string name) => EventSystem.RunEvent(new PlayerModifierRemoveEvent { Player = player, ModifierName = name });
+
 
         // ── 会议 ──
         public static bool OnMeetingTryStart(PlayerControl reporter, NetworkedPlayerInfo body, bool isEmergency) { var ev = new MeetingTryStartEvent { Reporter = reporter, ReportedBody = body, IsEmergencyMeeting = isEmergency }; EventSystem.RunEvent(ev); return !ev.IsCanceled; }

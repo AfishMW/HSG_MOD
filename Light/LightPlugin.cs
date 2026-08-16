@@ -194,10 +194,6 @@ public partial class LightPlugin : BasePlugin
             }
         }
     }
-    public static int GetChatBunColorFromIndex()
-    {
-        return 1;
-    }
 }
 
 /// <summary>

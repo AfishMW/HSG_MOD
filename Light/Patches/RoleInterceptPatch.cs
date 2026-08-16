@@ -1,4 +1,5 @@
 using System.Linq;
+using AmongUs.GameOptions;
 using HarmonyLib;
 using Hazel;
 using InnerNet;
@@ -27,10 +28,13 @@ namespace Light.Patches
         {
             try
             {
-                __instance.ShouldCheckForGameEnd = false;
-                LightPlayerDataManager.Initialize();
+                // 保持原版结束检查开启（ShouldCheckForGameEnd = true 由原版 StartGame 设置）。
+                // 若强制置 false，原版 CheckEndCriteria 永不触发 RpcEndGame -> 游戏无法正常结束。
+                // 自定义胜负在 RpcEndGame / AmongUsClient.OnGameEnd 层拦截处理。
+                // 玩家数据已在 SelectRoles 阶段初始化（此时玩家已生成、角色已分配）。
+                EventTriggers.OnIntroEnd();
                 EventTriggers.OnGameStart(PlayerControl.AllPlayerControls.Count);
-                LightLogger.Log("[Patch] 游戏开始，已禁用原版结束检查");
+                LightLogger.Log("[Patch] 游戏开始，已保持原版结束检查开启，自定义胜负在 RpcEndGame 层处理");
             }
             catch (System.Exception ex)
             {
@@ -60,15 +64,15 @@ namespace Light.Patches
     [HarmonyPatch(typeof(GameManager), nameof(GameManager.CheckEndGameViaTasks))]
     public static class BlockEndGameViaTasksPatch
     {
-        public static bool Prefix(ref bool __result)
+        public static bool Prefix(GameManager __instance)
         {
             try
             {
                 var ev = new GameTryEndEvent { CrewmatesWin = true, Reason = "task" };
                 EventSystem.RunEvent(ev);
-                if (ev.IsCanceled) { __result = false; return false; }
-                __result = ev.CrewmatesWin && !ev.ImpostorsWin;
-                return false;
+                // 放行原版：全部任务完成时原版 CheckEndGameViaTasks 会调用 RpcEndGame 结束游戏。
+                // 只有自定义逻辑明确取消时才拦下。
+                return !ev.IsCanceled;
             }
             catch (System.Exception ex)
             {
@@ -108,7 +112,10 @@ namespace Light.Patches
             try
             {
                 LightLogger.Log("[Patch] 拦截 SelectRoles，开始自定义分配");
+                // 先初始化玩家数据（角色分配时玩家已生成），保证 RpcDefinitions.SetRole 能记录到角色
+                LightInDark.Game.LightPlayerDataManager.Initialize();
                 LightInDark.Game.GameManager.Instance.Initialize();
+                EventTriggers.OnRoleSelectionBegin(PlayerControl.AllPlayerControls?.Count ?? 0);
 
                 // 复制到系统 List 并洗牌（AllPlayerControls 不支持 System.Linq）
                 var players = new List<PlayerControl>();
@@ -120,10 +127,28 @@ namespace Light.Patches
                 }
 
                 int impNum = Mathf.Clamp(GameOptionsManager.Instance.CurrentGameOptions.NumImpostors, 1, Mathf.Max(1, players.Count - 1));
+                var impostorsSet = players.Take(impNum).Select(p => p.PlayerId).ToHashSet();
                 var impostors = players.Take(impNum).Select(p => p.PlayerId).ToList();
                 var others = players.Skip(impNum).Select(p => p.PlayerId).ToList();
 
                 new StandardRoleAllocator().Assign(impostors, others);
+
+                // 关键修复：原版 SelectRoles 会通过 LogicRoleSelection -> 玩家 RpcSetRole
+                // -> CoSetRole 把 roleAssigned 置 true，随后才有条件触发 HudManager.CoShowIntro。
+                // 我们拦截并自行为每位玩家走 vanilla 的 RpcSetRole 路径，否则 roleAssigned 恒为
+                // false，Intro 永不启动 -> 卡在黑屏（“进了游戏但没进”）。
+                foreach (var pc in players)
+                {
+                    RoleTypes rt = impostorsSet.Contains(pc.PlayerId) ? RoleTypes.Impostor : RoleTypes.Crewmate;
+                    try
+                    {
+                        pc.RpcSetRole(rt, false);
+                    }
+                    catch (System.Exception ex2)
+                    {
+                        LightLogger.LogWarning($"[Light] RoleSelectPatch.RpcSetRole {pc.name} -> {rt} 失败: {ex2.Message}");
+                    }
+                }
                 return false;
             }
             catch (System.Exception ex)
@@ -154,19 +179,16 @@ namespace Light.Patches
     [HarmonyPatch(typeof(RoleBehaviour), nameof(RoleBehaviour.Initialize))]
     public static class BlockRoleInitializePatch
     {
-        public static bool Prefix(RoleBehaviour __instance)
+        public static void Postfix(RoleBehaviour __instance)
         {
             try
             {
-                if (__instance.Player == null) return true;
                 if (HudManager.Instance != null && HudManager.Instance.AbilityButton != null)
                     HudManager.Instance.AbilityButton.gameObject.SetActive(false);
-                return false;
             }
             catch (System.Exception ex)
             {
-                LightLogger.LogWarning("[Light] BlockRoleInitializePatch.Prefix NRE: " + ex.Message + "\n" + ex.StackTrace);
-                return true;
+                LightLogger.LogWarning("[Light] BlockRoleInitializePatch.Postfix NRE: " + ex.Message + "\n" + ex.StackTrace);
             }
         }
     }
