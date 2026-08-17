@@ -55,5 +55,18 @@
   "map.fungle": "Fungle",
   "killDistance.short": "Short",
   "killDistance.medium": "Medium",
-  "killDistance.long": "Long"
+  "killDistance.long": "Long",
+  "role.caller.name": "Caller",
+  "role.caller.description": "Can call an emergency meeting at any time.",
+  "role.caller.introBlurb": "Emergency meeting, call it anytime.",
+  "role.caller.skill": "Can call an emergency meeting at any time.\nPress E to use, 20s cooldown.",
+  "role.caller.ability": "Meeting",
+  "role.vanilla.impostor.name": "Impostor",
+  "role.vanilla.impostor.description": "Basic impostor role, default placeholder when no custom role is assigned",
+  "role.vanilla.impostor.introBlurb": "Lurk in the dark and wait for your chance.",
+  "role.vanilla.impostor.skill": "Kill crewmates, sabotage, and vent.\nNo mod-specific abilities.",
+  "role.vanilla.crewmate.name": "Crewmate",
+  "role.vanilla.crewmate.description": "Basic crewmate role, default placeholder when no custom role is assigned",
+  "role.vanilla.crewmate.introBlurb": "Complete tasks and find the impostor.",
+  "role.vanilla.crewmate.skill": "Complete all tasks and vote out the impostor.\nNo mod-specific abilities."
 }

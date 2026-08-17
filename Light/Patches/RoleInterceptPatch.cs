@@ -124,12 +124,13 @@ namespace Light.Patches
                 var others = players.Skip(impNum).Select(p => p.PlayerId).ToList();
 
                 new StandardRoleAllocator().Assign(impostors, others);
-                return false;
+                // 只分配自定义职业，原版 SelectRoles 继续运行处理兜底
+                return true;
             }
             catch (System.Exception ex)
             {
                 LightLogger.LogWarning("[Light] RoleSelectPatch.Prefix NRE: " + ex.Message + "\n" + ex.StackTrace);
-                return false;
+                return true;
             }
         }
     }

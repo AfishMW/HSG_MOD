@@ -55,5 +55,18 @@
   "map.fungle": "真菌",
   "killDistance.short": "短",
   "killDistance.medium": "中",
-  "killDistance.long": "长"
+  "killDistance.long": "长",
+  "role.caller.name": "Caller",
+  "role.caller.description": "可以在任意时刻强制召开紧急会议。",
+  "role.caller.introBlurb": "紧急会议，随时可以召开。",
+  "role.caller.skill": "可以在任意时刻强制召开紧急会议。\n按 E 键使用，冷却 20 秒。",
+  "role.caller.ability": "开会",
+  "role.vanilla.impostor.name": "内鬼",
+  "role.vanilla.impostor.description": "基础内鬼职业，未分配自定义职业时的默认占位",
+  "role.vanilla.impostor.introBlurb": "暗中潜伏，伺机而动。",
+  "role.vanilla.impostor.skill": "击杀船员、破坏设施、钻管道。\n无模组专属技能。",
+  "role.vanilla.crewmate.name": "船员",
+  "role.vanilla.crewmate.description": "基础船员职业，未分配自定义职业时的默认占位",
+  "role.vanilla.crewmate.introBlurb": "完成任务，揪出内鬼。",
+  "role.vanilla.crewmate.skill": "完成所有任务，发现并投票放逐内鬼。\n无模组专属技能。"
 }
