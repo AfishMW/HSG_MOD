@@ -304,5 +304,13 @@ public static class LightUtils
             return default;
         }
     }
-
+    /// <summary>
+    /// 检测今天是不是四月一号。
+    /// </summary>
+    /// <returns></returns>
+    public static bool IsAprilDay()
+    {
+        var today = DateTime.Now;
+        return today.Month == 4 && today.Day == 1;
+    }
 }

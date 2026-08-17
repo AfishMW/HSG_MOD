@@ -27,7 +27,6 @@ public static class PlayerColorHelper
             if (colorId >= 0 && colorId < Palette.PlayerColors.Length)
             {
                 var uc = Palette.PlayerColors[colorId];
-                LightLogger.Log($"[PlayerColorHelper] playerId={pc.PlayerId} colorId={colorId} color=({uc.r:F2},{uc.g:F2},{uc.b:F2})");
                 return uc;
             }
         }
@@ -44,7 +43,6 @@ public static class PlayerColorHelper
             if (colorId >= 0 && colorId < Palette.PlayerColors.Length)
             {
                 var uc = Palette.PlayerColors[colorId];
-                LightLogger.Log($"[PlayerColorHelper] info colorId={colorId} color=({uc.r:F2},{uc.g:F2},{uc.b:F2})");
                 return uc;
             }
         }
@@ -52,12 +50,6 @@ public static class PlayerColorHelper
         return UnityEngine.Color.white;
     }
 }
-
-/// <summary>
-/// 聊天颜色解析器：气泡和背景共用同一套逻辑。
-/// ChatFollowPlayerColor=true  → 玩家颜色
-/// ChatFollowPlayerColor=false → CustomChatColorOverride → ModMainColor → 抛异常
-/// </summary>
 public static class ChatColorResolver
 {
     public static UnityEngine.Color ResolveColor(NetworkedPlayerInfo? info = null, float alpha = 0.8f)

@@ -109,37 +109,6 @@ namespace LightInDark.Events
         public PlayerMoveEvent(PlayerControl player, Vector2 pos) : base(player) { Position = pos; }
     }
 
-    /// <summary>玩家爬梯子时触发。</summary>
-    public class PlayerClimbLadderEvent : BasePlayerEvent
-    {
-        public bool IsClimbingUp { get; init; }
-        public Vector2 From { get; init; }
-        public Vector2 To { get; init; }
-        public PlayerClimbLadderEvent() { }
-        public PlayerClimbLadderEvent(PlayerControl player, bool isClimbingUp, Vector2 from, Vector2 to) : base(player)
-        { IsClimbingUp = isClimbingUp; From = from; To = to; }
-    }
-
-    /// <summary>玩家使用移动平台时触发。</summary>
-    public class PlayerUseMovingPlatformEvent : BasePlayerEvent
-    {
-        public Vector2 From { get; init; }
-        public Vector2 To { get; init; }
-        public PlayerUseMovingPlatformEvent() { }
-        public PlayerUseMovingPlatformEvent(PlayerControl player, Vector2 from, Vector2 to) : base(player) { From = from; To = to; }
-    }
-
-    /// <summary>玩家使用滑索时触发。</summary>
-    public class PlayerUseZiplineEvent : BasePlayerEvent
-    {
-        public bool GoesToTop { get; set; }
-        public Vector2 From { get; init; }
-        public Vector2 To { get; init; }
-        public PlayerUseZiplineEvent() { }
-        public PlayerUseZiplineEvent(PlayerControl player, bool goesToTop, Vector2 from, Vector2 to) : base(player)
-        { GoesToTop = goesToTop; From = from; To = to; }
-    }
-
     /// <summary>玩家通过控制台开始小游戏时触发。</summary>
     public class PlayerBeginMinigameByConsoleEvent : BasePlayerEvent
     {

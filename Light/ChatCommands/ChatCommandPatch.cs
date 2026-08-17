@@ -1,28 +1,29 @@
 using HarmonyLib;
 using Il2CppSystem.Linq.Expressions.Interpreter;
 using InnerNet;
+using Light.Patches;
+using Light.Roles.Crewmates;
+using Light.UI.HudUI;
+using Light.UI.Window;
 using LightInDark.Core;
 using LightInDark.Game;
 using LightInDark.Roles;
-using Light.Roles.Crewmates;
 using LightInDark.RPCs;
-using Light.UI.HudUI;
-using Light.UI.Window;
 using LightInDark.Utilities;
 using Steamworks;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Text;
 using UnityEngine;
 using static UnityEngine.GraphicsBuffer;
-using System.Text;
 
 namespace Light.ChatCommands;
 
 [Harmony]
 public class PatchManager
 {
-    
+    public static ChatHistoryManager HistoryManager = new();
     public static bool IsHost(PlayerControl player) => AmongUsClient.Instance.AmHost;
     public static void SendLocalMessage(string msg,bool rename = true)
     {
@@ -238,7 +239,8 @@ public class PatchManager
                         return false;
                     }
             }
-
+            var historyText = __instance.freeChatField.textArea.text;
+            HistoryManager.AddMessage(historyText);
             return true;
         }
         catch (Exception ex)

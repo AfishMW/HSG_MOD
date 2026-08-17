@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using HarmonyLib;
 using InnerNet;
@@ -16,12 +16,11 @@ public static class GameEndPatch
     {
         try
         {
-            // 判断胜负
+            // 判断胜负（按原版 GameOverReason 枚举精确映射）
             var reason = endGameResult?.GameOverReason;
             int reasonVal = reason.HasValue ? (int)reason.Value : -1;
-            // 0-2 = Humans win (task, vote, disconnect), 3-6 = Impostor win (kill, vote, disconnect, sabotage)
-            bool crewWin = reasonVal >= 0 && reasonVal <= 2;
-            bool impWin = reasonVal >= 3 && reasonVal <= 6;
+            bool impWin = reason.HasValue && IsImpostorWin(reason.Value);
+            bool crewWin = reason.HasValue && !impWin;
 
             LightPlayerDataManager.CrewmatesWin = crewWin;
             LightPlayerDataManager.ImpostorsWin = impWin;
@@ -87,6 +86,22 @@ public static class GameEndPatch
         catch (Exception ex)
         {
             LightLogger.LogWarning($"[GameEnd] 保存复盘失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>按原版 GameOverReason 判定内鬼是否获胜。</summary>
+    private static bool IsImpostorWin(GameOverReason reason)
+    {
+        switch (reason)
+        {
+            case GameOverReason.ImpostorsByVote:
+            case GameOverReason.ImpostorsByKill:
+            case GameOverReason.ImpostorsBySabotage:
+            case GameOverReason.ImpostorDisconnect:
+            case GameOverReason.HideAndSeek_ImpostorsByKills:
+                return true;
+            default:
+                return false;
         }
     }
 }

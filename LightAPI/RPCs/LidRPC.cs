@@ -190,6 +190,9 @@ namespace LightInDark.RPCs
                 else if (type == typeof(PlayerControl)) writer.WritePlayer((PlayerControl?)value);
                 else if (type == typeof(Vector2)) writer.WriteVector2((Vector2)value);
                 else if (type == typeof(Vector3)) writer.WriteVector3((Vector3)value);
+                else if (type == typeof(byte[])) _WriteByteArray(writer, (byte[]?)value);
+                else if (type == typeof(int[])) _WriteIntArray(writer, (int[]?)value);
+                else if (type == typeof(string[])) _WriteStringArray(writer, (string[]?)value);
                 else throw new NotSupportedException($"[LidRPC] 不支持的类型: {type.Name}");
             }
             catch (Exception ex)
@@ -228,6 +231,9 @@ namespace LightInDark.RPCs
                 if (type == typeof(PlayerControl)) return reader.ReadPlayer();
                 if (type == typeof(Vector2)) return reader.ReadVector2();
                 if (type == typeof(Vector3)) return reader.ReadVector3();
+                if (type == typeof(byte[])) return _ReadByteArray(reader);
+                if (type == typeof(int[])) return _ReadIntArray(reader);
+                if (type == typeof(string[])) return _ReadStringArray(reader);
                 throw new NotSupportedException($"[LidRPC] 不支持的类型: {type.Name}");
             }
             catch (Exception ex)
@@ -235,6 +241,56 @@ namespace LightInDark.RPCs
                 LightLogger.LogError("LidRpcRegistry.DeserializeArg", ex);
                 return default;
             }
+        }
+
+        // ---- 数组序列化辅助 ----
+
+        private static void _WriteByteArray(MessageWriter writer, byte[]? arr)
+        {
+            if (arr == null) { writer.Write(0); return; }
+            writer.Write(arr.Length);
+            foreach (var v in arr) writer.Write(v);
+        }
+
+        private static void _WriteIntArray(MessageWriter writer, int[]? arr)
+        {
+            if (arr == null) { writer.Write(0); return; }
+            writer.Write(arr.Length);
+            foreach (var v in arr) writer.Write(v);
+        }
+
+        private static void _WriteStringArray(MessageWriter writer, string[]? arr)
+        {
+            if (arr == null) { writer.Write(0); return; }
+            writer.Write(arr.Length);
+            foreach (var v in arr) writer.Write(v ?? "");
+        }
+
+        private static byte[] _ReadByteArray(MessageReader reader)
+        {
+            int len = reader.ReadInt32();
+            if (len <= 0 || len > 1024) return Array.Empty<byte>();
+            var arr = new byte[len];
+            for (int i = 0; i < len; i++) arr[i] = reader.ReadByte();
+            return arr;
+        }
+
+        private static int[] _ReadIntArray(MessageReader reader)
+        {
+            int len = reader.ReadInt32();
+            if (len <= 0 || len > 1024) return Array.Empty<int>();
+            var arr = new int[len];
+            for (int i = 0; i < len; i++) arr[i] = reader.ReadInt32();
+            return arr;
+        }
+
+        private static string[] _ReadStringArray(MessageReader reader)
+        {
+            int len = reader.ReadInt32();
+            if (len <= 0 || len > 1024) return Array.Empty<string>();
+            var arr = new string[len];
+            for (int i = 0; i < len; i++) arr[i] = reader.ReadString();
+            return arr;
         }
     }
 }
