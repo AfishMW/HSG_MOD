@@ -28,11 +28,8 @@ public class StandardRoleAllocator : IRoleAllocator
             var crew = others.Where(p => !neutralIds.Contains(p)).ToList();
             Roll(table, crew, BuildPool(RoleCategory.Crewmate), GameConfig.MaxCrewmateRoles);
 
-            // 兜底：未分配到自定义职业的玩家设为原版职业
-            foreach (var p in impostors)
-                if (!table.HasRole(p)) table.SetRole(p, VanillaImpostor.Instance);
-            foreach (var p in others)
-                if (!table.HasRole(p)) table.SetRole(p, VanillaCrewmate.Instance);
+            // 兜底：未分配到自定义职业的玩家由原版 SelectRoles 处理
+            // 不再强制分配 VanillaImpostor/VanillaCrewmate
 
             EventTriggers.OnPreFixAssignment(table);
             table.Determine();

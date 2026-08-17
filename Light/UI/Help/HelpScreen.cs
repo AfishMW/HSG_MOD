@@ -116,7 +116,7 @@ public static class HelpScreen
             else
                 parent = Camera.main != null ? Camera.main.transform : null;
 
-            var screen = MetaScreen.GenerateWindow(HelpSize, parent, new Vector3(0, 0, 0),
+            var screen = MetaScreen.GenerateWindow(HelpSize, parent, new Vector3(0, 0, -50f),
                 withBlackScreen: true, closeOnClickOutside: false,
                 background: BackgroundSetting.Modern, withCloseButton: true);
 
@@ -589,7 +589,7 @@ public static class HelpScreen
                 if (window) window!.CloseScreen();
 
                 // 详情窗口后创建，排序相同的情况下自然渲染在帮助菜单之上
-                window = MetaScreen.GenerateWindow(new Vector2(7f, 4.5f), GetParent(), Vector3.zero,
+                window = MetaScreen.GenerateWindow(new Vector2(7f, 4.5f), GetParent(), new Vector3(0, 0, -100f),
                     withBlackScreen: true, closeOnClickOutside: true,
                     background: BackgroundSetting.Modern, sortingGroupOrder: 200);
                 window.SetWidget(BuildRoleDetailWidget(roles[currentIndex]), out _);

@@ -134,29 +134,13 @@ namespace Light.Patches
                 var others = players.Skip(impNum).Select(p => p.PlayerId).ToList();
 
                 new StandardRoleAllocator().Assign(impostors, others);
-
-                // 关键修复：原版 SelectRoles 会通过 LogicRoleSelection -> 玩家 RpcSetRole
-                // -> CoSetRole 把 roleAssigned 置 true，随后才有条件触发 HudManager.CoShowIntro。
-                // 我们拦截并自行为每位玩家走 vanilla 的 RpcSetRole 路径，否则 roleAssigned 恒为
-                // false，Intro 永不启动 -> 卡在黑屏（“进了游戏但没进”）。
-                foreach (var pc in players)
-                {
-                    RoleTypes rt = impostorsSet.Contains(pc.PlayerId) ? RoleTypes.Impostor : RoleTypes.Crewmate;
-                    try
-                    {
-                        pc.RpcSetRole(rt, false);
-                    }
-                    catch (System.Exception ex2)
-                    {
-                        LightLogger.LogWarning($"[Light] RoleSelectPatch.RpcSetRole {pc.name} -> {rt} 失败: {ex2.Message}");
-                    }
-                }
-                return false;
+                // 只分配自定义职业，原版 SelectRoles 继续运行处理兜底
+                return true;
             }
             catch (System.Exception ex)
             {
                 LightLogger.LogWarning("[Light] RoleSelectPatch.Prefix NRE: " + ex.Message + "\n" + ex.StackTrace);
-                return false;
+                return true;
             }
         }
     }

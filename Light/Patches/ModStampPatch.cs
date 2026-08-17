@@ -27,7 +27,7 @@ public static class ModStampPatch
                 }
                 modStamp.transform.localScale = Vector3.one * 0.06f;
                 var sr = modStamp.GetComponent<SpriteRenderer>();
-                sr?.sprite = ResourceHelper.LoadSpriteFromResource("Light.Resources.ModStamp.png");
+                if (sr != null) sr.sprite = ResourceHelper.LoadSpriteFromResource("Light.Resources.ModStamp.png");
             });
         }
         catch (System.Exception ex)
