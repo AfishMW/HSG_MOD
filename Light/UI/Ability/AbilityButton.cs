@@ -20,7 +20,26 @@ namespace Light.UI.Ability
     /// </summary>
     public class AbilityButtonConfig
     {
+        /// <summary>直接文本（优先用 LabelKey 走语言键，避免硬编码）。</summary>
         public string Label = "";
+
+        /// <summary>标签语言键（如 "Button.KILL.label"）。设置后按语言解析，缺省回退 <see cref="Label"/>。</summary>
+        public string LabelKey;
+
+        /// <summary>解析后的标签文本。</summary>
+        public string ResolvedLabel
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(LabelKey))
+                {
+                    string v = LightInDark.Language.Language.GetStringOrKey(LabelKey, Label);
+                    return string.IsNullOrEmpty(v) ? Label : v;
+                }
+                return Label;
+            }
+        }
+
         public Sprite Icon;
         public KeyCode Hotkey = KeyCode.None;
         public float Cooldown = 0f;
@@ -263,8 +282,9 @@ namespace Light.UI.Ability
                 if (_actionButton == null) return;
                 if (Config.Icon != null)
                     _actionButton.graphic.sprite = Config.Icon;
-                if (!string.IsNullOrEmpty(Config.Label))
-                    _actionButton.OverrideText(Config.Label);
+                string label = Config.ResolvedLabel;
+                if (!string.IsNullOrEmpty(label))
+                    _actionButton.OverrideText(label);
                 if (Config.Cooldown > 0f)
                 {
                     _actionButton.SetCoolDown(0f, Config.Cooldown);
@@ -524,7 +544,7 @@ namespace Light.UI.Ability
                 if (Config.ShowEffectCountdown && _actionButton?.buttonLabelText != null)
                 {
                     _actionButton.buttonLabelText.color = NormalColor;
-                    _actionButton.buttonLabelText.text = Config.Label;
+                    _actionButton.buttonLabelText.text = Config.ResolvedLabel;
                 }
             }
             catch (Exception ex)

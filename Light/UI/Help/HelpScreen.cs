@@ -55,6 +55,23 @@ public static class HelpScreen
         }
     }
 
+    /// <summary>
+    /// 打开帮助并直接定位到“我的职业”页（F1 快捷查看自己职业）。
+    /// </summary>
+    public static void TryOpenMyInfo()
+    {
+        try
+        {
+            if (LightGameManager.Instance?.LocalPlayer?.HasRole != true) return; // 未分配角色时不打开
+            _lastTab = HelpTab.MyInfo;
+            _lastScreen = OpenHelpScreen();
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[HelpScreen.TryOpenMyInfo]", ex);
+        }
+    }
+
     /// <summary>关闭帮助</summary>
     public static void TryCloseHelpScreen()
     {
@@ -164,10 +181,11 @@ public static class HelpScreen
         try
         {
             var gui = LIDGUI.Instance;
-            return gui.VerticalHolder(GUIAlignment.Center,
+            // 布局改为“左侧页签栏 + 右侧内容”两栏式（区别于原水平的顶部标签栏）。
+            return gui.HorizontalHolder(GUIAlignment.Center,
                 BuildTabsWidget(screen, validTabs, tab),
-                gui.VerticalMargin(0.1f),
-                BuildTabContent(tab));
+                gui.HorizontalMargin(0.15f),
+                gui.VerticalHolder(GUIAlignment.Center, BuildTabContent(tab)));
         }
         catch (Exception ex)
         {
@@ -175,7 +193,7 @@ public static class HelpScreen
         }
     }
 
-    /// <summary>标签栏：当前白、其他灰，按钮紧贴排列</summary>
+    /// <summary>左侧页签栏：当前白、其他灰，按钮纵向堆叠排列</summary>
     private static GUIWidget BuildTabsWidget(MetaScreen screen, HelpTab validTabs, HelpTab current)
     {
         try
@@ -189,7 +207,8 @@ public static class HelpScreen
                 buttons.Add(gui.RawButton(GUIAlignment.Center, TabButtonAttr, GetTabName(tab),
                     _ => ShowScreen(screen, validTabs, tab), color: color, selectedColor: color));
             }
-            return gui.HorizontalHolder(GUIAlignment.Center, buttons.ToArray());
+            // 纵向堆叠成左侧栏
+            return gui.VerticalHolder(GUIAlignment.Center, buttons.ToArray());
         }
         catch (Exception ex)
         {

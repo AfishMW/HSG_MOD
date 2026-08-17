@@ -34,6 +34,8 @@ namespace Light.Patches
                 // 玩家数据已在 SelectRoles 阶段初始化（此时玩家已生成、角色已分配）。
                 EventTriggers.OnIntroEnd();
                 EventTriggers.OnGameStart(PlayerControl.AllPlayerControls.Count);
+                LightInDark.Game.EndGameManager.OnNewGameStart();
+                LightInDark.Modifiers.ModifierManager.ClearAll();
                 LightLogger.Log("[Patch] 游戏开始，已保持原版结束检查开启，自定义胜负在 RpcEndGame 层处理");
             }
             catch (System.Exception ex)

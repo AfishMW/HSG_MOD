@@ -81,6 +81,10 @@ namespace LightInDark.Events
         public static PlayerCheckExtraWinEvent OnPlayerCheckExtraWin(PlayerControl player, string gameEnd = "") { var ev = new PlayerCheckExtraWinEvent { Player = player, GameEnd = gameEnd }; EventSystem.RunEvent(ev); return ev; }
         public static PlayerBlockWinEvent OnPlayerBlockWin(PlayerControl player, bool isWin, string gameEnd = "") { var ev = new PlayerBlockWinEvent { Player = player, IsWin = isWin, GameEnd = gameEnd }; EventSystem.RunEvent(ev); return ev; }
 
+        // ── 修饰器 ──
+        public static void OnModifierAdded(PlayerControl player, Modifiers.Modifier modifier) => EventSystem.RunEvent(new ModifierAddedEvent { Player = player, Modifier = modifier });
+        public static void OnModifierRemoved(PlayerControl player, Modifiers.Modifier modifier) => EventSystem.RunEvent(new ModifierRemovedEvent { Player = player, Modifier = modifier });
+
 
         // ── 会议 ──
         public static bool OnMeetingTryStart(PlayerControl reporter, NetworkedPlayerInfo body, bool isEmergency) { var ev = new MeetingTryStartEvent { Reporter = reporter, ReportedBody = body, IsEmergencyMeeting = isEmergency }; EventSystem.RunEvent(ev); return !ev.IsCanceled; }

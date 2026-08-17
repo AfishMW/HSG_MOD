@@ -16,15 +16,27 @@ public static class GameEndPatch
     {
         try
         {
-            // 判断胜负（按原版 GameOverReason 枚举精确映射）
-            var reason = endGameResult?.GameOverReason;
-            int reasonVal = reason.HasValue ? (int)reason.Value : -1;
-            bool impWin = reason.HasValue && IsImpostorWin(reason.Value);
-            bool crewWin = reason.HasValue && !impWin;
+            // 使用模组结束原因（通过 EndGameManager 自定义）。原版 GameOverReason 仅作兜底。
+            // 注意：原版 Assembly-CSharp 也有全局 EndGameManager，必须全限定模组类型。
+            var modReason = LightInDark.Game.EndGameManager.GetCurrentReason();
+            bool impWin;
+            string reasonStr;
+            if (modReason != LightInDark.Game.GameEndReason.None)
+            {
+                impWin = LightInDark.Game.EndGameReasonHelper.IsImpostorWin(modReason);
+                reasonStr = modReason.ToString();
+            }
+            else
+            {
+                var reason = endGameResult?.GameOverReason;
+                impWin = reason.HasValue && IsImpostorWin(reason.Value);
+                reasonStr = reason?.ToString() ?? "Unknown";
+            }
+            bool crewWin = !impWin;
 
             LightPlayerDataManager.CrewmatesWin = crewWin;
             LightPlayerDataManager.ImpostorsWin = impWin;
-            LightPlayerDataManager.WinReason = reason?.ToString() ?? "Unknown";
+            LightPlayerDataManager.WinReason = reasonStr;
 
             // 房间号
             try

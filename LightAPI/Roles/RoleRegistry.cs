@@ -20,7 +20,8 @@ namespace LightInDark.Roles
         public static IReadOnlyCollection<DefinedRole> AllRoles => _roles.Values;
 
         /// <summary>
-        /// 注册角色。在 LIDPlugin.Load() 中调用。
+        /// 注册角色（校验 CodeName 必须重写、Intro 不可为空；不合格则拒绝并告警）。
+        /// 在插件主类 Load() 中调用。
         /// </summary>
         public static T Register<T>() where T : DefinedRole, new()
         {
@@ -36,15 +37,20 @@ namespace LightInDark.Roles
         }
 
         /// <summary>
-        /// 注册角色实例。
+        /// 注册角色实例。校验失败（CodeName 为空、已注册、或 Intro 为空）时拒绝注册并返回 default。
         /// </summary>
         public static T Register<T>(T role) where T : DefinedRole
         {
             try
             {
-                if (role == null) throw new ArgumentNullException(nameof(role));
+                if (!IsValid(role, out string reason))
+                {
+                    LightLogger.LogWarning($"拒绝注册角色 {role?.CodeName ?? "null"}：{reason}");
+                    return default;
+                }
+
                 role.Id = _nextId++;
-                _roles[role.Name] = role;
+                _roles[role.CodeName] = role;
                 _rolesByType[typeof(T)] = role;
                 _rolesById[role.Id] = role;
                 return role;
@@ -56,7 +62,48 @@ namespace LightInDark.Roles
             }
         }
 
-        /// <summary>按名称获取角色定义</summary>
+        /// <summary>
+        /// 尝试注册角色，返回是否成功。
+        /// </summary>
+        /// <param name="logPrefix">错误日志前缀，默认 "{CodeName} 注册失败"。</param>
+        /// <param name="includeStackTrace">是否输出异常堆栈（默认 true，等效 LightLogger.LogError(msg, ex)）。</param>
+        public static bool TryRegister<T>(string logPrefix = null, bool includeStackTrace = true)
+            where T : DefinedRole, new()
+        {
+            try
+            {
+                var role = new T();
+                if (!IsValid(role, out string reason))
+                {
+                    string msg = $"{logPrefix ?? $"{role.CodeName} 注册失败"}：{reason}";
+                    if (includeStackTrace) LightLogger.LogError(msg, new InvalidOperationException(reason));
+                    else LightLogger.LogError(msg);
+                    return false;
+                }
+                Register(role);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                string msg = logPrefix ?? "角色注册失败";
+                if (includeStackTrace) LightLogger.LogError(msg, ex);
+                else LightLogger.LogError(msg);
+                return false;
+            }
+        }
+
+        /// <summary>校验角色：CodeName 必须非空，Intro 必须非 null/空，CodeName 不得重复。</summary>
+        private static bool IsValid(DefinedRole role, out string reason)
+        {
+            reason = null;
+            if (role == null) { reason = "role 为 null"; return false; }
+            if (string.IsNullOrEmpty(role.CodeName)) { reason = "必须重写 CodeName（内部名）"; return false; }
+            if (_roles.ContainsKey(role.CodeName)) { reason = $"CodeName 已注册：{role.CodeName}"; return false; }
+            if (string.IsNullOrEmpty(role.IntroBlurb)) { reason = $"Intro（开场白）为空，职业 {role.CodeName} 必须重写 IntroBlurbKey 且译文中译本不可为空"; return false; }
+            return true;
+        }
+
+        /// <summary>按 CodeName（内部名）获取角色定义</summary>
         public static DefinedRole GetByName(string name)
         {
             try

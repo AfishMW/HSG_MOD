@@ -57,23 +57,6 @@ public static class VersionPatch
 }
 
 
-//[HarmonyPatch(typeof(FindGameButton), nameof(FindGameButton.OnClick))]
-//public class FindGameButtonPatch
-//{
-//    public static bool Prefix(FindGameButton __instance)
-//    {
-//        var popup = DestroyableSingleton<DisconnectPopup>.Instance;
-//        if (popup != null)
-//        {
-//            popup._textArea.text = "猪禁止游玩Among Us！";
-//            popup.OnTextChanged();
-//            popup.gameObject.SetActive(true);
-//        }
-//        return false;
-//    }
-//}
-
-
 //public static class ModVersionShow
 //{
 //    static TextMeshPro _verText;

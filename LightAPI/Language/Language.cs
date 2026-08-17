@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -135,6 +135,26 @@ public static class Language
         {
             LightLogger.LogError("Language.GetString", ex);
             return default;
+        }
+    }
+
+    /// <summary>
+    /// 取语言键对应的文本；若键不存在，则返回 <paramref name="fallback"/>
+    /// （fallback 为空时返回键本身）。
+    /// </summary>
+    public static string GetStringOrKey(string key, string fallback = "")
+    {
+        try
+        {
+            string result = Translate(key, null);
+            if (result == null || result == key) // 未命中
+                return string.IsNullOrEmpty(fallback) ? key : fallback;
+            return result;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("Language.GetStringOrKey", ex);
+            return string.IsNullOrEmpty(fallback) ? key : fallback;
         }
     }
 

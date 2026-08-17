@@ -20,7 +20,8 @@ public static class MainColor
         public string ChatText { get; set; } = "说点啥...";
         public bool ChatFollowPlayerColor { get; set; } = true;
         public string CustomChatColorOverride { get; set; } = "FFE566CC";
-
+        
+        public bool AlphaChatBackGround { get; set; } = true;
         [JsonIgnore]
         public Color chatColor => HexToColor(ChatColorARGB);
         [JsonIgnore]

@@ -152,10 +152,12 @@ public partial class LightPlugin : BasePlugin
             LightLogger.LogError("[LightPlugin.LoadCommand]", ex);
         }
     }
-    private static void LoadRole()
+    private void LoadRole()
     {
         try
         {
+            // 用主插件 BepInEx ConfigFile 初始化职业配置（写入 .cfg）
+            LightInDark.Configuration.RoleConfig.Initialize(Config);
             RoleRegistry.Register<Caller>();
             RoleRegistry.Register<VanillaImpostor>(VanillaImpostor.Instance);
             RoleRegistry.Register<VanillaCrewmate>(VanillaCrewmate.Instance);

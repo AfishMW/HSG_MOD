@@ -43,9 +43,9 @@ public class StandardRoleAllocator : IRoleAllocator
         }
     }
 
-    /// <summary>构建某类别的抽选池（仅参与分配的职业）</summary>
+    /// <summary>构建某类别的抽选池（仅参与分配且配置最大数量>0 的职业）</summary>
     private List<DefinedRole> BuildPool(RoleCategory category)
-        => RoleRegistry.AllRoles.Where(r => r.Category == category && r.Allocation.MaxCount > 0).ToList();
+        => RoleRegistry.AllRoles.Where(r => r.Category == category && GetMaxCount(r) > 0).ToList();
 
     /// <summary>抽选：先保证必出职业，再按概率补足，直到达到本类别数量上限</summary>
     private void Roll(RoleTable table, List<byte> players, List<DefinedRole> pool, int globalMax)
@@ -57,10 +57,11 @@ public class StandardRoleAllocator : IRoleAllocator
             var candidates = players.OrderBy(_ => Rng.Next()).ToList();
             int assigned = 0;
 
-            // 必出职业优先分配
+            // 必出职业优先分配（数量由配置/默认决定）
             foreach (var role in pool.Where(r => r.Allocation.GuaranteedCount > 0))
             {
-                for (int i = 0; i < role.Allocation.GuaranteedCount && candidates.Count > 0 && assigned < globalMax; i++)
+                int count = GetMaxCount(role);
+                for (int i = 0; i < count && candidates.Count > 0 && assigned < globalMax; i++)
                 {
                     table.SetRole(candidates[0], role);
                     candidates.RemoveAt(0);
@@ -68,7 +69,7 @@ public class StandardRoleAllocator : IRoleAllocator
                 }
             }
 
-            // 剩余候选按概率抽选
+            // 剩余候选按概率抽选，直到达到该类别的最大数量上限
             foreach (var player in candidates)
             {
                 if (assigned >= globalMax) break;
@@ -86,13 +87,13 @@ public class StandardRoleAllocator : IRoleAllocator
         }
     }
 
-    /// <summary>按概率从池中抽选一个职业，未命中返回 null</summary>
+    /// <summary>按概率从池中抽选一个职业，未命中返回 null（概率由配置/默认决定）</summary>
     private DefinedRole PickByChance(List<DefinedRole> pool)
     {
         try
         {
             foreach (var role in pool)
-                if (Rng.Next(100) < role.Allocation.Chance)
+                if (Rng.Next(100) < GetChance(role))
                     return role;
             return null;
         }
@@ -101,4 +102,12 @@ public class StandardRoleAllocator : IRoleAllocator
             LightLogger.LogError("[StandardRoleAllocator.PickByChance]", ex); return default;
         }
     }
+
+    /// <summary>读取职业最大数量（配置优先，回退到代码 Allocation 默认）。</summary>
+    public static int GetMaxCount(DefinedRole role)
+        => RoleConfig.GetRoleCount(role.CodeName, role.Allocation.MaxCount);
+
+    /// <summary>读取职业分配概率（配置优先，回退到代码 Allocation 默认）。</summary>
+    public static int GetChance(DefinedRole role)
+        => RoleConfig.GetRoleChance(role.CodeName, role.Allocation.Chance);
 }

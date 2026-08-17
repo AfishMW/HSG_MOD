@@ -55,5 +55,18 @@
   "map.fungle": "Fungle",
   "killDistance.short": "Short",
   "killDistance.medium": "Medium",
-  "killDistance.long": "Long"
+  "killDistance.long": "Long",
+  "Caller.name": "Caller",
+  "Caller.describe": "Can force an emergency meeting at any time.",
+  "Caller.intro": "Call emergency meetings anytime.",
+  "Caller.skill": "Force an emergency meeting at any time.\nPress E to use.",
+  "Button.Caller.label": "Meeting",
+  "VanillaImpostor.name": "Impostor",
+  "VanillaImpostor.describe": "Base Impostor role used as a default placeholder.",
+  "VanillaImpostor.intro": "Hide in the dark, strike when ready.",
+  "VanillaImpostor.skill": "Kill crewmates, sabotage, and use vents.\nNo mod-specific skills.",
+  "VanillaCrewmate.name": "Crewmate",
+  "VanillaCrewmate.describe": "Base Crewmate role used as a default placeholder.",
+  "VanillaCrewmate.intro": "Complete tasks and find the impostor.",
+  "VanillaCrewmate.skill": "Complete all tasks and vote out the impostor.\nNo mod-specific skills."
 }

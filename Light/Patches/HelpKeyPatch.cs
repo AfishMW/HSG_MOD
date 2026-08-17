@@ -18,6 +18,12 @@ public static class HelpKeyPatch
             // H 打开
             if (Input.GetKeyDown(KeyCode.H) && CanOpenHelp())
                 HelpScreen.TryOpenHelpScreen();
+            // F1 快捷查看自己职业
+            if (Input.GetKeyDown(KeyCode.F1))
+            {
+                if (HelpScreen.OpenedAnyHelpScreen) HelpScreen.TryCloseHelpScreen();
+                else HelpScreen.TryOpenMyInfo();
+            }
         }
         catch (System.Exception ex)
         {
