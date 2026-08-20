@@ -1,16 +1,14 @@
 using UnityEngine;
 using System.Reflection;
 using System.IO;
+using Il2CppInterop.Runtime.InteropTypes.Arrays;
+using LightInDark.Core;
 namespace Light.Utilities;
 
 public static class ResourceHelper
 {
     private const string DefaultResourceRoot = "Light.Resources.";
     public static string ResourceRoot { get; set; } = DefaultResourceRoot;
-    /// <summary>
-    /// 从当前程序集的嵌入资源加载 Texture2D
-    /// </summary>
-    /// <param name="resourcePath">完整资源路径</param>
     public static Texture2D LoadTextureFromResource(string resourcePath)
     {
         var assembly = Assembly.GetExecutingAssembly();
@@ -34,7 +32,25 @@ public static class ResourceHelper
             return texture;
         }
     }
-
+    public unsafe static Texture2D LoadTextureFromResoucesTOUE(string path)
+    {
+        try
+        {
+            Texture2D texture = new(2,2,TextureFormat.ARGB32,true);
+            Assembly assembly = Assembly.GetExecutingAssembly();
+            Stream stream = assembly.GetManifestResourceStream(path);
+            long length = stream.Length;
+            Il2CppStructArray<byte> byteTexture = new(length);
+            stream.Read(new Span<byte>(IntPtr.Add(byteTexture.Pointer,IntPtr.Size*4).ToPointer(),(int)length));
+            ImageConversion.LoadImage(texture, byteTexture, false);
+            return texture;
+        }
+        catch(Exception ex)
+        {
+            LightLogger.LogError("[ResourcesHelper] Error1",ex);
+        }
+        return null;
+    }
     public static Sprite LoadSpriteFromResource(string resourcePath, float pixelsPerUnit = 100f, Vector2? pivot = null)
     {
         Texture2D tex = LoadTextureFromResource(resourcePath);

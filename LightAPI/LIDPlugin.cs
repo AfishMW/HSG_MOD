@@ -17,7 +17,7 @@ using UnityEngine;
 
 namespace LightInDark;
 
-[BepInPlugin("com.hvtxsvcmaomao.lid","Light in Dark","1.0.0")]
+[BepInPlugin("com.moonscar.lightapi", "Light in Dark","1.0.0")]
 [BepInProcess("Among Us.exe")]
 public partial class LIDPlugin : BasePlugin
 {

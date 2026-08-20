@@ -21,9 +21,10 @@ namespace Light;
 
 [BepInPlugin(Id, Name, Version)]
 [BepInProcess("Among Us.exe")]
+[BepInDependency("com.moonscar.lightapi",BepInDependency.DependencyFlags.HardDependency)]
 public partial class LightPlugin : BasePlugin
 {
-    public const string Id = "com.light.inthedark";
+    public const string Id = "com.moonscar.lightindark";
     public const string Name = "LightInTheDark";
     public const string Version = "1.0.0.0";
 
@@ -61,6 +62,7 @@ public partial class LightPlugin : BasePlugin
             RpcDefinitions.OnFreeChatStateChanged += show => ShowChatPatch.NeedShowFreeChat = show;
             AddCursorComponent();
             RegisterShowModStampOnMainMenu();
+
             Log.LogInfo($"模组 {Name} v{Version} 已加载！");
         }
         catch (Exception ex)
@@ -68,12 +70,6 @@ public partial class LightPlugin : BasePlugin
             LightLogger.LogError("[LightPlugin.Load]", ex);
         }
     }
-
-    /// <summary>
-    /// 在 MainMenu 场景加载完成后再调用 ShowModStamp。
-    /// 不能在 Load() 中直接调用：此时 ModManager 的 ModStamp/ModStampText 字段尚未初始化，
-    /// 原版 ShowModStamp 内部会抛 NullReferenceException。
-    /// </summary>
     private static void RegisterShowModStampOnMainMenu()
     {
         try
@@ -97,7 +93,6 @@ public partial class LightPlugin : BasePlugin
         }
     }
 
-    /// <summary>初始化光标（纯静态，不再 AddComponent）</summary>
     private static void AddCursorComponent()
     {
         try
@@ -110,7 +105,6 @@ public partial class LightPlugin : BasePlugin
         }
     }
 
-    /// <summary>把嵌入的默认语言文件解压到 BepInEx/Language（已存在则不覆盖，玩家可编辑）</summary>
     private static void ExtractLanguageFiles()
     {
         try

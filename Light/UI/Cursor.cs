@@ -6,18 +6,13 @@ using UnityEngine;
 using Light.Utilities;
 
 namespace Light.UI;
-
-/// <summary>
-/// 光标管理器（纯静态，不继承 MonoBehaviour，避免 Il2Cpp AddComponent 异常）
-/// </summary>
 public static class Cursor
 {
     public static int Index { get; private set; }
     private static string ConfigPath => Path.Combine(LightPlugin.CursurDataPath, "Cursor_LID.json");
-    public static Texture2D Cur_1 = ResourceHelper.LoadTexture("Cursor/1.png");
-    public static Texture2D Cur_2 = ResourceHelper.LoadTexture("Cursor/2.png");
+    public static Texture2D Cur_1 = ResourceHelper.LoadTextureFromResoucesTOUE("Resources.Cursor.1.png");
+    public static Texture2D Cur_2 = ResourceHelper.LoadTextureFromResoucesTOUE("Resources.Cursor.2.png");
 
-    /// <summary>初始化光标（在 LightPlugin.Load 中调用，替代原 AddComponent）</summary>
     public static void Initialize()
     {
         try
@@ -30,11 +25,6 @@ public static class Cursor
             LightLogger.LogError("[Cursor.Initialize]", ex);
         }
     }
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="index"></param>
-    /// <returns>返回true更换成功，返回false为无索引，返回null为触发异常。</returns>
     public static bool? ChangeCursorFromIndex(int index)
     {
         try
@@ -60,12 +50,12 @@ public static class Cursor
         }
         catch(Exception ex)
         {
-            LightLogger.LogError($"[Cursor] 更换异常：{ex.Message} 堆栈->\n{ex}");
+            LightLogger.LogError($"[Cursor] 更换异常",ex);
             return null;
         }
     }
 
-    private static int LoadIndexFromJson()
+    static int LoadIndexFromJson()
     {
         try
         {
@@ -83,7 +73,7 @@ public static class Cursor
         }
         catch (Exception ex)
         {
-            LightInDark.Core.LightLogger.LogWarning($"[Cursor] 读取配置失败: {ex.Message}");
+            LightLogger.LogWarning($"[Cursor] 读取配置失败: {ex.Message}");
             return 0;
         }
     }
@@ -98,7 +88,7 @@ public static class Cursor
         }
         catch (Exception ex)
         {
-            LightInDark.Core.LightLogger.LogWarning($"[Cursor] 保存配置失败: {ex.Message}");
+            LightLogger.LogWarning($"[Cursor] 保存配置失败: {ex.Message}");
         }
     }
 
