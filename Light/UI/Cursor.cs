@@ -45,6 +45,7 @@ public static class Cursor
                     return true;
                 default:
                     LightLogger.Log($"[Cursor] 未知索引： {index} ");
+                    
                     return false;
             }
         }

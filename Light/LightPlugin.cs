@@ -42,11 +42,13 @@ public partial class LightPlugin : BasePlugin
     {
         try
         {
+#if ANDROID
+            Application.Quit();
+#endif
             FirstChanceExceptionLogger.Initialize();
             StaticLog = Log;
             Harmony.PatchAll();
-            bool vM =VersionMaker.MakeVersion();
-            if (!vM)
+            if (!VersionMaker.MakeVersion())
                 Log.LogError($"VM json 加载失败。具体异常请查看Light.log。");
             LoadCommand();
             EventSystem.ScanAndRegisterAll();
@@ -62,7 +64,7 @@ public partial class LightPlugin : BasePlugin
             RpcDefinitions.OnFreeChatStateChanged += show => ShowChatPatch.NeedShowFreeChat = show;
             AddCursorComponent();
             RegisterShowModStampOnMainMenu();
-
+            ChatHistoryLogUtils.Init();
             Log.LogInfo($"模组 {Name} v{Version} 已加载！");
         }
         catch (Exception ex)

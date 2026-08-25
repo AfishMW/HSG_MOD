@@ -56,8 +56,8 @@ namespace LightInDark.UI
                     if (pva == null) continue;
 
                     // 目标玩家
-                    var player = GetPlayerById(pva.TargetPlayerId);
-                    if (player == null || pva.TargetPlayerId == PlayerControl.LocalPlayer.PlayerId) continue;
+                    var player = GetPlayerById(pva.PlayerId);
+                    if (player == null || pva.PlayerId == PlayerControl.LocalPlayer.PlayerId) continue;
 
                     GameObject created = null;
                     foreach (var cb in _callbacks)
@@ -68,7 +68,7 @@ namespace LightInDark.UI
                         BindClick(btn, __instance, player, cb);
                         created = btn;
                     }
-                    _createdButtons[pva.TargetPlayerId] = created;
+                    _createdButtons[pva.PlayerId] = created;
                 }
             }
             catch (Exception ex)

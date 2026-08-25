@@ -172,4 +172,8 @@
 		<Reference Include="..\Libs\__Generated.dll" />
 	</ItemGroup>
 
+
+    <Target Name="CopyToLibs" AfterTargets="Build">
+        <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ProjectDir)..\Libs\" SkipUnchangedFiles="true" />
+    </Target>
 </Project>
