@@ -46,8 +46,6 @@ public static class VersionPatch
             apClone.DistanceFromEdge = new Vector3(2.369f,-0.45f);
             apClone.updateAlways = true;
 
-            var modDes = UnityEngine.Object.Instantiate(__instance.text, __instance.transform.parent);
-
         }
         catch (Exception ex)
         {

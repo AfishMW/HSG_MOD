@@ -6,19 +6,21 @@ using UnityEngine;
 using Light.Utilities;
 
 namespace Light.UI;
+
 public static class Cursor
 {
     public static int Index { get; private set; }
     private static string ConfigPath => Path.Combine(LightPlugin.CursurDataPath, "Cursor_LID.json");
-    public static Texture2D Cur_1 = ResourceHelper.LoadTextureFromResoucesTOUE("Resources.Cursor.1.png");
-    public static Texture2D Cur_2 = ResourceHelper.LoadTextureFromResoucesTOUE("Resources.Cursor.2.png");
+    private const int DefaultCursorIndex = 1;
+    private const int CursorSize = 32;
+    private static readonly Texture2D? Cur_1 = LoadCursorTexture("Cursor/1.png");
+    private static readonly Texture2D? Cur_2 = LoadCursorTexture("Cursor/2.png");
 
     public static void Initialize()
     {
         try
         {
-            Index = LoadIndexFromJson();
-            ChangeCursorFromIndex(Index);
+            SetCursorIndex(DefaultCursorIndex);
         }
         catch (Exception ex)
         {
@@ -27,33 +29,75 @@ public static class Cursor
     }
     public static bool? ChangeCursorFromIndex(int index)
     {
+        return SetCursorIndex(index);
+    }
+
+    public static bool? SetCursorIndex(int index)
+    {
         try
         {
-            switch (index)
+            Texture2D? texture = index switch
             {
-                case 0:
-                    UnityEngine.Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
-                    LightLogger.Log($"[Cursor] index {index}");
-                    return true;
-                case 1:
-                    UnityEngine.Cursor.SetCursor(Cur_1, Vector2.zero, CursorMode.Auto);
-                    LightLogger.Log($"[Cursor] index {index}");
-                    return true;
-                case 2:
-                    UnityEngine.Cursor.SetCursor(Cur_2, Vector2.zero, CursorMode.Auto);
-                    LightLogger.Log($"[Cursor] index {index}");
-                    return true;
-                default:
-                    LightLogger.Log($"[Cursor] 未知索引： {index} ");
-                    
-                    return false;
+                1 => Cur_1,
+                2 => Cur_2,
+                _ => null
+            };
+
+            if (index < 0 || index > 2)
+            {
+                LightLogger.Log($"[Cursor] 未知索引： {index}");
+                return false;
             }
+
+            if (index > 0 && texture == null)
+            {
+                LightLogger.LogWarning($"[Cursor] 光标资源加载失败，索引：{index}");
+                return null;
+            }
+
+            LightLogger.Log($"[DEBUG] SetCursor 前 index={index}, texture={(texture == null ? "null" : $"{texture.width}x{texture.height}, format={texture.format}, readable={texture.isReadable}")}, mode={CursorMode.Auto}");
+            UnityEngine.Cursor.SetCursor(texture, Vector2.zero, CursorMode.Auto);
+            LightLogger.Log($"[DEBUG] SetCursor 后 visible={UnityEngine.Cursor.visible}, lockState={UnityEngine.Cursor.lockState}");
+            Index = index;
+            SaveIndex(index);
+            LightLogger.Log($"[Cursor] index {index}");
+            return true;
         }
-        catch(Exception ex)
+        catch (Exception ex)
         {
-            LightLogger.LogError($"[Cursor] 更换异常",ex);
+            LightLogger.LogError("[Cursor] 更换异常", ex);
             return null;
         }
+    }
+
+    private static Texture2D? LoadCursorTexture(string path)
+    {
+        Texture2D? source = ResourceHelper.LoadTexture(path);
+        if (source == null)
+            return null;
+
+        if (source.width <= CursorSize && source.height <= CursorSize)
+            return source;
+
+        var resized = new Texture2D(CursorSize, CursorSize, TextureFormat.RGBA32, false)
+        {
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+
+        for (int y = 0; y < CursorSize; y++)
+        {
+            float sourceY = (y + 0.5f) / CursorSize;
+            for (int x = 0; x < CursorSize; x++)
+            {
+                float sourceX = (x + 0.5f) / CursorSize;
+                resized.SetPixel(x, y, source.GetPixelBilinear(sourceX, sourceY));
+            }
+        }
+
+        resized.Apply(false, false);
+        LightLogger.Log($"[Cursor] 已完整缩放光标纹理 {path}: {source.width}x{source.height} -> {CursorSize}x{CursorSize}");
+        return resized;
     }
 
     static int LoadIndexFromJson()
@@ -62,20 +106,20 @@ public static class Cursor
         {
             if (!File.Exists(ConfigPath))
             {
-                var defaultData = new { index = 0 };
+                var defaultData = new { index = DefaultCursorIndex };
                 string json = JsonSerializer.Serialize(defaultData, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(ConfigPath, json);
-                return 0;
+                return DefaultCursorIndex;
             }
 
             string content = File.ReadAllText(ConfigPath);
             using var doc = JsonDocument.Parse(content);
-            return doc.RootElement.TryGetProperty("index", out var el) ? el.GetInt32() : 0;
+            return doc.RootElement.TryGetProperty("index", out var el) ? el.GetInt32() : DefaultCursorIndex;
         }
         catch (Exception ex)
         {
             LightLogger.LogWarning($"[Cursor] 读取配置失败: {ex.Message}");
-            return 0;
+            return DefaultCursorIndex;
         }
     }
 
