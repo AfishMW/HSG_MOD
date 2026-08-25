@@ -121,6 +121,9 @@ public static class ButtonBreathEffect
                 }
             }
 
+            // 兜底：确保悬停/点击事件非空，避免原版 PassiveButtonManager 触发 NRE
+            if (pb.OnMouseOver == null) pb.OnMouseOver = new UnityEngine.Events.UnityEvent();
+            if (pb.OnMouseOut == null) pb.OnMouseOut = new UnityEngine.Events.UnityEvent();
             pb.OnMouseOver?.AddListener((UnityEngine.Events.UnityAction)(() => state.IsHovering = true));
             pb.OnMouseOut?.AddListener((UnityEngine.Events.UnityAction)(() => state.IsHovering = false));
             pb.OnClick?.AddListener((UnityEngine.Events.UnityAction)(() => state.ClickLerp = 1f));
