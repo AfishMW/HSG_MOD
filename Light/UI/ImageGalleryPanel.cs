@@ -438,6 +438,14 @@ public class ImageGalleryPanel
         ApplyBackground();
     }
 
+    public void ApplyRandomBackground()
+    {
+        if (_entries.Count == 0) return;
+        _currentIndex = UnityEngine.Random.Range(0, _entries.Count);
+        _appliedIndex = _currentIndex;
+        ApplyBackground();
+    }
+
     public void UpdateParallax(Vector2 mouseOffset)
     {
         try

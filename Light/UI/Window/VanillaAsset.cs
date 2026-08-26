@@ -84,7 +84,7 @@ public static class VanillaAsset
             try
             {
                 EnsureLoaded();
-                return _versionFont!;
+                return _versionFont;
             }
             catch (Exception ex)
             {

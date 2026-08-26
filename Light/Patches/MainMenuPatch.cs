@@ -1,15 +1,16 @@
+using AmongUs.Data;
+using BepInEx.Unity.IL2CPP.Utils.Collections;
+using HarmonyLib;
+using Light.UI;
+using Light.UI.Help;
+using Light.UI.Window;
+using Light.Utilities;
+using LightInDark.Core;
+using LightInDark.Utilities;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using BepInEx.Unity.IL2CPP.Utils.Collections;
-using HarmonyLib;
-using Light.Utilities;
-using Light.UI;
-using Light.UI.Help;
-using Light.UI.Window;
-using LightInDark.Core;
-using LightInDark.Utilities;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -108,10 +109,8 @@ public static class MainMenuPatch
                 modStamp.SetActive(true);
                 modStamp.transform.localScale = Vector3.one * 0.06f;
                 var sr = modStamp.GetComponent<SpriteRenderer>();
-                if (sr != null)
-                    sr.sprite = ResourceHelper.LoadSpriteFromResource("Light.Resources.ModStamp.png");
+                sr?.sprite = ResourceHelper.LoadSpriteFromResource("Light.Resources.ModStamp.png");
             }
-            FindGO("ReactorVersion")?.SetActive(false);
             var ambience = FindGO("Ambience");
             if (ambience != null)
             {
@@ -152,8 +151,7 @@ public static class MainMenuPatch
                     btn.transform.localPosition += new Vector3(0f, height, 0f);
             }
             var divider = leftPanel?.transform.FindChild("Main Buttons")?.FindChild("Divider");
-            if (divider != null)
-                divider.localPosition += new Vector3(0f, height, 0f);
+            divider?.localPosition += new Vector3(0f, height, 0f);
             if (leftPanel != null)
             {
                 var reworked = UnityHelper.CreateObject<SpriteRenderer>(
@@ -195,6 +193,7 @@ public static class MainMenuPatch
             CreateLightButton(__instance, btns, height);
             AdjustIcons();
             ColorAllButtons();
+            CloneTitleToMainMenu(__instance);
             if (leftPanel != null)
             {
                 var mainButtons = leftPanel.transform.FindChild("Main Buttons");
@@ -206,6 +205,7 @@ public static class MainMenuPatch
                 leftPanel.SetActive(false);
             }
             FindGO("Divider")?.SetActive(false);
+            SetupExtraButtons(__instance);
             ApplyButtonEffects(__instance);
             SetupRightPanel(__instance);
             SetupLightScreen(__instance);
@@ -536,34 +536,7 @@ public static class MainMenuPatch
             SetUpBtn("关于模组", () => HelpScreen.TryOpenHelpScreen());
             SetUpBtn("成就", () => LightLogger.LogWarning("[Light] 成就 - 待实现"));
             SetUpBtn("Discord", () => Application.OpenURL("https://discord.gg/"));
-            SetUpBtn("检查更新", () =>
-            {
-                string result = VersionMaker.CheckForUpdate();
-                switch (result)
-                {
-                    case "need update":
-                        VersionMaker.StartUpdateProcess();
-                        break;
-                    case "no need":
-                        LightUtils.ShowCustomDisconnectWindow("当前已是最新版本。");
-                        break;
-                    case "not installed":
-                        LightUtils.ShowCustomDisconnectWindow("模组未安装。你咋点的检查更新并且看到这个窗口？\n也有可能是你把文件改名了，请改回去。");
-                        break;
-                    case "check error":
-                        LightUtils.ShowCustomDisconnectWindow("更新检查失败。\n请将游戏目录下的Light.log发送给开发者或者QQ群中。\n不要直接将此界面截图/拍照给其他人。");
-                        break;
-                    case "path error":
-                        LightUtils.ShowCustomDisconnectWindow($"未找到更新检查器！请检查你的目录下有无 {VersionMaker.UpdaterExeName} 。");
-                        break;
-                    case "github error":
-                        LightUtils.ShowCustomDisconnectWindow("无法访问GitHub来检查版本！请检查您的网络状况。\n当然，最坏的结果是我们删仓跑路了。");
-                        break;
-                    default:
-                        LightUtils.ShowCustomDisconnectWindow("未知返回值。\n请将游戏目录下的Light.log发送给开发者或者QQ群中。\n不要直接将此界面截图/拍照给其他人。");
-                        break;
-                }
-            });
+
             SetUpBtn("更多功能", () =>
             {
                 if (_lightScreen != null) _lightScreen.SetActive(false);
@@ -589,11 +562,6 @@ public static class MainMenuPatch
         {
             var panel = new LightPanel(__instance, "LightSubScreen", "更多功能");
 
-            panel.AddButton("背景板", () =>
-            {
-                if (_lightSubScreen != null) _lightSubScreen.SetActive(false);
-                _galleryPanel?.Show();
-            });
             panel.AddButton("功能B", () => LightLogger.Log("[Light] 功能B - 待实现"));
             panel.AddButton("功能C", () => LightLogger.Log("[Light] 功能C - 待实现"));
             panel.AddButton("功能D", () => LightLogger.Log("[Light] 功能D - 待实现"));
@@ -635,7 +603,7 @@ public static class MainMenuPatch
             if (_lightSubScreen != null)
                 gallery.OnBack = () => _lightSubScreen.SetActive(true);
 
-            gallery.ApplyDefaultBackground();
+            gallery.ApplyRandomBackground();
 
             _galleryPanel = gallery;
         }
@@ -691,7 +659,7 @@ public static class MainMenuPatch
                 if (label != null)
                 {
                     var tmp = label.GetComponent<TextMeshPro>();
-                    if (tmp != null) tmp.text = text;
+                    tmp?.text = text;
                     var tr = label.GetComponent<TextTranslatorTMP>();
                     if (tr != null) tr.enabled = false;
                 }
@@ -890,4 +858,171 @@ public static class MainMenuPatch
             LightLogger.LogWarning("[Light] MainMenuPatch.HideRightPanel NRE: " + ex.Message + "\n" + ex.StackTrace);
         }
     }
+
+    /// <summary>仿照 FS：克隆 quitButton 四份（检查更新 / Github / 两个占位符），
+    /// 用 AspectPosition.anchorPoint 网格布局避免按钮重叠。</summary>
+    private static void SetupExtraButtons(MainMenuManager __instance)
+    {
+        try
+        {
+            if (__instance.quitButton == null) return;
+            var template = __instance.quitButton.gameObject;
+            var parent = template.transform.parent;
+
+            // 场景切换后旧的克隆会被销毁，这里清理可能残留的死引用对象
+            for (int i = 0; i < 4; i++)
+            {
+                var old = FindGO($"ExtraButton{i}");
+                if (old != null) Object.Destroy(old);
+            }
+
+            var defs = new (string label, System.Action action)[]
+            {
+                ("检查更新", CheckForUpdate),
+                ("Github", () => Application.OpenURL("https://github.com/AfishMW/LightInDark")),
+                ("模组官网", () => Application.OpenURL("https://github.com/AfishMW/LightInDark")),
+                (DataManager.Settings.Language.CurrentLanguage==SupportedLangs.SChinese 
+                ||
+                DataManager.Settings.Language.CurrentLanguage==SupportedLangs.TChinese
+                ?
+                "QQ群"
+                :
+                "Discord", 
+                () => 
+                {
+                    bool isQQGroup = DataManager.Settings.Language.CurrentLanguage==SupportedLangs.SChinese||DataManager.Settings.Language.CurrentLanguage==SupportedLangs.TChinese;
+                    if (isQQGroup)
+                    {
+                        Application.OpenURL("https://qm.qq.com/q/mRsF2k5sUE");
+                    }
+                    else
+                    {
+                        LightUtils.ShowCustomDisconnectWindow("TODO : No DC");
+                    }
+                }),
+            };
+
+            // 2 列网格布局（思路与 SetUpBtn 一致）：col0 -> x0.42，col1 -> x0.58；每行 y 步进 0.08
+            for (int i = 0; i < defs.Length; i++)
+            {
+                var button = Object.Instantiate(template, parent);
+                button.name = $"ExtraButton{i}";
+                button.SetActive(true);
+
+                // 原 quitButton 带 ConditionalHide，克隆后若不销毁会因同名同父被隐藏
+                var condHide = button.GetComponent<ConditionalHide>();
+                if (condHide != null) Object.Destroy(condHide);
+
+                var fp = button.transform.FindChild("FontPlacer");
+                if (fp != null && fp.childCount > 0)
+                {
+                    var tmp = fp.GetChild(0).GetComponent<TextMeshPro>();
+                    if (tmp != null) tmp.text = defs[i].label;
+                    var tr = fp.GetChild(0).GetComponent<TextTranslatorTMP>();
+                    if (tr != null) tr.enabled = false;
+                }
+
+                var pb = button.GetComponent<PassiveButton>();
+                if (pb != null)
+                {
+                    // 注意：必须把 i 拷贝到局部变量再捕获，否则闭包引用的是循环变量 i，
+                    // 循环结束后 i == defs.Length，点击时会 defs[i] 越界抛 IndexOutOfRangeException
+                    int itemIndex = i;
+                    pb.OnClick = new Button.ButtonClickedEvent();
+                    pb.OnClick.AddListener((UnityEngine.Events.UnityAction)(() => defs[itemIndex].action()));
+                }
+
+                var asp = button.GetComponent<AspectPosition>();
+                if (asp != null)
+                {
+                    int col = i % 2;
+                    int row = i / 2 + 1;  // 从第 1 行开始，避开原版 Credits/Quit 按钮所在行
+                    asp.anchorPoint = new Vector2(col == 0 ? 0.42f : 0.58f, 0.5f - 0.08f * row);
+                    asp.AdjustPosition();
+                }
+
+                var scalerList = Object.FindObjectOfType<SlicedAspectScaler>();
+                if (scalerList != null)
+                {
+                    var scaled = button.GetComponent<AspectScaledAsset>();
+                    if (scaled != null) scalerList.objectsToScale.Add(scaled);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[MainMenuPatch.SetupExtraButtons]", ex);
+        }
+    }
+
+    /// <summary>检查更新：need update -> 开始更新，其余情况弹窗提示。</summary>
+    private static void CheckForUpdate()
+    {
+        string result = VersionMaker.CheckForUpdate();
+        switch (result)
+        {
+            case "need update":
+                VersionMaker.StartUpdateProcess();
+                break;
+            case "no need":
+                LightUtils.ShowCustomDisconnectWindow("当前已是最新版本。");
+                break;
+            case "not installed":
+                LightUtils.ShowCustomDisconnectWindow("模组未安装。你咋点的检查更新并且看到这个窗口？\n也有可能是你把文件改名了，请改回去。");
+                break;
+            case "check error":
+                LightUtils.ShowCustomDisconnectWindow("更新检查失败。\n请将游戏目录下的Light.log发送给开发者或者QQ群中。\n不要直接将此界面截图/拍照给其他人。");
+                break;
+            case "path error":
+                LightUtils.ShowCustomDisconnectWindow($"未找到更新检查器！请检查你的目录下有无 {VersionMaker.UpdaterExeName} 。");
+                break;
+            case "github error":
+                LightUtils.ShowCustomDisconnectWindow("无法访问GitHub来检查版本！请检查您的网络状况。\n当然，最坏的结果是我们删仓跑路了。");
+                break;
+            default:
+                LightUtils.ShowCustomDisconnectWindow("未知返回值。\n请将游戏目录下的Light.log发送给开发者或者QQ群中。\n不要直接将此界面截图/拍照给其他人。");
+                break;
+        }
+    }
+
+    /// <summary>克隆主界面临时标题（LOGO-AU）挂到主菜单根，替换为模组 Logo。在隐藏 LeftPanel 前调用。</summary>
+    private static void CloneTitleToMainMenu(MainMenuManager __instance)
+    {
+        try
+        {
+            var leftPanel = FindGO("LeftPanel");
+            var sizer = leftPanel != null ? leftPanel.transform.FindChild("Sizer") : null;
+            var logo = sizer != null ? sizer.FindChild("LOGO-AU") : null;
+            if (logo == null)
+            {
+                LightLogger.LogWarning("[Light] 未找到 LOGO-AU，跳过标题克隆");
+                return;
+            }
+
+            var title = Object.Instantiate(logo.gameObject, __instance.transform);
+            title.name = "ModTitle";
+            foreach (var trans in title.GetComponentsInChildren<AspectSize>(true))
+                Object.Destroy(trans);
+            foreach (var trans in title.GetComponentsInChildren<AspectPosition>(true))
+                Object.Destroy(trans);
+
+            var sr = title.GetComponent<SpriteRenderer>();
+            if (sr != null)
+            {
+                var logoSp = ResourceHelper.LoadSpriteFromResource("Light.Resources.Logo.LightInDark.png");
+                if (logoSp != null) sr.sprite = logoSp;
+            }
+
+            title.transform.SetParent(__instance.transform, false);
+            title.transform.localPosition = new Vector3(-3.3f, 1.98f, -4);
+            title.transform.localScale = new Vector3(0.25f, 0.25f, 1f);
+
+            LightLogger.Log("[Light] 已克隆主标题并挂到主界面");
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[Light] CloneTitleToMainMenu", ex);
+        }
+    }
+
 }
