@@ -1,4 +1,4 @@
-﻿global using Color = LightInDark.Color;
+global using Color = LightInDark.Color;
 global using UColor = UnityEngine.Color;
 using BepInEx;
 using BepInEx.Unity.IL2CPP;
@@ -13,6 +13,7 @@ using LightInDark.RPCs;
 using System;
 using System.Collections;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 
 namespace LightInDark;
@@ -33,6 +34,12 @@ public partial class LIDPlugin : BasePlugin
             Harmony.PatchAll();
             LidRpcRegistry.ScanAndPatch(Harmony);
             EventSystem.ScanAndRegisterAll();
+            // 场景切换事件：监听 UNITY activeSceneChanged，切换后触发 EventSystem 事件
+            UnityEngine.SceneManagement.SceneManager.add_activeSceneChanged((Action<Scene, Scene>)((prev, next) =>
+            {
+                try { EventTriggers.OnSceneChanged(prev.name, next.name); }
+                catch (Exception ex) { LightLogger.LogError("SceneChanged handler", ex); }
+            }));
             Language.Language.Load();
             LightLogger.Log("API加载成功");
         }

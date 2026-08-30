@@ -170,7 +170,7 @@ public static class HudUIAssets
             {
                 if (_buttonSprites != null) return _buttonSprites;
                 _buttonSprites = SpriteSheetLoader.LoadDivided(
-                    "Light.Resources.GUI.Button.png", 150f, 3, 2, 12, 12, 12, 12);
+                    "Light.Resources.GUI.SettingGUI.Button.png", 150f, 3, 2, 12, 12, 12, 12);
                 return _buttonSprites!;
             }
             catch (Exception ex)
@@ -195,7 +195,7 @@ public static class HudUIAssets
             {
                 if (_checkmarkSprites != null) return _checkmarkSprites;
                 _checkmarkSprites = SpriteSheetLoader.LoadDivided(
-                    "Light.Resources.GUI.Checkmark.png", 150f, 2, 1, 0, 0, 0, 0);
+                    "Light.Resources.GUI.SettingGUI.Checkmark.png", 150f, 2, 1, 0, 0, 0, 0);
                 return _checkmarkSprites!;
             }
             catch (Exception ex)
@@ -217,7 +217,7 @@ public static class HudUIAssets
             {
                 if (_closeButtonSprites != null) return _closeButtonSprites;
                 _closeButtonSprites = SpriteSheetLoader.LoadDivided(
-                    "Light.Resources.GUI.CloseButton.png", 150f, 2, 1, 0, 0, 0, 0);
+                    "Light.Resources.GUI.SettingGUI.CloseButton.png", 150f, 2, 1, 0, 0, 0, 0);
                 return _closeButtonSprites!;
             }
             catch (Exception ex)
@@ -239,7 +239,7 @@ public static class HudUIAssets
             {
                 if (_navButtonSprites != null) return _navButtonSprites;
                 _navButtonSprites = SpriteSheetLoader.LoadDivided(
-                    "Light.Resources.GUI.NavButton.png", 150f, 2, 2, 0, 0, 0, 0);
+                    "Light.Resources.GUI.SettingGUI.NavButton.png", 150f, 2, 2, 0, 0, 0, 0);
                 return _navButtonSprites!;
             }
             catch (Exception ex)
@@ -263,7 +263,7 @@ public static class HudUIAssets
             {
                 if (_frameSprite != null) return _frameSprite;
                 _frameSprite = SpriteSheetLoader.LoadSliced(
-                    "Light.Resources.GUI.Background_Frame.png", 100f, 12, 12, 12, 12);
+                    "Light.Resources.GUI.SettingGUI.Background_Frame.png", 100f, 12, 12, 12, 12);
                 return _frameSprite;
             }
             catch (Exception ex)
@@ -283,7 +283,7 @@ public static class HudUIAssets
             {
                 if (_innerSprite != null) return _innerSprite;
                 _innerSprite = SpriteSheetLoader.LoadSliced(
-                    "Light.Resources.GUI.Background_Inner.png", 100f, 8, 8, 8, 8);
+                    "Light.Resources.GUI.SettingGUI.Background_Inner.png", 100f, 8, 8, 8, 8);
                 return _innerSprite;
             }
             catch (Exception ex)
@@ -293,6 +293,67 @@ public static class HudUIAssets
         }
     }
 
+
+    // ── SettingGUI 系列（设置界面专用素材，Light.Resources.GUI.SettingGUI.*）──
+
+    private static Sprite? _settingFrameSprite;
+    public static Sprite SettingFrameSprite
+    {
+        get
+        {
+            try
+            {
+                if (_settingFrameSprite != null) return _settingFrameSprite;
+                _settingFrameSprite = SpriteSheetLoader.LoadSliced(
+                    "Light.Resources.GUI.SettingGUI.Background_Frame.png", 100f, 12, 12, 12, 12);
+                return _settingFrameSprite;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("[SpriteSheetLoader.get]", ex); return default;
+            }
+        }
+    }
+
+    private static Sprite? _settingInnerSprite;
+    public static Sprite SettingInnerSprite
+    {
+        get
+        {
+            try
+            {
+                if (_settingInnerSprite != null) return _settingInnerSprite;
+                _settingInnerSprite = SpriteSheetLoader.LoadSliced(
+                    "Light.Resources.GUI.SettingGUI.Background_Inner.png", 100f, 8, 8, 8, 8);
+                return _settingInnerSprite;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("[SpriteSheetLoader.get]", ex); return default;
+            }
+        }
+    }
+
+    private static Sprite[]? _settingCloseSprites;
+    public static Sprite[] SettingCloseSprites
+    {
+        get
+        {
+            try
+            {
+                if (_settingCloseSprites != null) return _settingCloseSprites;
+                _settingCloseSprites = SpriteSheetLoader.LoadDivided(
+                    "Light.Resources.GUI.SettingGUI.CloseButton.png", 150f, 2, 1, 0, 0, 0, 0);
+                return _settingCloseSprites!;
+            }
+            catch (Exception ex)
+            {
+                LightLogger.LogError("[SpriteSheetLoader.get]", ex); return default;
+            }
+        }
+    }
+    public static Sprite SettingCloseNormal => SettingCloseSprites[0];
+    public static Sprite SettingCloseHover => SettingCloseSprites[1];
     // GUI/ColorButton.png — 九宫格（薄边框）
     private static Sprite? _colorButtonSprite;
     public static Sprite ColorButtonSprite

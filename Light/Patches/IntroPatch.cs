@@ -46,6 +46,7 @@ public static class IntroPatch
             var blurb = __instance.RoleBlurbText;
             blurb.text = role.IntroBlurb;
             blurb.color = LightInDark.ColorHelper.ToUnityColor(role.Color);
+            
             blurb.gameObject.SetActive(true);
         }
         catch (Exception ex)

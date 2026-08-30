@@ -1,6 +1,7 @@
 global using HarmonyLib;
 global using System.Collections;
 global using UnityEngine;
+using Light.Configuration;
 using BepInEx;
 using BepInEx.Logging;
 using BepInEx.Unity.IL2CPP;
@@ -16,6 +17,7 @@ using Light.Roles.Vanilla;
 using LightInDark.Core;
 using System;
 using UnityEngine.SceneManagement;
+using Light.Components;
 
 namespace Light;
 
@@ -26,14 +28,15 @@ public partial class LightPlugin : BasePlugin
 {
     public const string Id = "com.moonscar.lightindark";
     public const string Name = "LightInTheDark";
-    public const string Version = "1.0.0.0";
+    public const string Version = "1.0.0";
 
-    public const string VisualVersion = "v1.0.0.0";
+    public const string VisualVersion = "v1.0.0";
 
     public const string RichVersion = "<color=#4FD1C5>ver</color> <color=#38B2AC>1.0.0</color>";
     public static string AUVersion;
     public static string CursurDataPath = Application.persistentDataPath;
     public static MainColor.ModColorData ColorData;
+    public static LightSettings.LightSettingsData LightSettingsData;
     public Harmony Harmony { get; } = new(Id);
 
     internal static ManualLogSource StaticLog { get; private set; } = null!;
@@ -42,12 +45,12 @@ public partial class LightPlugin : BasePlugin
     {
         try
         {
-#if ANDROID
-            Application.Quit();
-#endif
+#if DEBUG
             FirstChanceExceptionLogger.Initialize();
+#endif
             StaticLog = Log;
             Harmony.PatchAll();
+            LightSettingsData = LightSettings.LoadSettingData();
             if (!VersionMaker.MakeVersion())
                 Log.LogError($"VM json 加载失败。具体异常请查看Light.log。");
             LoadCommand();
@@ -57,6 +60,7 @@ public partial class LightPlugin : BasePlugin
             LidRpcRegistry.ScanAndPatch(Harmony);
             ColorData = MainColor.LoadChatColor();
             LoadRole();
+            PresetManager.ApplyCurrentPreset();  // 启动时恢复 current.lid 配置
             Dispatcher.Initialize();
 #if !DEBUG
             LightLogger.ClearLog();
@@ -76,7 +80,7 @@ public partial class LightPlugin : BasePlugin
     {
         try
         {
-            SceneManager.add_sceneLoaded((Action<UnityEngine.SceneManagement.Scene, LoadSceneMode>)((scene, mode) =>
+            SceneManager.add_sceneLoaded((Action<Scene, LoadSceneMode>)((scene, mode) =>
             {
                 try
                 {
@@ -116,7 +120,6 @@ public partial class LightPlugin : BasePlugin
             var asm = typeof(LightPlugin).Assembly;
             foreach (var res in new[] { "Light.Resources.Language.SChinese.json", "Light.Resources.Language.English.json" })
             {
-                // 资源名形如 ...Language.SChinese.json，取倒数第二个 '.' 之后的段作文件名
                 string fileName = res.Substring(res.LastIndexOf('.', res.LastIndexOf('.') - 1) + 1);
                 string path = Path.Combine(folder, fileName);
                 if (File.Exists(path)) continue;
@@ -152,11 +155,10 @@ public partial class LightPlugin : BasePlugin
     {
         try
         {
-            // 用主插件 BepInEx ConfigFile 初始化职业配置（写入 .cfg）
             LightInDark.Configuration.RoleConfig.Initialize(Config);
             RoleRegistry.Register<Caller>();
-            RoleRegistry.Register<VanillaImpostor>(VanillaImpostor.Instance);
-            RoleRegistry.Register<VanillaCrewmate>(VanillaCrewmate.Instance);
+            RoleRegistry.Register(VanillaImpostor.Instance);
+            RoleRegistry.Register(VanillaCrewmate.Instance);
         }
         catch (Exception ex)
         {
@@ -166,7 +168,7 @@ public partial class LightPlugin : BasePlugin
     public static class FirstChanceExceptionLogger
     {
         static bool _init = false;
-        static readonly object _lock = new object();
+        static readonly object _lock = new();
         public static void Initialize()
         {
             if (_init) return;

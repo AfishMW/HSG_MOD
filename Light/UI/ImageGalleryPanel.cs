@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Security.Cryptography;
 using LightInDark.Core;
 using LightInDark.UI.Window;
 using Light.UI.HudUI;
@@ -27,12 +26,10 @@ public class ImageGalleryPanel
     }
 
     private const string ResourcePrefix = "Light.Resources.MainMenuBackground.BG_";
-    private const string DefaultName = "Default";
 
     private static readonly Dictionary<string, Sprite> _spriteCache = new();
 
     private readonly List<ImageEntry> _entries = new();
-    private readonly string _defaultHash;
     private readonly Vector2 _windowSize = new(7f, 4.5f);
 
     private MetaScreen? _screen;
@@ -51,15 +48,13 @@ public class ImageGalleryPanel
     private int _currentIndex;
     private int _appliedIndex = -1;
     private Action<int>? _onApply;
-    private Action? _onHashFailedFallback;
     private bool _built;
 
     public int CurrentIndex => _currentIndex;
     public int AppliedIndex => _appliedIndex;
 
-    public ImageGalleryPanel(string defaultHash = "")
+    public ImageGalleryPanel()
     {
-        _defaultHash = defaultHash;
     }
 
     public void AddImage(string displayName, string resourceName, string author,
@@ -75,8 +70,47 @@ public class ImageGalleryPanel
         });
     }
 
+    /// <summary>自动扫描程序集内嵌资源 Light.Resources.MainMenuBackground.BG_*.png，逐个注册为背景条目。</summary>
+    /// <remarks>匹配规则：BG_ 开头、.png 结尾；自动忽略 *_preview.png 预览图。返回扫描到的数量。</remarks>
+    public int ScanBackgroundResources()
+    {
+        try
+        {
+            int added = 0;
+            var assembly = Assembly.GetExecutingAssembly();
+            foreach (var res in assembly.GetManifestResourceNames())
+            {
+                if (!res.StartsWith(ResourcePrefix, StringComparison.Ordinal)) continue;
+                string tail = res.Substring(ResourcePrefix.Length);
+                if (!tail.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) continue;
+                if (tail.EndsWith("_preview.png", StringComparison.OrdinalIgnoreCase)) continue;
+                string name = tail.Substring(0, tail.Length - ".png".Length);
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                _entries.Add(new ImageEntry
+                {
+                    DisplayName = name,
+                    ResourceName = name,
+                    Author = "",
+                    Description = "",
+                    Hash = ""
+                });
+                added++;
+            }
+            return added;
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[ImageGalleryPanel.ScanBackgroundResources]", ex);
+            return 0;
+        }
+    }
+
+    /// <summary>元素数量。</summary>
+    public int Count => _entries.Count;
+
+    /// <summary>清空当前条目。</summary>
+    public void ClearImages() => _entries.Clear();
     public void SetApplyCallback(Action<int> onApply) => _onApply = onApply;
-    public void SetHashFailedFallback(Action fallback) => _onHashFailedFallback = fallback;
 
     private void Build()
     {
@@ -255,13 +289,6 @@ public class ImageGalleryPanel
         return bytes;
     }
 
-    private static string ComputeHash(byte[] data)
-    {
-        using var sha = SHA256.Create();
-        return BitConverter.ToString(sha.ComputeHash(data))
-            .Replace("-", "").ToLowerInvariant();
-    }
-
     private static Sprite BytesToSprite(byte[] bytes, float pixelsPerUnit = 100f)
     {
         var tex = new Texture2D(2, 2, TextureFormat.ARGB32, false);
@@ -277,11 +304,12 @@ public class ImageGalleryPanel
     private static string PreviewPathFor(string name) =>
         ResourcePrefix + name + "_preview.png";
 
-    private Sprite? LoadVerifiedSprite(string name, string expectedHash, float pixelsPerUnit = 100f)
+    /// <summary>加载一张背景贴图（不做哈希校验）。资源缺失返回 null。</summary>
+    private Sprite? LoadSprite(string name, float pixelsPerUnit = 100f)
     {
         try
         {
-            string cacheKey = name + "_" + expectedHash + "_" + pixelsPerUnit;
+            string cacheKey = name + "_" + pixelsPerUnit;
             if (_spriteCache.TryGetValue(cacheKey, out var cached))
                 return cached;
 
@@ -290,46 +318,6 @@ public class ImageGalleryPanel
             if (bytes == null)
             {
                 LightLogger.LogWarning($"[Gallery] 资源未找到: {path}");
-                return TryLoadDefault(pixelsPerUnit);
-            }
-
-            if (string.IsNullOrEmpty(expectedHash) || ComputeHash(bytes) == expectedHash.ToLowerInvariant())
-            {
-                var spr = BytesToSprite(bytes, pixelsPerUnit);
-                if (spr != null) _spriteCache[cacheKey] = spr;
-                return spr;
-            }
-
-            LightLogger.LogWarning($"[Gallery] 哈希不匹配: {name}");
-            return TryLoadDefault(pixelsPerUnit);
-        }
-        catch (Exception ex)
-        {
-            LightLogger.LogError("[ImageGalleryPanel.LoadVerifiedSprite]", ex); return default;
-        }
-    }
-
-    private Sprite? TryLoadDefault(float pixelsPerUnit = 100f)
-    {
-        try
-        {
-            string cacheKey = DefaultName + "_" + _defaultHash + "_" + pixelsPerUnit;
-            if (_spriteCache.TryGetValue(cacheKey, out var cached))
-                return cached;
-
-            var bytes = ReadResourceBytes(ResourcePathFor(DefaultName));
-            if (bytes == null)
-            {
-                LightLogger.LogWarning("[Gallery] BG_Default.png 未找到");
-                _onHashFailedFallback?.Invoke();
-                return null;
-            }
-
-            if (!string.IsNullOrEmpty(_defaultHash) &&
-                ComputeHash(bytes) != _defaultHash.ToLowerInvariant())
-            {
-                LightLogger.LogWarning("[Gallery] BG_Default 哈希不匹配");
-                _onHashFailedFallback?.Invoke();
                 return null;
             }
 
@@ -339,7 +327,8 @@ public class ImageGalleryPanel
         }
         catch (Exception ex)
         {
-            LightLogger.LogError("[ImageGalleryPanel.TryLoadDefault]", ex); return default;
+            LightLogger.LogError("[ImageGalleryPanel.LoadSprite]", ex);
+            return null;
         }
     }
 
@@ -352,7 +341,7 @@ public class ImageGalleryPanel
             if (bytes != null)
                 return BytesToSprite(bytes, 100f);
             // fallback: 用原图
-            return LoadVerifiedSprite(name, "", 100f);
+            return LoadSprite(name, 100f);
         }
         catch { return null; }
     }
@@ -417,7 +406,7 @@ public class ImageGalleryPanel
         {
             if (_currentIndex < 0 || _currentIndex >= _entries.Count) return;
             var entry = _entries[_currentIndex];
-            var sprite = LoadVerifiedSprite(entry.ResourceName, entry.Hash, 350f);
+            var sprite = LoadSprite(entry.ResourceName, 350f);
             if (sprite == null) return;
 
             EnsureBgObject();
@@ -428,14 +417,6 @@ public class ImageGalleryPanel
         {
             LightLogger.LogError("[ImageGalleryPanel.ApplyBackground]", ex);
         }
-    }
-
-    public void ApplyDefaultBackground()
-    {
-        if (_entries.Count == 0) return;
-        _currentIndex = 0;
-        _appliedIndex = 0;
-        ApplyBackground();
     }
 
     public void ApplyRandomBackground()
@@ -486,7 +467,7 @@ public class ImageGalleryPanel
             // 预览图：优先用 _preview.png
             var previewSpr = LoadPreviewSprite(entry.ResourceName);
             if (previewSpr == null)
-                previewSpr = LoadVerifiedSprite(entry.ResourceName, entry.Hash);
+                previewSpr = LoadSprite(entry.ResourceName);
 
             try
             {

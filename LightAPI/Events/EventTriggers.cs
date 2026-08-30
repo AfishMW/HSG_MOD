@@ -16,6 +16,10 @@ namespace LightInDark.Events
         public static void OnLobbySkipCountdown(int playerCount) => EventSystem.RunEvent(new LobbySkipCountdownEvent { PlayerCount = playerCount });
         public static void OnLobbyCancelStart(int remainingSeconds) => EventSystem.RunEvent(new LobbyCancelStartEvent { RemainingSeconds = remainingSeconds });
 
+        // ── 场景切换 ──
+        /// <summary>场景切换后触发（UNITY activeSceneChanged）。</summary>
+        public static void OnSceneChanged(string prevScene, string nextScene) => EventSystem.RunEvent(new SceneChangedEvent { PreviousSceneName = prevScene, NextSceneName = nextScene });
+
         // ── 游戏流程 ──
         public static void OnGameStart(int playerCount) => EventSystem.RunEvent(new GameStartEvent { PlayerCount = playerCount });
         public static void OnGameLoadingStart(int mapId) => EventSystem.RunEvent(new GameLoadingStartEvent { MapId = mapId });

@@ -1,0 +1,78 @@
+﻿using LightInDark.Core;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using static Light.MainColor;
+
+namespace Light.Components;
+
+public static class LightSettings
+{
+    static string JsonPath => Path.Combine(Application.persistentDataPath, "LID_Settings.json");
+    static JsonSerializerOptions _options = new() { WriteIndented = true };
+    [Serializable]
+    public class LightSettingsData
+    {
+        /// <summary>
+        /// 解锁全部装扮
+        /// </summary>
+        public bool UnlockAllCosmic { get; set; } = true;
+        /// <summary>
+        /// 在局内不展示所有装扮
+        /// </summary>
+        public bool DontShowCosmic { get; set; } = false;
+        /// <summary>
+        /// 在会议中显示任务面板
+        /// </summary>
+        public bool ShowTaskPanelInMeeting { get; set; } = true;
+        /// <summary>
+        /// 最高帧数上限 最多为150
+        /// </summary>
+        public int MaxFPS { get; set; } = 60;
+    }
+    public static LightSettingsData LoadSettingData()
+    {
+        try
+        {
+            if (File.Exists(JsonPath))
+            {
+                LightLogger.Log("未发现设置JSON，开始创建。");
+                var r = new LightSettingsData();
+                Save(r);
+                LightLogger.Log("创建完毕");
+                return r;
+            }
+            string json = File.ReadAllText(JsonPath);
+            var result = JsonSerializer.Deserialize<LightSettingsData>(json,_options);
+            if (result == null)
+            {
+                LightLogger.LogWarning("JSON格式无效，使用默认值");
+                result = new LightSettingsData();
+                Save(result);
+            }
+            if (result.MaxFPS > 150) result.MaxFPS = 150;
+            return result;
+        }
+        catch(Exception ex)
+        {
+            LightLogger.LogError("设置加载失败,使用默认值",ex);
+            return new LightSettingsData();
+        }
+    }
+    public static void Save(LightSettingsData data)
+    {
+        try
+        {
+            string json = JsonSerializer.Serialize(data, _options);
+            File.WriteAllText(JsonPath, json);
+            LightLogger.Log("颜色配置已保存。");
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[LightSettings.Save]", ex);
+        }
+    }
+}

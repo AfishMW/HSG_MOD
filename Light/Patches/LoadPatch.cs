@@ -348,7 +348,7 @@ public static class LoadPatch
             logo.color = new UnityEngine.Color(1f, 1f, 1f, p);
             yield return null;
         }
-        logo.color = UnityEngine.Color.clear;
+        logo.color = Color.clear;
 
         instance.sceneChanger.AllowFinishLoadingScene();
         instance.startedSceneLoad = true;

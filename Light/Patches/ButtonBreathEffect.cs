@@ -136,11 +136,25 @@ public static class ButtonBreathEffect
         }
     }
 
+    /// <summary>创建房间界面（CreateGameOptions，主菜单 MainUI 下的 CreateGameScreen）是否正在显示。</summary>
+    private static bool IsCreateGameScreenActive()
+    {
+        try
+        {
+            var screen = UnityEngine.Object.FindObjectOfType<CreateGameOptions>();
+            return screen != null && screen.gameObject.activeInHierarchy;
+        }
+        catch { return false; }
+    }
+
     public static void Update()
     {
         try
         {
             if (GameObject.Find("MainUI") == null) return;
+
+            // 创建房间界面（MainUI-CreateGameScreen）显示时，去掉呼吸灯/点击按压/悬停反馈，避免与房间创建面板错位
+            if (IsCreateGameScreenActive()) return;
 
             _deadKeys.Clear();
             foreach (var kvp in _states)

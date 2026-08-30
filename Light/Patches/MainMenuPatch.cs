@@ -6,6 +6,7 @@ using Light.UI.Help;
 using Light.UI.Window;
 using Light.Utilities;
 using LightInDark.Core;
+using LightInDark.Events;
 using LightInDark.Utilities;
 using System;
 using System.Collections;
@@ -35,6 +36,9 @@ public static class MainMenuPatch
     private static bool _bgMoved;
     private static float _bgMoveDelay;
     private static bool _updaterChecked;
+    private static bool _pendingRandomBackground;
+    private static bool _bgInitialMoveDone;
+    private static bool _hasBackground;
 
     private static GameObject? FindGO(string name) => GameObject.Find(name);
 
@@ -111,17 +115,12 @@ public static class MainMenuPatch
                 var sr = modStamp.GetComponent<SpriteRenderer>();
                 sr?.sprite = ResourceHelper.LoadSpriteFromResource("Light.Resources.ModStamp.png");
             }
-            var ambience = FindGO("Ambience");
-            if (ambience != null)
-            {
-                ambience.transform.FindChild("PlayerParticles")?.gameObject.SetActive(false);
-                if (ambience.transform.childCount > 0)
-                    ambience.transform.GetChild(0).gameObject.SetActive(false);
-            }
-            _bgMoved = false;
+            // 背景上移动画只在"首次进入主菜单"执行一次；之后进入不再上移
+            _bgMoved = _bgInitialMoveDone;
             _bgMoveDelay = 0f;
+            // BackgroundTexture（会移动上去的那个）只在首次进入主菜单出现；之后再次进入直接不显示、不移动
             var bg = FindGO("BackgroundTexture");
-            bg?.SetActive(true);
+            if (bg != null) bg.SetActive(!_bgInitialMoveDone);
 
             var btns = FindButtons();
 
@@ -248,6 +247,7 @@ public static class MainMenuPatch
                 }
             }
 
+            Application.targetFrameRate = LightPlugin.LightSettingsData.MaxFPS;
             if (!_updaterChecked)
             {
                 _updaterChecked = true;
@@ -284,7 +284,6 @@ public static class MainMenuPatch
             if (!btns.TryGetValue("SettingsButton", out var settings)) return;
             var clone = GameObject.Instantiate(settings.gameObject, settings.transform.parent);
             clone.name = "LightButton";
-            // LIGHT 落到“设置”按钮下方一个槽位；原版“设置”按钮保留
             clone.transform.localPosition =
                 settings.transform.localPosition - new Vector3(0f, height, 0f);
 
@@ -464,13 +463,13 @@ public static class MainMenuPatch
             if (_rightPanel == null) return;
 
             var asp = _rightPanel.GetComponent<AspectPosition>();
-            if (asp != null) asp.enabled = false;
+            asp?.enabled = false;
 
             _rightPanelOp = _rightPanel.transform.localPosition;
             _rightPanel.transform.localPosition = _rightPanelOp + new Vector3(10f, 0f, 0f);
 
             var sr = _rightPanel.GetComponent<SpriteRenderer>();
-            if (sr != null) sr.color = new Color32(173, 214, 255, 255);
+            sr?.color = new Color32(173, 214, 255, 255);
 
         }
         catch (Exception ex)
@@ -497,7 +496,7 @@ public static class MainMenuPatch
                     titleText.fontSize = 4.5f;
                 }
                 var titleTrans = titleEntry.GetComponent<TextTranslatorTMP>();
-                if (titleTrans != null) titleTrans.enabled = false;
+                titleTrans?.enabled = false;
             }
 
             var child4 = GetChild(_lightScreen.transform, 4);
@@ -515,9 +514,9 @@ public static class MainMenuPatch
                 if (label != null)
                 {
                     var tmp = label.GetComponent<TextMeshPro>();
-                    if (tmp != null) tmp.text = text;
+                    tmp?.text = text;
                     var tr = label.GetComponent<TextTranslatorTMP>();
-                    if (tr != null) tr.enabled = false;
+                    tr?.enabled = false;
                 }
                 var pb = obj.GetComponent<PassiveButton>();
                 if (pb != null)
@@ -584,15 +583,21 @@ public static class MainMenuPatch
     {
         try
         {
-            var gallery = new ImageGalleryPanel("60768f3185be4d77d40de1d75df44140704cead716175ea8915bd42e08d7c8e5");
-
-            gallery.AddImage("At the Polus Core", "At the Polus Core", "曦曦", "波鲁斯星核的壮丽景象", "60768f3185be4d77d40de1d75df44140704cead716175ea8915bd42e08d7c8e5");
-            gallery.AddImage("Default", "Default", "Inner Sloth", "原版默认背景", "");
-
-            gallery.SetHashFailedFallback(() =>
+            var gallery = new ImageGalleryPanel();
+            int scanned = gallery.ScanBackgroundResources();
+            _hasBackground = scanned > 0;
+            if (!_hasBackground)
+                LightLogger.LogWarning("[Light] 未扫描到任何 BG_*.png，背景图不会显示");
+            else
             {
-                LightLogger.LogWarning("[Light] BG_Default 哈希验证失败，请检查资源完整性");
-            });
+                var ambience = FindGO("Ambience");
+                if (ambience != null)
+                {
+                    ambience.transform.FindChild("PlayerParticles")?.gameObject.SetActive(false);
+                    if (ambience.transform.childCount > 0)
+                        ambience.transform.GetChild(0).gameObject.SetActive(false);
+                }
+            }
 
             gallery.SetApplyCallback(index =>
             {
@@ -602,8 +607,12 @@ public static class MainMenuPatch
 
             if (_lightSubScreen != null)
                 gallery.OnBack = () => _lightSubScreen.SetActive(true);
-
-            gallery.ApplyRandomBackground();
+            if (_pendingRandomBackground) _pendingRandomBackground = false;
+            if (_hasBackground)
+            {
+                LightLogger.Log("[Light] 显示随机背景");
+                gallery.ApplyRandomBackground();
+            }
 
             _galleryPanel = gallery;
         }
@@ -631,9 +640,9 @@ public static class MainMenuPatch
                 if (titleEntry != null)
                 {
                     var titleText = titleEntry.GetComponent<TextMeshPro>();
-                    if (titleText != null) titleText.text = title;
+                    titleText?.text = title;
                     var titleTrans = titleEntry.GetComponent<TextTranslatorTMP>();
-                    if (titleTrans != null) titleTrans.enabled = false;
+                    titleTrans?.enabled = false;
                 }
 
                 var child4 = GetChild(_panel.transform, 4);
@@ -653,7 +662,7 @@ public static class MainMenuPatch
             {
                 if (_buttonTemplate == null) return;
                 GameObject obj = _buttonTemplate.gameObject;
-                if (_index > 0) obj = GameObject.Instantiate(obj, obj.transform.parent);
+                if (_index > 0) obj = Object.Instantiate(obj, obj.transform.parent);
 
                 var label = GetChild(obj.transform, 0)?.GetChild(0);
                 if (label != null)
@@ -726,9 +735,7 @@ public static class MainMenuPatch
             SpriteRenderer? tint = __instance.screenTint;
             if (tint == null)
             {
-                var go = FindGO("ScreenTint") ?? __instance.transform.FindChild("ScreenTint")?.gameObject;
-                if (go == null)
-                    go = __instance.mainMenuUI.transform.FindChild("Tint")?.gameObject;
+                var go = (FindGO("ScreenTint") ?? __instance.transform.FindChild("ScreenTint")?.gameObject) ?? (__instance.mainMenuUI.transform.FindChild("Tint")?.gameObject);
                 if (go != null) tint = go.GetComponent<SpriteRenderer>();
             }
 
@@ -755,15 +762,31 @@ public static class MainMenuPatch
         try
         {
             var sceneName = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
-            if (sceneName != "MainMenu" && sceneName != "MatchMaking")
+            bool isMainOrMatch = sceneName == "MainMenu" || sceneName == "MatchMaking";
+
+            // 自定义背景对象（跨场景时 _galleryPanel 可能为 null，用 Find 兜底找到残留对象）
+            var bgObj = _galleryPanel?._bgObj;
+            if (bgObj == null) bgObj = FindGO("LightBackground");
+
+            if (!isMainOrMatch)
             {
+                // 非 MainMenu/MatchMaking 场景：隐藏并缩小到几乎不可见，杜绝背景外泄到其它场景
+                if (bgObj != null)
+                {
+                    bgObj.SetActive(false);
+                    bgObj.transform.localScale = Vector3.one * 0.0001f;
+                }
                 _showingPanel = false;
-                if (_galleryPanel != null && _galleryPanel._bgObj != null)
-                    _galleryPanel._bgObj.SetActive(false);
                 return;
             }
-            if (_galleryPanel != null && _galleryPanel._bgObj != null && !_galleryPanel._bgObj.activeSelf)
-                _galleryPanel._bgObj.SetActive(true);
+
+            // MainMenu / MatchMaking：恢复背景尺寸与可见性（最多只剩首次创建的那一个，二次进入已被 SetupGalleryScreen 清掉）
+            if (bgObj != null)
+            {
+                float s = Mathf.Max((float)Screen.width / (float)Screen.height / (16f / 9f), 1f);
+                bgObj.transform.localScale = new Vector3(s, s, 1f);
+                if (!bgObj.activeSelf) bgObj.SetActive(true);
+            }
 
             ButtonBreathEffect.Update();
 
@@ -773,7 +796,7 @@ public static class MainMenuPatch
                     _lightScreen.SetActive(false);
                 if (_lightSubScreen != null && _lightSubScreen.activeSelf)
                     _lightSubScreen.SetActive(false);
-                if (_galleryPanel != null) _galleryPanel.Hide();
+                _galleryPanel?.Hide();
             }
 
             if (_rightPanel != null)
@@ -801,6 +824,7 @@ public static class MainMenuPatch
                         if (pos.y > 7f)
                         {
                             _bgMoved = true;
+                            _bgInitialMoveDone = true;
                             bg.SetActive(false);
                         }
                     }
@@ -859,8 +883,6 @@ public static class MainMenuPatch
         }
     }
 
-    /// <summary>仿照 FS：克隆 quitButton 四份（检查更新 / Github / 两个占位符），
-    /// 用 AspectPosition.anchorPoint 网格布局避免按钮重叠。</summary>
     private static void SetupExtraButtons(MainMenuManager __instance)
     {
         try
@@ -869,14 +891,13 @@ public static class MainMenuPatch
             var template = __instance.quitButton.gameObject;
             var parent = template.transform.parent;
 
-            // 场景切换后旧的克隆会被销毁，这里清理可能残留的死引用对象
             for (int i = 0; i < 4; i++)
             {
                 var old = FindGO($"ExtraButton{i}");
                 if (old != null) Object.Destroy(old);
             }
 
-            var defs = new (string label, System.Action action)[]
+            var defs = new (string label, Action action)[]
             {
                 ("检查更新", CheckForUpdate),
                 ("Github", () => Application.OpenURL("https://github.com/AfishMW/LightInDark")),
@@ -890,7 +911,8 @@ public static class MainMenuPatch
                 "Discord", 
                 () => 
                 {
-                    bool isQQGroup = DataManager.Settings.Language.CurrentLanguage==SupportedLangs.SChinese||DataManager.Settings.Language.CurrentLanguage==SupportedLangs.TChinese;
+                    bool isQQGroup = DataManager.Settings.Language.CurrentLanguage==SupportedLangs.SChinese || 
+                    DataManager.Settings.Language.CurrentLanguage==SupportedLangs.TChinese;
                     if (isQQGroup)
                     {
                         Application.OpenURL("https://qm.qq.com/q/mRsF2k5sUE");
@@ -901,15 +923,11 @@ public static class MainMenuPatch
                     }
                 }),
             };
-
-            // 2 列网格布局（思路与 SetUpBtn 一致）：col0 -> x0.42，col1 -> x0.58；每行 y 步进 0.08
             for (int i = 0; i < defs.Length; i++)
             {
                 var button = Object.Instantiate(template, parent);
                 button.name = $"ExtraButton{i}";
                 button.SetActive(true);
-
-                // 原 quitButton 带 ConditionalHide，克隆后若不销毁会因同名同父被隐藏
                 var condHide = button.GetComponent<ConditionalHide>();
                 if (condHide != null) Object.Destroy(condHide);
 
@@ -917,16 +935,14 @@ public static class MainMenuPatch
                 if (fp != null && fp.childCount > 0)
                 {
                     var tmp = fp.GetChild(0).GetComponent<TextMeshPro>();
-                    if (tmp != null) tmp.text = defs[i].label;
+                    tmp?.text = defs[i].label;
                     var tr = fp.GetChild(0).GetComponent<TextTranslatorTMP>();
-                    if (tr != null) tr.enabled = false;
+                    tr?.enabled = false;
                 }
 
                 var pb = button.GetComponent<PassiveButton>();
                 if (pb != null)
                 {
-                    // 注意：必须把 i 拷贝到局部变量再捕获，否则闭包引用的是循环变量 i，
-                    // 循环结束后 i == defs.Length，点击时会 defs[i] 越界抛 IndexOutOfRangeException
                     int itemIndex = i;
                     pb.OnClick = new Button.ButtonClickedEvent();
                     pb.OnClick.AddListener((UnityEngine.Events.UnityAction)(() => defs[itemIndex].action()));
@@ -936,7 +952,7 @@ public static class MainMenuPatch
                 if (asp != null)
                 {
                     int col = i % 2;
-                    int row = i / 2 + 1;  // 从第 1 行开始，避开原版 Credits/Quit 按钮所在行
+                    int row = i / 2 + 1;
                     asp.anchorPoint = new Vector2(col == 0 ? 0.42f : 0.58f, 0.5f - 0.08f * row);
                     asp.AdjustPosition();
                 }
@@ -955,7 +971,6 @@ public static class MainMenuPatch
         }
     }
 
-    /// <summary>检查更新：need update -> 开始更新，其余情况弹窗提示。</summary>
     private static void CheckForUpdate()
     {
         string result = VersionMaker.CheckForUpdate();
@@ -985,14 +1000,73 @@ public static class MainMenuPatch
         }
     }
 
+    /// <summary>监听场景切换事件（自动注册为 SceneChangedEvent 监听者）。
+    ///  - 进入 MainMenu：标记"待随机背景"，供 SetupGalleryScreen 消费；
+    ///  - 进入 MainMenu/MatchMaking：恢复背景可见与尺寸；
+    ///  - 进入其它场景：隐藏并缩小背景（该事件在任意场景都会触发，弥补 LateUpdate 只在主菜单运行的缺口，杜绝背景外泄）。</summary>
+    public static void OnSceneChanged(SceneChangedEvent ev)
+    {
+        try
+        {
+            if (ev == null) return;
+            bool isMainOrMatch = ev.NextSceneName == "MainMenu" || ev.NextSceneName == "MatchMaking";
+
+            // 跨场景时 _galleryPanel 可能为 null，用 Find 兜底找到残留的背景对象
+            var bgObj = _galleryPanel?._bgObj;
+            if (bgObj == null) bgObj = FindGO("LightBackground");
+
+            if (!isMainOrMatch)
+            {
+                // 非 MainMenu/MatchMaking 场景：隐藏并缩小到几乎不可见，杜绝背景外泄到局内/其它场景
+                if (bgObj != null)
+                {
+                    bgObj.SetActive(false);
+                    bgObj.transform.localScale = Vector3.one * 0.0001f;
+                }
+                _showingPanel = false;
+                return;
+            }
+
+            // MainMenu / MatchMaking：恢复背景尺寸与可见性
+            if (bgObj != null)
+            {
+                float s = Mathf.Max((float)Screen.width / (float)Screen.height / (16f / 9f), 1f);
+                bgObj.transform.localScale = new Vector3(s, s, 1f);
+                if (!bgObj.activeSelf) bgObj.SetActive(true);
+            }
+
+            if (ev.EnteredMainMenu)
+            {
+                _pendingRandomBackground = true;
+                if (_galleryPanel != null)
+                {
+                    _pendingRandomBackground = false;
+                    _galleryPanel.ApplyRandomBackground();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            LightLogger.LogError("[MainMenuPatch.OnSceneChanged]", ex);
+        }
+    }
+
+    /// <summary>场景切换监听（使用 SceneChangedEvent 事件）：检测切换后的场景是否为 MatchMaking。</summary>
+    /// <remarks>方法体只保留检测，其余请在此方法内自行补充。</remarks>
+    public static void OnMatchMakingScene(SceneChangedEvent ev)
+    {
+        bool isMatchMaking = ev != null && ev.NextSceneName == "MatchMaking";
+        // ========== 以下由你填写：isMatchMaking 为 true 时执行 MatchMaking 相关逻辑 ==========
+    }
+
     /// <summary>克隆主界面临时标题（LOGO-AU）挂到主菜单根，替换为模组 Logo。在隐藏 LeftPanel 前调用。</summary>
     private static void CloneTitleToMainMenu(MainMenuManager __instance)
     {
         try
         {
             var leftPanel = FindGO("LeftPanel");
-            var sizer = leftPanel != null ? leftPanel.transform.FindChild("Sizer") : null;
-            var logo = sizer != null ? sizer.FindChild("LOGO-AU") : null;
+            var sizer = leftPanel?.transform.FindChild("Sizer");
+            var logo = sizer?.FindChild("LOGO-AU");
             if (logo == null)
             {
                 LightLogger.LogWarning("[Light] 未找到 LOGO-AU，跳过标题克隆");

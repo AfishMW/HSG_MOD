@@ -84,30 +84,20 @@ public static class Language
     {
         try
         {
-            if (_all.TryGetValue(_current, out var dict) && dict.TryGetValue(key, out string val))
+            // 命中且值不是历史遗留的"占位"时返回翻译
+            if (_all.TryGetValue(_current, out var dict) && dict.TryGetValue(key, out string val) && val != "占位")
                 return val;
 
-            if (_current != "English" && _all.TryGetValue("English", out var enDict) && enDict.TryGetValue(key, out string enVal))
+            if (_current != "English" && _all.TryGetValue("English", out var enDict) && enDict.TryGetValue(key, out string enVal) && enVal != "占位")
                 return enVal;
 
-            if (_all.TryGetValue(_current, out var currentDict))
-            {
-                lock (_fileLock)
-                {
-                    if (!currentDict.ContainsKey(key))
-                    {
-                        currentDict[key] = "占位";
-                        SaveLanguageFile(_current, currentDict);
-                    }
-                }
-            }
-
+            // 未命中：返回 fallback ?? key，不再把"占位"写进语言文件（否则下次命中"占位"导致 UI 显示占位符）
             return fallback ?? key;
         }
         catch (Exception ex)
         {
             LightLogger.LogError("Language.Translate", ex);
-            return default;
+            return fallback ?? key;
         }
     }
 

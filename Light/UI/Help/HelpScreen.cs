@@ -676,19 +676,23 @@ public static class HelpScreen
     };
 
     /// <summary>分配信息行（MaxCount==0 显示不参与分配）</summary>
+    /// <summary>分配信息行（读取 RoleConfig 注册表当前值：最大数量/生成概率，MaxCount==0 显示不参与分配）。</summary>
     private static string GetAllocationLine(DefinedRole role)
     {
         try
         {
-            var allocation = role.Allocation;
-            if (allocation.MaxCount <= 0)
+            int maxCount = RoleConfig.GetRoleCount(role.CodeName, role.Allocation.MaxCount);
+            int chance = RoleConfig.GetRoleChance(role.CodeName, role.Allocation.Chance);
+            int guaranteed = role.Allocation.GuaranteedCount;
+
+            if (maxCount <= 0)
                 return role.Name + ": " + Language.Translate("help.overview.noAssign", "不参与分配");
 
-            string text = $"{role.Name} × {allocation.MaxCount}";
-            if (allocation.GuaranteedCount > 0)
-                text += $" ({Language.Translate("help.overview.guaranteed", "必出")} {allocation.GuaranteedCount})";
-            else if (allocation.Chance < 100)
-                text += $" ({Language.Translate("help.overview.chance", "概率")} {allocation.Chance}%)";
+            string text = $"{role.Name} × {maxCount}";
+            if (guaranteed > 0)
+                text += $" ({Language.Translate("help.overview.guaranteed", "必出")} {guaranteed})";
+            else if (chance < 100)
+                text += $" ({Language.Translate("help.overview.chance", "概率")} {chance}%)";
             return text;
         }
         catch (Exception ex)

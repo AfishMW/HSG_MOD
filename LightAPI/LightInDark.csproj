@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
 		<TargetFramework>net6.0</TargetFramework>
 		<LangVersion>latest</LangVersion>
@@ -15,6 +15,9 @@
 		<EmbeddedResource Remove="mem-log\**" />
 		<None Remove="mem-log\**" />
 		<None Remove="CODELY.md" />
+	</ItemGroup>
+	<ItemGroup>
+	  <None Include="..\Light\.editorconfig" Link=".editorconfig" />
 	</ItemGroup>
 	<ItemGroup>
 		<Reference Include="..\Libs\0Harmony.dll" />
