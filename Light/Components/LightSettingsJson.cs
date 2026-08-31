@@ -37,7 +37,7 @@ public static class LightSettings
     {
         try
         {
-            if (File.Exists(JsonPath))
+            if (!File.Exists(JsonPath))
             {
                 LightLogger.Log("未发现设置JSON，开始创建。");
                 var r = new LightSettingsData();
@@ -68,7 +68,7 @@ public static class LightSettings
         {
             string json = JsonSerializer.Serialize(data, _options);
             File.WriteAllText(JsonPath, json);
-            LightLogger.Log("颜色配置已保存。");
+            LightLogger.Log("设置配置已保存。");
         }
         catch (Exception ex)
         {
