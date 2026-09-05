@@ -1,6 +1,7 @@
 global using HarmonyLib;
 global using System.Collections;
 global using UnityEngine;
+global using Light.Utilities; 
 using Light.Configuration;
 using BepInEx;
 using BepInEx.Logging;
@@ -38,6 +39,7 @@ public partial class LightPlugin : BasePlugin
     public static MainColor.ModColorData ColorData;
     public static LightSettings.LightSettingsData LightSettingsData;
     public Harmony Harmony { get; } = new(Id);
+    public static string LightUserDataPath => Path.Combine(Application.persistentDataPath, "LightInDark");
 
     internal static ManualLogSource StaticLog { get; private set; } = null!;
 
@@ -60,7 +62,7 @@ public partial class LightPlugin : BasePlugin
             LidRpcRegistry.ScanAndPatch(Harmony);
             ColorData = MainColor.LoadChatColor();
             LoadRole();
-            PresetManager.ApplyCurrentPreset();  // 启动时恢复 current.lid 配置
+            PresetManager.ApplyCurrentPreset();
             Dispatcher.Initialize();
 #if !DEBUG
             LightLogger.ClearLog();
@@ -69,6 +71,7 @@ public partial class LightPlugin : BasePlugin
             AddCursorComponent();
             RegisterShowModStampOnMainMenu();
             ChatHistoryLogUtils.Init();
+            
             Log.LogInfo($"模组 {Name} v{Version} 已加载！");
         }
         catch (Exception ex)

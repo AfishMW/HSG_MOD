@@ -3,13 +3,14 @@ using System.Text.Json;
 using LightInDark.Core;
 using System.Text.Json.Serialization;
 using LightInDark;
+
 using UnityEngine;
 
-namespace Light;
+namespace Light.Components;
 
 public static class MainColor
 {
-    static string jsonPath => Path.Combine(Application.persistentDataPath, "LID_ModColor.json");
+    static string jsonPath => Path.Combine(LightPlugin.LightUserDataPath, "ChatSettings.json");
     static JsonSerializerOptions _options = new() { WriteIndented = true };
     [Serializable]
     public class ModColorData
@@ -79,6 +80,7 @@ public static class MainColor
     {
         try
         {
+            FileUtil.EnsureDirectoryExists(jsonPath);
             string json = JsonSerializer.Serialize(data, _options);
             File.WriteAllText(jsonPath, json);
             LightLogger.Log("颜色配置已保存。");

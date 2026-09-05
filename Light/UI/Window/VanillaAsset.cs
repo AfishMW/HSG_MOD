@@ -11,6 +11,7 @@ using System;
 using Object = UnityEngine.Object;
 using Button = UnityEngine.UI.Button;
 using Color = LightInDark.Color;
+using UnityHelper = Light.Utilities.UnityHelper;
 
 namespace Light.UI.Window;
 

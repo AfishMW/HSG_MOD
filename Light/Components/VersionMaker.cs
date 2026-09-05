@@ -10,7 +10,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace Light;
+namespace Light.Components;
 
 public class VersionMaker
 {
@@ -52,9 +52,9 @@ public class VersionMaker
             };
             try
             {
-                using (Process process = Process.Start(startInfo))
+                using (Process process = Process.Start(startInfo)!)
                 {
-                    string output = process.StandardOutput.ReadToEnd().Trim();
+                    string output = process!.StandardOutput.ReadToEnd().Trim();
                     process.WaitForExit();
                     return output;
                 }
@@ -67,7 +67,7 @@ public class VersionMaker
         }
         catch (Exception ex)
         {
-            LightLogger.LogError("[VersionMaker.CheckForUpdate]", ex); return default;
+            LightLogger.LogError("[VersionMaker.CheckForUpdate]", ex); return default!;
         }
     }
     public static void StartUpdateProcess()

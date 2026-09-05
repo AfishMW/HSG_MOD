@@ -5,13 +5,13 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using static Light.MainColor;
+using static Light.Components.MainColor;
 
 namespace Light.Components;
 
 public static class LightSettings
 {
-    static string JsonPath => Path.Combine(Application.persistentDataPath, "LID_Settings.json");
+    static string JsonPath => Path.Combine(LightPlugin.LightUserDataPath, "Settings.json");
     static JsonSerializerOptions _options = new() { WriteIndented = true };
     [Serializable]
     public class LightSettingsData
@@ -66,6 +66,7 @@ public static class LightSettings
     {
         try
         {
+            FileUtil.EnsureDirectoryExists(JsonPath);
             string json = JsonSerializer.Serialize(data, _options);
             File.WriteAllText(JsonPath, json);
             LightLogger.Log("设置配置已保存。");

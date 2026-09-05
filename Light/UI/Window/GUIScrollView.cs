@@ -5,6 +5,7 @@ using UnityEngine.Rendering;
 using LightInDark.Core;
 using System;
 using Object = UnityEngine.Object;
+using UnityHelper = Light.Utilities.UnityHelper;
 
 namespace Light.UI.Window;
 

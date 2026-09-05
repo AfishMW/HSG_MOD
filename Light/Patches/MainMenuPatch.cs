@@ -1,6 +1,7 @@
 using AmongUs.Data;
 using BepInEx.Unity.IL2CPP.Utils.Collections;
 using HarmonyLib;
+using Light.Components;
 using Light.UI;
 using Light.UI.Help;
 using Light.UI.Window;

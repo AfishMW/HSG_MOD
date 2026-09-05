@@ -10,7 +10,7 @@ namespace Light.UI;
 public static class Cursor
 {
     public static int Index { get; private set; }
-    private static string ConfigPath => Path.Combine(LightPlugin.CursurDataPath, "Cursor_LID.json");
+    private static string ConfigPath => Path.Combine(LightPlugin.LightUserDataPath, "Cursor.json");
     private const int DefaultCursorIndex = 1;
     private const int CursorSize = 32;
     private static readonly Texture2D? Cur_1 = LoadCursorTexture("Cursor/1.png");
@@ -127,6 +127,7 @@ public static class Cursor
     {
         try
         {
+            FileUtil.EnsureDirectoryExists(ConfigPath);
             var data = new { index };
             string json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(ConfigPath, json);
